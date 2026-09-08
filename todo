@@ -1,0 +1,11 @@
+- ajouter de l'herbe 
+- plus de diversité dans les batiments → fait (variantes seedées : rotation, échelle, teinte ; modèles alternatifs à déposer, voir public/models/README.md)
+- ajouter du sable et des plages → fait (bande de sable par biome sur le biseau de l'île)
+- procédurale + biome en fonction de ce que ça contient → fait (domain/biome.ts ; végétation et eau par île restent à faire)
+- clean les gros fichiers
+- ajouter du lint
+- on voit pas les gens monter et sortir du métro → fait (voyageurs calés sur l'horaire : montée d'escalier, attente sur le quai, embarquement pendant l'arrêt, descente et retour à la rue ; mobility/passengers.ts + station.ts)
+- ajouter train et gares pour le gros traffic inter iles
+- cliquer sur une voiture/camion doit permettre de visualiser son trajet un peu comme sur city skyline
+- avoir une manière visuelle le taux d'utilisation de la RAM/CPU/DISK pour chaque ville/ile
+- occlusion ambiante ?

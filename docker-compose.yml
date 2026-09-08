@@ -1,0 +1,73 @@
+# Base services — used by both docker compose and docker stack deploy
+# Usage:
+#   Local dev:   docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build
+#   Stack deploy: docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml confcity
+#
+# Site-specific values (registry, public host, Traefik entrypoint, placement) come from the
+# environment — copy `.env.example` to `.env` and edit it. The defaults below run on a
+# single-node box with no external registry.
+
+services:
+  # ── Frontend (nginx + static SPA) ──
+  frontend:
+    image: ${REGISTRY:-confcity}/frontend
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.confcity.rule=Host(`${CONFCITY_HOST:-city.localhost}`)"
+      - "traefik.http.routers.confcity.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.confcity.tls.certresolver=${TRAEFIK_CERTRESOLVER:-resolver}"
+      - "traefik.http.services.confcity.loadbalancer.server.port=80"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+    deploy:
+      replicas: 1
+      # Without a registry the image only exists on the node that built it, so an
+      # unconstrained scheduler can place the task where it cannot be pulled
+      # ("No such image" in a loop). Pin the placement, or push to a registry.
+      placement:
+        constraints:
+          - ${DEPLOY_CONSTRAINT:-node.role == manager}
+      restart_policy:
+        condition: on-failure
+      labels:
+        # conf-city visualises itself like any other service
+        - "confcity.type=app"
+        - "confcity.label=Conf City"
+        - "confcity.description=3D UI of the cluster"
+        - "confcity.group=apps"
+        - "confcity.links=confcity_proxy"
+    networks:
+      - confcity
+      - traefik
+
+  # ── Telemetry proxy (WebSocket hub) ──
+  proxy:
+    image: ${REGISTRY:-confcity}/proxy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.proxy
+    deploy:
+      replicas: 1
+      # cf. frontend: same placement rule, same reason
+      placement:
+        constraints:
+          - ${DEPLOY_CONSTRAINT:-node.role == manager}
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "confcity.type=app"
+        - "confcity.label=Conf City proxy"
+        - "confcity.description=WebSocket hub between the providers and the UI"
+        - "confcity.group=apps"
+    networks:
+      - confcity
+
+networks:
+  confcity:
+    driver: overlay
+    attachable: true
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

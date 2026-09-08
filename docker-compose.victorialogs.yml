@@ -1,0 +1,31 @@
+# VictoriaLogs overlay — read logs from the log store instead of the Docker API
+#
+# Why bother: `/services/{id}/logs` aggregates every replica and never says which node
+# emitted a line, so a service spread over several machines lands under one arbitrary city.
+# It also only serves a tail — no history, so the log panel stays empty until the next push.
+# VictoriaLogs carries the Swarm labels with each line and answers past ranges, fixing both.
+#
+# Only one log backend may be active at a time: two sources reading the same containers
+# push every line twice, under timestamps too close to reconcile.
+#
+# Usage:
+#   docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml \
+#                       -c docker-compose.victorialogs.yml confcity
+# Drop this file from the chain to go back to Docker-API logs.
+
+services:
+  provider-swarm:
+    environment:
+      LOGS_BACKEND: victorialogs
+      # Swarm service alias of VictoriaLogs, resolved inside the log network joined below.
+      VICTORIALOGS_URL: ${VICTORIALOGS_URL:-http://victorialogs:9428}
+    networks:
+      - confcity
+      - obs
+
+networks:
+  # VictoriaLogs lives in its own stack; we join that network rather than move it.
+  # Set VICTORIALOGS_NETWORK in `.env` to the external network it is attached to.
+  obs:
+    external: true
+    name: ${VICTORIALOGS_NETWORK:-monitoring_obs}

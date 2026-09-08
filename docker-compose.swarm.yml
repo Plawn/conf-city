@@ -1,0 +1,81 @@
+# Swarm provider overlay — real Docker Swarm metrics
+#
+# Two providers, complementary and both required for full coverage:
+#   provider-swarm (managers) — topology, meta, liveness, logs, resource limits
+#   provider-node  (every node) — container usage; /containers/{id}/stats is local-only
+# Usage:
+#   Local:  docker compose -f docker-compose.yml -f docker-compose.swarm.yml up --build
+#   Stack:  docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml confcity
+
+services:
+  provider-swarm:
+    image: ${REGISTRY:-confcity}/provider-swarm
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.provider
+      args:
+        PROVIDER_SCRIPT: proxy/providers/docker-swarm.ts
+    environment:
+      PROXY_URL: ws://proxy:4001/ws/provider
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Ambient infrastructure: links pointing at these services are not drawn
+      # (building kept) — same effect as `confcity.ambient=true` on the service
+      # itself, configured here so the target stack needs no restart. Empty by
+      # default: shared bridges keep even a well-connected service readable.
+      AMBIENT_SERVICES: ${AMBIENT_SERVICES:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      labels:
+        # conf-city infrastructure: not drawn as a building
+        - "confcity.hidden=true"
+    networks:
+      - confcity
+
+  # ── Per-node stats agent ──
+  # `mode: global`: the manager's Docker socket cannot read the stats of containers
+  # scheduled on another node, so one agent runs on each node and reports what it sees.
+  provider-node:
+    image: ${REGISTRY:-confcity}/provider-node
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.provider
+      args:
+        PROVIDER_SCRIPT: proxy/providers/docker-node.ts
+    environment:
+      PROXY_URL: ws://proxy:4001/ws/provider
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Swarm templating — one distinct id per node. The proxy indexes providers by
+      # their declared id, so two homonyms would evict each other.
+      PROVIDER_ID: "node-agent-{{.Node.Hostname}}"
+      # Host procfs, for the machine-level CPU/memory of the city badge. Container
+      # stats alone miss the kernel, dockerd and every non-Swarm container.
+      # Disk I/O comes from the same mount (/proc/diskstats).
+      HOST_PROC: /host/proc
+      # Host root, for the disk *space* gauge only: the container's own `/` is the
+      # overlay, which reports whatever backs /var/lib/docker rather than the machine.
+      HOST_FS: /hostfs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /:/hostfs:ro
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      labels:
+        # conf-city infrastructure: not drawn as a building
+        - "confcity.hidden=true"
+    networks:
+      - confcity
+
+networks:
+  confcity:
+    driver: overlay
+    attachable: true

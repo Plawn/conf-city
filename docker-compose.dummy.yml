@@ -1,0 +1,23 @@
+# Dummy provider overlay — random walk metrics for testing
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build
+
+services:
+  provider-dummy:
+    image: ${REGISTRY:-confcity}/provider-dummy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.provider
+    environment:
+      PROXY_URL: ws://proxy:4001/ws/provider
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - confcity
+
+networks:
+  confcity:
+    driver: overlay
+    attachable: true

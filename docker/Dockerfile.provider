@@ -1,0 +1,15 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN BUN_FROZEN_LOCKFILE=0 bun install --ignore-scripts
+
+COPY proxy/ proxy/
+COPY src/data/sample.json src/data/sample.json
+
+ARG PROVIDER_SCRIPT=proxy/providers/dummy.ts
+ENV PROVIDER_SCRIPT=${PROVIDER_SCRIPT}
+ENV PROXY_URL=ws://proxy:4001/ws/provider
+
+CMD ["sh", "-c", "bun $PROVIDER_SCRIPT"]

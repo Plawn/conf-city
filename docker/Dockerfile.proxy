@@ -1,0 +1,17 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN BUN_FROZEN_LOCKFILE=0 bun install --ignore-scripts
+
+COPY proxy/ proxy/
+COPY src/data/sample.json src/data/sample.json
+
+ENV PROXY_PORT=4001
+EXPOSE 4001
+
+HEALTHCHECK --interval=10s --timeout=3s \
+  CMD wget -qO- http://localhost:4001/health || exit 1
+
+CMD ["bun", "proxy/server.ts"]

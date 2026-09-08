@@ -1,0 +1,111 @@
+{
+  "cities": [
+    {
+      "id": "paris-1",
+      "name": "Server Paris 1",
+      "description": "Prod primary server",
+      "biome": "meadow",
+      "nodes": [
+        {
+          "id": "frontend",
+          "type": "app",
+          "label": "Frontend",
+          "description": "Web UI serving React SPA",
+          "links": ["api"],
+          "group": "web"
+        },
+        {
+          "id": "api",
+          "type": "app",
+          "label": "API Gateway",
+          "description": "Business logic and routing",
+          "links": ["db", "cache", "queue"],
+          "group": "web"
+        },
+        {
+          "id": "db",
+          "type": "db",
+          "label": "PostgreSQL",
+          "description": "Main relational database",
+          "links": [],
+          "group": "data"
+        },
+        {
+          "id": "cache",
+          "type": "cache",
+          "label": "Redis",
+          "description": "Session and data cache",
+          "links": [],
+          "group": "data"
+        },
+        {
+          "id": "queue",
+          "type": "queue",
+          "label": "RabbitMQ",
+          "description": "Async job processing",
+          "links": ["worker"],
+          "group": "jobs"
+        },
+        {
+          "id": "worker",
+          "type": "app",
+          "label": "Worker",
+          "description": "Background job processor",
+          "links": ["db"],
+          "group": "jobs"
+        }
+      ]
+    },
+    {
+      "id": "london-1",
+      "name": "Server London 1",
+      "description": "Prod replica / analytics",
+      "nodes": [
+        {
+          "id": "analytics-api",
+          "type": "app",
+          "label": "Analytics API",
+          "description": "Data ingestion endpoint",
+          "links": ["analytics-db", "analytics-cache"],
+          "group": "web"
+        },
+        {
+          "id": "analytics-db",
+          "type": "db",
+          "label": "ClickHouse",
+          "description": "Analytics columnar database",
+          "links": [],
+          "group": "data"
+        },
+        {
+          "id": "analytics-cache",
+          "type": "cache",
+          "label": "Redis",
+          "description": "Query result cache",
+          "links": [],
+          "group": "data"
+        },
+        {
+          "id": "dashboard",
+          "type": "app",
+          "label": "Dashboard",
+          "description": "Internal analytics dashboard",
+          "links": ["analytics-api"],
+          "group": "web"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "paris-1/api",
+      "to": "london-1/analytics-api",
+      "label": "Event stream"
+    },
+    {
+      "from": "paris-1/db",
+      "to": "london-1/analytics-db",
+      "label": "DB replication"
+    }
+  ]
+}

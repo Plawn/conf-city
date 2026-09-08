@@ -1,0 +1,75 @@
+@import "tailwindcss";
+/* glass-ui-solid is used for its CSS only (tokens + .glass-* classes); no Solid components are imported. */
+@import "glass-ui-solid/theme.css";
+@import "./styles/glass-ui.css";
+
+/* Glass surfaces sit over a busy 3D scene: give them an opaque-ish tint so text stays readable
+   even where backdrop blur is weak. Same layer as the vendored rules, later source → wins. */
+@layer components {
+  .dark .glass-morphic,
+  .dark .glass-morphic-subtle {
+    background: color-mix(in oklab, #0c0d1f 62%, transparent);
+  }
+  .dark .glass-morphic-thick {
+    background: color-mix(in oklab, #0c0d1f 78%, transparent);
+  }
+}
+
+@theme {
+  --color-ok: #44cc66;
+  --color-warn: #ff9a3c;
+  --color-danger: #ff4d5e;
+  --color-muted: #9aa3b5;
+  --color-node-app: #4488ff;
+  --color-node-db: #44bb66;
+  --color-node-cache: #ff8844;
+  --color-node-queue: #aa44ff;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a1a;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: white;
+  color-scheme: dark;
+}
+
+/* Uppercase section heading used across panels */
+@utility heading {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  color: var(--color-surface-400);
+}
+
+/* Thin scrollbars inside glass panels */
+.glass-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.glass-scroll::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.15);
+  border-radius: 3px;
+}
+.glass-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out;
+}
