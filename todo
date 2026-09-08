@@ -4,8 +4,15 @@
 - procédurale + biome en fonction de ce que ça contient → fait (domain/biome.ts ; végétation et eau par île restent à faire)
 - clean les gros fichiers
 - ajouter du lint
-- on voit pas les gens monter et sortir du métro → fait (voyageurs calés sur l'horaire : montée d'escalier, attente sur le quai, embarquement pendant l'arrêt, descente et retour à la rue ; mobility/passengers.ts + station.ts)
 - ajouter train et gares pour le gros traffic inter iles
 - cliquer sur une voiture/camion doit permettre de visualiser son trajet un peu comme sur city skyline
 - avoir une manière visuelle le taux d'utilisation de la RAM/CPU/DISK pour chaque ville/ile
-- occlusion ambiante ?
+- meteo -> ?
+- fix les jonctions des routes
+- rendre centrale/chateau d'eau/storage plus visible -> plus gros ?
+- voitures volent au dessus de la route
+- plus de diversité dans les voitures
+- passer sur un asset de lighthouse/port/metro/gare de metro plus nice
+- avoir des ponts plus beau
+- ameliorer la vue mobile
+- sizer les iles en fonction des puissances/tailles de machine -> faut rendre visuel le fait qu'une machine ai beaucoup de conteneurs par rapport a sa taille / batiment sizing en fonction de ram au niveau du sol pas uniquement hauteur maybe ?
