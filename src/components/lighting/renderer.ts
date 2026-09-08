@@ -58,7 +58,7 @@ export async function createRenderer(
       antialias: false,
       alpha: false,
       forceWebGL: webgl,
-      trackTimestamp: renderParams.has("perf"),
+      trackTimestamp: renderParams.has("perf") || renderParams.get("profile") === "1",
     });
   let renderer = make(fallback || forceWebGL);
   try {

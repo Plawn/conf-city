@@ -4,6 +4,7 @@ import { AmbientLight, Box3, Color, DirectionalLight, Fog, Vector3 } from "three
 import { computeSolarState, resolveSolarInstant } from "../../domain/solar";
 import { useLightingStore } from "../../store/lightingStore";
 import { useQualityProfile } from "../../store/uiStore";
+import { renderParams } from "./renderer";
 import { useLighting } from "./runtime";
 import { fitShadowBounds, ShadowBoundsCache } from "./shadowBounds";
 
@@ -21,7 +22,8 @@ export function SolarLighting({ extent }: { extent: number }) {
   const profile = useQualityProfile();
   const { sun, ambient, bounds, previousBounds, boundsCache, center, size } = useMemo(() => {
     const sun = new DirectionalLight(0xffffff, 0);
-    sun.castShadow = true;
+    sun.shadow.camera.name = "Sun shadow";
+    sun.castShadow = renderParams.get("shadows") !== "0";
     sun.shadow.autoUpdate = false;
     sun.shadow.bias = -0.00015;
     sun.shadow.normalBias = 0.035;

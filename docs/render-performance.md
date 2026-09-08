@@ -90,6 +90,56 @@ To qualify a machine, load `?perf=1&quality=eco`, then `balanced`, then `high`, 
 fps, CPU ms, GPU ms and draws from the HUD, then load `?perf=1` alone and confirm
 `__CITY_PERF__.quality.changes` converges on the same tier without oscillating.
 
+## GPU costs inside the 3D pipeline
+
+Open `?profile=1&quality=eco&idle=0` on the target machine, select Office (30 fps),
+and let shaders and traffic warm up. In the **3D pipeline** panel, click **Record
+10 s**. The panel shows average GPU milliseconds per sampled frame and the share
+of each pass family: scene/materials/lighting, sun and lighthouse shadows, clustered
+light compute, bloom, contact shading, volume, composition and antialiasing.
+Pass details remain available in the export. Repeat with a frozen day/night
+preview and during camera motion, keeping the viewport and quality fixed.
+
+**Export flamegraph** writes a Speedscope file. Open it in
+<https://www.speedscope.app/> and choose **Left Heavy** for the aggregate cost tree.
+Widths are measured GPU work, grouped by family and native pass name; they are
+**not** absolute GPU timestamps, shader function call stacks or a chronological
+timeline. The native per-pass GPU durations are counted once even when CPU render
+submission calls are nested. **Export JSON** includes raw passes, CPU submission
+scopes, complete-GPU-sample coverage, mean/p95 costs, adapter, resolution and the
+quality/options at the start and export time. Intermittent shadows contribute zero
+on complete frames where they did not run.
+
+Only calls inside `LightingPipeline`'s composed draw are sampled. Simulation, DOM
+work and environment baking outside that scope are excluded. Frames rendered while
+an asynchronous readback is outstanding run normally without queries and are not
+sampled; the report counts these skipped frames. Sampling and instrumentation can
+affect the result, so use repeated captures and compare the ordinary HUD separately.
+GPU utilization and power consumption cannot be inferred directly from these timings.
+Queries are enabled only during a capture, with bounded sample and timestamp storage.
+WebGL2 or devices without WebGPU timestamp support retain CPU scopes and report GPU
+data as unavailable; they never substitute CPU durations. When combined with
+`perf=1`, the profiler owns query resolution and the old HUD's GPU total is unavailable.
+
+The scene pass includes water, geometry, materials and local light shading together.
+To isolate their contributions, reload and compare one diagnostic switch at a time:
+
+| Additional parameter | Work removed |
+| --- | --- |
+| `&localLights=0` | Real local lights (street lamps, vehicle spots, lighthouse projector); emissive geometry stays visible |
+| `&shadows=0` | Sun and lighthouse shadow maps |
+| `&bloom=0` | Bloom extraction, blur chain and bloom composition |
+| `&ao=0` / `&volume=0` | Existing contact-shading / lighthouse-volume switches; already off in Eco |
+
+These are comparisons within the current renderer, not a recreation of the old
+pre-lighting renderer. Default visuals are unchanged. `window.__CITY_PROFILE__`
+exposes `start(durationMs)`, `stop()`, `recording`, `resolving`, `report()` and
+`speedscope()` in profile mode. Captures last 1–30 seconds and retain at most 1,800
+sampled frames. Automated functional checks use `bun scripts/check-profile.ts`
+(default URL `http://127.0.0.1:4175/`), with `CITY_URL`, `CITY_BACKEND`,
+`CHROMIUM_PATH`, `CITY_OUTPUT` and `GPU_SOFTWARE=1` supported. Software GPU captures
+validate attribution and export only, not performance on an integrated GPU.
+
 ## Reproducible comparison
 
 Build and serve the application, then run browser measurements sequentially:

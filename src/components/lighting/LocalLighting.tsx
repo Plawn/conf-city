@@ -55,8 +55,9 @@ export function LocalLighting() {
       group.add(light, light.target);
     }
     const beacon = runtime.beaconLight;
+    beacon.shadow.camera.name = "Lighthouse shadow";
     beacon.layers.enable(BEACON_VOLUME_LAYER);
-    beacon.castShadow = gpu && profile.beaconShadow;
+    beacon.castShadow = gpu && profile.beaconShadow && renderParams.get("shadows") !== "0";
     beacon.shadow.mapSize.set(512, 512);
     // The sweep reads fine at 15 Hz; re-rendering the 512² map every frame does not.
     beacon.shadow.autoUpdate = false;

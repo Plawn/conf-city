@@ -26,7 +26,13 @@ import type { DeckExit } from "./geo/roadGraph";
 import { HtmlPortalContext, useHtmlPortal } from "./htmlPortal";
 import { LightingPipeline } from "./lighting/LightingPipeline";
 import { LocalLighting } from "./lighting/LocalLighting";
-import { createRenderer, gpuRenderer, isWebGPU, rendererDeviceInfo } from "./lighting/renderer";
+import {
+  createRenderer,
+  gpuRenderer,
+  isWebGPU,
+  rendererDeviceInfo,
+  renderParams,
+} from "./lighting/renderer";
 import { cachedInitializer } from "./lighting/rendererInitialization";
 import { createLightingRuntime, LightingContext } from "./lighting/runtime";
 import { SolarLighting } from "./lighting/SolarLighting";
@@ -381,7 +387,7 @@ export function WorldScene({
                 </MobilitySimulation>
               </Suspense>
 
-              <LocalLighting />
+              {renderParams.get("localLights") !== "0" && <LocalLighting />}
               <LightingPipeline />
 
               <CameraAnimator

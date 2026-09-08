@@ -4,7 +4,7 @@ import type { GovernorChange, QualityChoice, QualityTier } from "../domain/quali
 import { selectTier, useUiStore } from "../store/uiStore";
 import type { inspectBuildings } from "./buildings/instances";
 import { ActiveClusteredLighting } from "./lighting/ActiveClusteredLighting";
-import { gpuRenderer, isWebGPU, rendererDeviceInfo } from "./lighting/renderer";
+import { gpuRenderer, isWebGPU, rendererDeviceInfo, renderParams } from "./lighting/renderer";
 import { useLighting } from "./lighting/runtime";
 import { qualityHistory } from "./QualityGovernor";
 
@@ -165,6 +165,7 @@ export function PerfHud() {
       box.textContent = `${metrics.backend} · ${quality.choice === "auto" ? `auto/${quality.tier}` : quality.tier}${quality.idle ? " (idle)" : ""} · ${(1000 / Math.max(1, frameMs)).toFixed(0)} fps · ${samples.at(-1)!.cpuMs.toFixed(1)} ms CPU · ${latestGpu == null ? "GPU n/a" : `${latestGpu.gpuMs.toFixed(1)} ms GPU (async)`} · ${render.drawCalls} draws · ${(memory.total / 1048576).toFixed(1)} MiB`;
       if (
         !resolving &&
+        renderParams.get("profile") !== "1" &&
         (renderer.backend as unknown as { trackTimestamp: boolean }).trackTimestamp
       ) {
         resolving = true;

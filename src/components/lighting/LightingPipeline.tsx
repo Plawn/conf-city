@@ -38,6 +38,7 @@ import type { OrbitControls } from "three-stdlib";
 import { useQualityProfile, useUiStore } from "../../store/uiStore";
 import { inspectBuildings } from "../buildings/instances";
 import { createBeaconGeometry } from "./beaconGeometry";
+import { renderProfiledPipeline } from "./PipelineProfiler";
 import { gatePass } from "./passGate";
 import { gpuRenderer, isWebGPU, renderParams } from "./renderer";
 import { BEACON_VOLUME_LAYER, useLighting } from "./runtime";
@@ -48,8 +49,25 @@ export function LightingPipeline() {
   const renderer = gpuRenderer(gl);
   const runtime = useLighting();
   const profile = useQualityProfile();
+  useEffect(() => {
+    if (renderParams.get("profile") !== "1") {
+      return;
+    }
+    let disposed = false;
+    let detach: (() => void) | undefined;
+    void import("./pipelineProfilePanel").then(({ attachPipelineProfilePanel }) => {
+      if (!disposed) {
+        detach = attachPipelineProfilePanel(renderer);
+      }
+    });
+    return () => {
+      disposed = true;
+      detach?.();
+    };
+  }, [renderer]);
   const resources = useMemo(() => {
     const scenePass = pass(scene, camera, { samples: 0 });
+    scenePass.renderTarget.texture.userData.profileLabel = "City scene (MRT / materials / lights)";
     scenePass.setMRT(mrt({ output, normal: normalView, emissive }));
     const beauty = scenePass.getTextureNode("output");
     const normals = scenePass.getTextureNode("normal");
@@ -115,6 +133,7 @@ export function LightingPipeline() {
     const volumePass = pass(scene, camera, { samples: 0, depthBuffer: false })
       .setLayers(volumeLayers)
       .setResolutionScale(0.5);
+    volumePass.renderTarget.texture.userData.profileLabel = "City lighthouse volume";
     const volumeBlur = gaussianBlur(volumePass.getTextureNode(), 0.75, 2);
     gatePass(
       volumePass,
@@ -140,11 +159,14 @@ export function LightingPipeline() {
     if (isWebGPU(renderer) && profile.volume && renderParams.get("volume") !== "0") {
       color = color.add(volumeBlur.getTextureNode().rgb);
     }
-    const glow = bloom(vec4(color, beauty.a), 0.25, 0.3, 1.15);
-    glow.setResolutionScale(profile.bloomScale);
+    const glow =
+      renderParams.get("bloom") === "0" ? null : bloom(vec4(color, beauty.a), 0.25, 0.3, 1.15);
+    glow?.setResolutionScale(profile.bloomScale);
     const pipeline = new RenderPipeline(renderer);
     pipeline.outputColorTransform = false;
-    const antialias = fxaa(renderOutput(vec4(color.add(glow.rgb), beauty.a)));
+    const antialias = fxaa(renderOutput(vec4(glow ? color.add(glow.rgb) : color, beauty.a)));
+    antialias.textureNode.value.userData.profileLabel =
+      "City composition / tone mapping (FXAA input)";
     pipeline.outputNode = antialias;
     return {
       pipeline,
@@ -170,7 +192,7 @@ export function LightingPipeline() {
       resources.scenePass.dispose();
       resources.ambient?.dispose();
       resources.filtered?.dispose();
-      resources.glow.dispose();
+      resources.glow?.dispose();
       resources.gi?.dispose();
       resources.volumePass.dispose();
       resources.volumeBlur.dispose();
@@ -287,7 +309,7 @@ export function LightingPipeline() {
     resources.beamOrigin.value.copy(light.position);
     resources.beamDirection.value.copy(light.target.position).sub(light.position).normalize();
     resources.beamRange.value = Math.max(0.01, light.distance);
-    resources.pipeline.render();
+    renderProfiledPipeline(renderer, () => resources.pipeline.render());
   }, 1);
   return <primitive object={resources.volume} />;
 }
