@@ -14,6 +14,8 @@ export interface LocalLightSource {
   kind: "street" | "vehicle" | "beacon";
   position: Vector3;
   direction: Vector3;
+  /** Half the headlight spacing, world units, along the vehicle's right; zero for other kinds. */
+  lateral: Vector3;
   color: Color;
   intensity: number;
   range: number;
@@ -74,6 +76,7 @@ export function createLightSource(id: string, kind: LocalLightSource["kind"]): L
     kind,
     position: new Vector3(),
     direction: new Vector3(0, -1, 0),
+    lateral: new Vector3(),
     color: new Color("#ffd7a0"),
     intensity: 0,
     range: 5,

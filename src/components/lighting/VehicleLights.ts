@@ -75,6 +75,11 @@ export function createVehicleLights(
         }
         source.position.set(0, 0.1, 0.28).applyMatrix4(pose);
         source.direction.set(0, -0.12, 1).applyQuaternion(rotation).normalize();
+        // Same offset as the bulbs, so a split pair sits exactly on them (bridge roll included).
+        source.lateral
+          .set(0.092, 0, 0)
+          .applyQuaternion(rotation)
+          .multiplyScalar(scale * opacity);
         source.color.setRGB(1, 0.91, 0.72);
         source.intensity = 9 * opacity;
         source.range = 4 * scale;

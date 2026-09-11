@@ -1,6 +1,7 @@
 import type { WebGLRenderer } from "three";
 import { DynamicLighting } from "three/addons/lighting/DynamicLighting.js";
 import { ACESFilmicToneMapping, VSMShadowMap, WebGPURenderer } from "three/webgpu";
+import { MAX_CLUSTERED_LIGHTS } from "../../domain/quality";
 import { ActiveClusteredLighting } from "./ActiveClusteredLighting";
 
 export const renderParams = new URLSearchParams(
@@ -78,7 +79,7 @@ export async function createRenderer(
   // blur is paid per map render (rare) rather than per shaded pixel (every frame).
   renderer.shadowMap.type = VSMShadowMap;
   renderer.lighting = isWebGPU(renderer)
-    ? new ActiveClusteredLighting(1024, 32, 24, 64)
+    ? new ActiveClusteredLighting(MAX_CLUSTERED_LIGHTS, 32, 24, 64)
     : new DynamicLighting({ maxDirectionalLights: 1, maxPointLights: 8, maxSpotLights: 9 });
   renderer.onDeviceLost = onLost;
   // R3F's custom-renderer hook supports this runtime contract; its public gl type is WebGL-only.

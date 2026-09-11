@@ -9,28 +9,53 @@ import {
   SHADOW_CASTER_LAYER,
   useLighting,
 } from "./runtime";
-import { LightCandidates } from "./selection";
+import { headlightSplit, LightCandidates } from "./selection";
 
 const BEACON_SHADOW_HZ = 15;
 
 interface Slot {
   light: PointLight | SpotLight;
+  /** Second headlight of a clustered vehicle pair (WebGPU only); null elsewhere. */
+  secondary: SpotLight | null;
+  /** Pair shown as two headlights (near) or one merged beam (far). */
+  split: boolean;
   id: string | null;
   fade: number;
 }
 
-function syncSlot(slot: Slot, source: LocalLightSource, night: number) {
+function aimSpot(light: SpotLight, source: LocalLightSource) {
+  light.angle = source.angle;
+  light.target.position.copy(light.position).add(source.direction);
+  light.target.updateMatrixWorld();
+}
+
+function syncSlot(slot: Slot, source: LocalLightSource, night: number, cameraPosition: Vector3) {
   const light = slot.light;
   light.position.copy(source.position);
   light.color.copy(source.color);
   light.distance = source.range;
-  light.intensity =
+  const intensity =
     source.intensity * slot.fade * (source.kind === "beacon" ? 0.15 + night * 0.85 : night);
-  if (light instanceof SpotLight) {
-    light.angle = source.angle;
-    light.target.position.copy(source.position).add(source.direction);
-    light.target.updateMatrixWorld();
+  light.intensity = intensity;
+  if (!(light instanceof SpotLight)) {
+    return;
   }
+  const secondary = slot.secondary;
+  if (secondary) {
+    // Distance LOD: two headlights on the bulbs up close, one merged beam further away.
+    // The merged pair keeps its second spot at 0, which the node compacts away for free.
+    slot.split = headlightSplit(slot.split, source.position.distanceToSquared(cameraPosition));
+    secondary.color.copy(source.color);
+    secondary.distance = source.range;
+    secondary.intensity = slot.split ? intensity / 2 : 0;
+    if (slot.split) {
+      light.intensity = intensity / 2;
+      light.position.sub(source.lateral);
+      secondary.position.copy(source.position).add(source.lateral);
+      aimSpot(secondary, source);
+    }
+  }
+  aimSpot(light, source);
 }
 
 export function LocalLighting() {
@@ -51,7 +76,15 @@ export function LocalLighting() {
       : 8;
     for (let i = 0; i < (gpu ? vehicleSpots : 8); i++) {
       const light = new SpotLight(0xffffff, 0, 6, 0.32, 0.7, 2);
-      spots.push({ light, id: null, fade: 0 });
+      // WebGPU: both spots of a pair opt into the clustered node; WebGL2 keeps one per slot.
+      let secondary: SpotLight | null = null;
+      if (gpu) {
+        light.userData.clustered = true;
+        secondary = new SpotLight(0xffffff, 0, 6, 0.32, 0.7, 2);
+        secondary.userData.clustered = true;
+        group.add(secondary, secondary.target);
+      }
+      spots.push({ light, secondary, split: false, id: null, fade: 0 });
       group.add(light, light.target);
     }
     const beacon = runtime.beaconLight;
@@ -74,7 +107,7 @@ export function LocalLighting() {
     beacon.shadow.radius = 2;
     beacon.shadow.blurSamples = 6;
     group.add(beacon, beacon.target);
-    const beaconSlot: Slot = { light: beacon, id: null, fade: 0 };
+    const beaconSlot: Slot = { light: beacon, secondary: null, split: false, id: null, fade: 0 };
     return {
       group,
       points,
@@ -106,6 +139,7 @@ export function LocalLighting() {
     () => () => {
       for (const slot of [...resources.points, ...resources.spots, resources.beacon]) {
         slot.light.dispose();
+        slot.secondary?.dispose();
       }
       runtime.shadowBeaconId = null;
     },
@@ -114,14 +148,9 @@ export function LocalLighting() {
   useFrame(({ camera, clock }, delta) => {
     const r = resources;
     const night = runtime.night.value;
-    // Vehicle spots exist at night only: one recompile per transition. The lighthouse map
-    // is frozen by day and hidden through its intensity uniform, so `castShadow` never flips.
+    // The lighthouse map is frozen by day and hidden through its intensity uniform, so
+    // `castShadow` never flips; vehicle spots are clustered, so their list never recompiles.
     r.beacon.light.shadow.intensity = runtime.nightLights ? 1 : 0;
-    for (const slot of r.spots) {
-      if (slot.light.visible !== runtime.nightLights) {
-        slot.light.visible = runtime.nightLights;
-      }
-    }
     if (clock.elapsedTime >= r.nextSelection) {
       r.nextSelection = clock.elapsedTime + 0.2;
       camera.updateMatrixWorld();
@@ -175,7 +204,7 @@ export function LocalLighting() {
       const wantedPoints = Math.min(r.pointLimit, gpu ? streets : 8);
       while (r.points.length < wantedPoints) {
         const light = new PointLight(0xffd7a0, 0, 5, 2);
-        const slot = { light, id: null, fade: 0 };
+        const slot: Slot = { light, secondary: null, split: false, id: null, fade: 0 };
         r.slots.splice(r.points.length, 0, slot);
         r.points.push(slot);
         r.group.add(light);
@@ -210,9 +239,12 @@ export function LocalLighting() {
       }
       const source = slot.id ? runtime.sources.get(slot.id) : undefined;
       if (source) {
-        syncSlot(slot, source, night);
+        syncSlot(slot, source, night, r.cameraPosition);
       } else {
         slot.light.intensity = 0;
+        if (slot.secondary) {
+          slot.secondary.intensity = 0;
+        }
       }
     };
     for (const slot of r.points) {

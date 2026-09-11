@@ -58,7 +58,7 @@ render four to eight times the pixels of a 1080p screen.
 | Bloom mip chain | ¼ resolution | ½ resolution | ½ resolution |
 | Sun shadow map / refresh ceiling | 1024² ≤ 4 Hz | 2048² ≤ 6 Hz | 2048² ≤ 6 Hz |
 | Lighthouse shadow (refreshed at night, frozen by day) / volume | none / cone | 512² / raymarched | 512² / raymarched |
-| Clustered points / vehicle spots (WebGPU) | 96 / 4 | 256 / 8 | 1024 / 16 |
+| Clustered points / vehicle headlight pairs (WebGPU) | 96 / 4 | 256 / 8 | 1024 / 16 |
 | Cars / trucks | 120 / 30 | 240 / 60 | 240 / 60 |
 
 The render scale is `min(devicePixelRatio, maxDpr, sqrt(maxPixels / canvas area))`,
@@ -281,11 +281,41 @@ map is no longer redrawn and vehicles no longer cast into it (55 draws fewer), a
 each fragment reads one VSM texel instead of five compares. At night nothing moved
 because the cost sits in the local lights themselves, not in their shadows:
 `localLights=0` brings the night scene pass to 3.4 ms on both builds while
-`shadows=0` changes nothing. The next lever for the night is the per-fragment
-evaluation of the vehicle spots, which are not clustered like the point lights.
+`shadows=0` changes nothing. The next lever for the night was the per-fragment
+evaluation of the vehicle spots, which the clustered node of three r185 left to the
+material path; see the clustered headlights section below.
 Contact shading stays around 10 % of the frame, so the half-resolution denoise
 remains unimplemented. Raw rows, the matrix script and the world are in
 `out/profile/fast-shadows`.
+
+### Clustered headlights (2026-09-11)
+
+Same rig, world and captures as above, three alternated runs per build against the
+Tweaks commit (`0c8094e`), night preview only. `ClusteredLightsNode` of three r185
+only clusters shadowless point lights, so every vehicle spot was evaluated on every
+fragment. The TS fork in `lighting/clustered/` packs opted-in spots (`userData.clustered`,
+no shadow map) into the same data texture with a cone bounding sphere for the compute
+test and a `smoothstep` cone factor in the fragment loop; point lights carry sentinel
+cone cosines so both kinds share one shading path. Each vehicle slot owns a headlight
+pair that splits within 12 units of the camera and merges beyond 16, the merged
+second spot sitting at intensity 0 and compacted away before packing.
+
+| Median, night | Before | After | `localLights=0` |
+| --- | ---: | ---: | ---: |
+| GPU per frame | 17.1 ms | 12.1 ms | 11.6 ms |
+| Scene / materials / lighting | 8.41 ms | 3.74 ms | 3.34 ms |
+| Light clustering | 0.43 ms | 0.47 ms | 0.47 ms |
+| Frame interval p95 | 33.4 ms | 17.7 ms | 17.6 ms |
+| CPU p95 | 7.1 ms | 4.7 ms | 3.8 ms |
+| Draw calls | 120 | 121 | 112 |
+
+The night scene pass now sits 0.4 ms above the no-local-lights floor, and the
+night frame interval matches the daytime one. Composition, bloom and contact
+shading are unchanged. The spots left the material light list, so dusk and dawn
+no longer recompile materials: the night camera check reports zero pipeline
+compiles in motion, `check-lighting` passes on both backends and the night profile
+check shows the `Light clustering` group with spot visits above zero. Rows and the
+matrix script are in `out/profile/b-night` and the session scratchpad.
 
 Final validation passed 221 unit tests, lint, application and benchmark-script type
 checks, and the production build. Browser checks at 800×500 passed building

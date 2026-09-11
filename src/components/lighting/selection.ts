@@ -83,3 +83,15 @@ export class BrakeTracker {
 export function nightGate(previous: boolean, night: number): boolean {
   return previous ? night >= 0.01 : night > 0.03;
 }
+
+/** Squared camera distances: a pair splits into two headlights below 12 units, merges back past 16. */
+export const HEADLIGHT_SPLIT_SQ = 144;
+export const HEADLIGHT_MERGE_SQ = 256;
+
+/**
+ * Whether a vehicle slot shows two clustered headlights or one merged beam.
+ * Hysteresis in squared distance keeps a vehicle hovering at the edge from flapping.
+ */
+export function headlightSplit(previous: boolean, distanceSq: number): boolean {
+  return previous ? distanceSq <= HEADLIGHT_MERGE_SQ : distanceSq < HEADLIGHT_SPLIT_SQ;
+}

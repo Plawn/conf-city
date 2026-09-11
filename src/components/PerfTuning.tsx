@@ -34,6 +34,7 @@ export interface LightingPerfSample {
   beaconShadowRenders: number;
   clusterDispatches: number;
   clusteredPointLightVisits: number;
+  clusteredSpotLightVisits: number;
   draws: number;
   triangles: number;
   textures: number;
@@ -105,6 +106,7 @@ export function PerfHud() {
     if (renderer.lighting instanceof ActiveClusteredLighting) {
       renderer.lighting.work.dispatches = 0;
       renderer.lighting.work.pointLightVisits = 0;
+      renderer.lighting.work.spotLightVisits = 0;
     }
     frameStart.current = performance.now();
   }, -1000);
@@ -167,6 +169,10 @@ export function PerfHud() {
         clusteredPointLightVisits:
           renderer.lighting instanceof ActiveClusteredLighting
             ? renderer.lighting.work.pointLightVisits
+            : 0,
+        clusteredSpotLightVisits:
+          renderer.lighting instanceof ActiveClusteredLighting
+            ? renderer.lighting.work.spotLightVisits
             : 0,
         draws: render.drawCalls,
         triangles: render.triangles,

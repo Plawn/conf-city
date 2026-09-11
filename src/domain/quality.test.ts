@@ -4,6 +4,7 @@ import {
   frameBudgetMs,
   initialTier,
   isIdle,
+  MAX_CLUSTERED_LIGHTS,
   percentile,
   QUALITY_PROFILES,
   QUALITY_TIERS,
@@ -12,6 +13,9 @@ import {
 } from "./quality";
 
 describe("quality profiles", () => {
+  test("the clustered node holds the widest tier's points plus a spot pair per slot", () => {
+    expect(MAX_CLUSTERED_LIGHTS).toBe(1056);
+  });
   test("every budget is monotonic from eco to high", () => {
     const [eco, balanced, high] = QUALITY_TIERS.map((tier) => QUALITY_PROFILES[tier]);
     for (const key of [

@@ -34,6 +34,40 @@ test("clusters drop only zero-intensity points and restore fading lights without
   expect(lights).toHaveLength(5);
 });
 
+test("opted-in shadowless spots cluster, compact at zero intensity and keep the material key", () => {
+  const node = new ActiveClusteredLightsNode();
+  const point = new PointLight(0xffffff, 1);
+  const marked = new SpotLight(0xffffff, 1, 6);
+  marked.userData.clustered = true;
+  const merged = new SpotLight(0xffffff, 0, 6);
+  merged.userData.clustered = true;
+  const beacon = new SpotLight(0xffffff, 1, 6);
+  const shadowed = new SpotLight(0xffffff, 1, 6);
+  shadowed.userData.clustered = true;
+  shadowed.castShadow = true;
+  const infinite = new SpotLight(0xffffff, 1, 0);
+  infinite.userData.clustered = true;
+  const sun = new DirectionalLight();
+  node.work = { dispatches: 0, pointLightVisits: 0, spotLightVisits: 0 };
+  const materialOnly = [point, beacon, shadowed, infinite, sun];
+  node.setLights(materialOnly);
+  const materialKey = node.customCacheKey();
+  node.setLights([point, marked, merged, beacon, shadowed, infinite, sun]);
+  expect(node.clusteredLights).toEqual([point, marked]);
+  expect(node.materialLights).toEqual([beacon, shadowed, infinite, sun]);
+  expect(node.clusteredSpots).toBe(1);
+  expect(node.customCacheKey()).toBe(materialKey);
+  node.updateBefore(new NodeFrame());
+  merged.intensity = 0.5;
+  node.setLights([point, marked, merged, beacon, shadowed, infinite, sun]);
+  expect(node.clusteredLights).toEqual([point, marked, merged]);
+  node.updateBefore(new NodeFrame());
+  expect(node.work).toEqual({ dispatches: 2, pointLightVisits: 2, spotLightVisits: 3 });
+  node.setLights(materialOnly);
+  expect(node.clusteredSpots).toBe(0);
+  expect(node.customCacheKey()).toBe(materialKey);
+});
+
 test("suspended volume clears once, blur consumes black once, and both resume immediately", () => {
   let active = false;
   let image = "uninitialized";

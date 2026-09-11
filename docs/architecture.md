@@ -147,7 +147,8 @@ mobility/                  engine.ts (one bounded clock for every transport), Mo
                            ConstructionMarkers.tsx
 lighting/                  SolarLighting (sun + shadow fitting), LightingPipeline (GTAO, bloom, FXAA, lighthouse
                            volume), LocalLighting + ActiveClusteredLighting + VehicleLights (street lamps and
-                           headlights, clustered on WebGPU, 8 spots on WebGL2), selection.ts (selectLights,
+                           headlight pairs, clustered on WebGPU, 8 spots on WebGL2), clustered/ (TS fork of
+                           three's ClusteredLightsNode with spot support, lightPacking.ts), selection.ts (selectLights,
                            BrakeTracker), shadowBounds.ts, renderer.ts (WebGPURenderer, `?renderer=webgl`),
                            rendererInitialization.ts, runtime.ts (LightingContext), passGate.ts, beaconGeometry.ts
 utilities/                 Lighthouse (worst usage beacon), UtilityDistrict (power station = CPU, water tower =

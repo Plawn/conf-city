@@ -167,8 +167,11 @@ try {
       ) {
         throw new Error(`Unexpected volume work in ${label}: ${JSON.stringify(last)}`);
       }
-      if (label === "noon" && last.clusteredPointLightVisits !== 0) {
-        throw new Error("Zero-intensity daytime points still enter cluster calculations");
+      if (
+        label === "noon" &&
+        (last.clusteredPointLightVisits !== 0 || last.clusteredSpotLightVisits !== 0)
+      ) {
+        throw new Error("Zero-intensity daytime lights still enter cluster calculations");
       }
     }
     const summary = summarizePerf(state.samples, state.gpuSamples, benchmarkFrameBudget);
@@ -232,7 +235,8 @@ try {
             ? perf.volumePasses > 0 && perf.volumeBlurPasses > 0
             : perf.volumePasses === 0 &&
                 perf.volumeBlurPasses === 0 &&
-                perf.clusteredPointLightVisits === 0;
+                perf.clusteredPointLightVisits === 0 &&
+                perf.clusteredSpotLightVisits === 0;
         },
         label === "night" && backend === "webgpu" && volumeEnabled,
       );

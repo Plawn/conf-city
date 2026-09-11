@@ -5,7 +5,7 @@ import { readSolarLocation, useLightingStore } from "../../store/lightingStore";
 import { createSim } from "../traffic/sim";
 import { createBeaconGeometry } from "./beaconGeometry";
 import { createLightingRuntime } from "./runtime";
-import { BrakeTracker, nightGate, selectLights } from "./selection";
+import { BrakeTracker, headlightSplit, nightGate, selectLights } from "./selection";
 import {
   fitShadowBounds,
   frustumCorners,
@@ -316,6 +316,10 @@ test("vehicle projectors follow pitch/roll and release sources on pool recycling
   expect(
     source.direction.distanceTo(new Vector3(0, -0.12, 1).applyQuaternion(q).normalize()),
   ).toBeLessThan(1e-6);
+  // The pair offset is the bulb offset rotated with the body, scaled like the projector.
+  expect(source.lateral.distanceTo(new Vector3(0.092 * 1.4, 0, 0).applyQuaternion(q))).toBeLessThan(
+    1e-6,
+  );
   pool.id[0] = 99;
   lights.update(pool, 1 / 30);
   expect(runtime.sources.has("trucks:42")).toBe(false);
@@ -327,4 +331,14 @@ test("vehicle projectors follow pitch/roll and release sources on pool recycling
   lights.update(pool, 1 / 30);
   lights.dispose();
   expect(runtime.sources.size).toBe(0);
+});
+
+test("headlight pairs split near the camera with hysteresis between 12 and 16 units", () => {
+  expect(headlightSplit(false, 143)).toBe(true);
+  expect(headlightSplit(false, 144)).toBe(false);
+  expect(headlightSplit(false, 200)).toBe(false);
+  expect(headlightSplit(true, 200)).toBe(true);
+  expect(headlightSplit(true, 256)).toBe(true);
+  expect(headlightSplit(true, 257)).toBe(false);
+  expect(headlightSplit(false, 257)).toBe(false);
 });

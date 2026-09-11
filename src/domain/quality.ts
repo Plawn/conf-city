@@ -84,6 +84,14 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
   },
 };
 
+/** Texels of the clustered lights node, sized once: the widest tier's points plus a spot pair per vehicle slot. */
+export const MAX_CLUSTERED_LIGHTS = Math.max(
+  ...QUALITY_TIERS.map((tier) => {
+    const profile = QUALITY_PROFILES[tier];
+    return profile.pointLights + 2 * profile.vehicleSpots;
+  }),
+);
+
 export const QUALITY_LABELS: Record<QualityChoice, string> = {
   auto: "Auto",
   eco: "Eco",
