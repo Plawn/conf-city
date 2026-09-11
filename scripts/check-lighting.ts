@@ -4,6 +4,7 @@
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
 import { isQualityTier, QUALITY_PROFILES } from "../src/domain/quality";
+import { mergeQualityProfile, parseTweaks } from "../src/domain/qualityOverrides";
 import { chromiumArgs } from "./chromium-args";
 import {
   benchmarkDpr,
@@ -24,7 +25,10 @@ const cityParams = `${process.env.CITY_PARAMS ?? ""}${/quality=/.test(process.en
 const forcedTier = new URLSearchParams(cityParams).get("quality");
 /** Only a fixed tier is predictable here; "auto" lets the governor pick, so no volume assertion. */
 const volumeAllowed = isQualityTier(forcedTier)
-  ? QUALITY_PROFILES[forcedTier].volume
+  ? mergeQualityProfile(
+      QUALITY_PROFILES[forcedTier],
+      parseTweaks(new URLSearchParams(cityParams).get("tweaks")),
+    ).volume
   : forcedTier !== "auto";
 const volumeEnabled = volumeAllowed && !process.env.CITY_PARAMS?.includes("volume=0");
 

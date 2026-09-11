@@ -37,24 +37,19 @@ export function LocalLighting() {
   const runtime = useLighting();
   const renderer = gpuRenderer(useThree((s) => s.gl));
   const gpu = isWebGPU(renderer);
-  const profile = useQualityProfile();
+  // Destructured: the light pool is rebuilt only for the budgets it actually reads.
+  const { pointLights, vehicleSpots, beaconShadow } = useQualityProfile();
   const resources = useMemo(() => {
     const group = new Group();
     const points: Slot[] = [];
     const spots: Slot[] = [];
     // Allocate point lights lazily as streets register, avoiding 1024 empty lights in small worlds.
     // The tier caps the budget; `?lights=` only lowers it further for measurements.
-    const requested = Number(renderParams.get("lights") ?? profile.pointLights);
+    const requested = Number(renderParams.get("lights") ?? pointLights);
     const pointLimit = gpu
-      ? Math.max(
-          1,
-          Math.min(
-            profile.pointLights,
-            Number.isFinite(requested) ? requested : profile.pointLights,
-          ),
-        )
+      ? Math.max(1, Math.min(pointLights, Number.isFinite(requested) ? requested : pointLights))
       : 8;
-    for (let i = 0; i < (gpu ? profile.vehicleSpots : 8); i++) {
+    for (let i = 0; i < (gpu ? vehicleSpots : 8); i++) {
       const light = new SpotLight(0xffffff, 0, 6, 0.32, 0.7, 2);
       spots.push({ light, id: null, fade: 0 });
       group.add(light, light.target);
@@ -63,7 +58,7 @@ export function LocalLighting() {
     beacon.shadow.camera.name = "Lighthouse shadow";
     beacon.layers.enable(BEACON_VOLUME_LAYER);
     // Casts for the component's lifetime; night only changes the intensity uniform and refresh.
-    const shadowCapable = gpu && profile.beaconShadow && renderParams.get("shadows") !== "0";
+    const shadowCapable = gpu && beaconShadow && renderParams.get("shadows") !== "0";
     beacon.castShadow = shadowCapable;
     beacon.shadow.needsUpdate = shadowCapable;
     beacon.shadow.intensity = runtime.nightLights ? 1 : 0;
@@ -106,7 +101,7 @@ export function LocalLighting() {
       sphere: new Sphere(),
       cameraPosition: new Vector3(),
     };
-  }, [gpu, runtime, profile]);
+  }, [gpu, runtime, pointLights, vehicleSpots, beaconShadow]);
   useEffect(
     () => () => {
       for (const slot of [...resources.points, ...resources.spots, resources.beacon]) {

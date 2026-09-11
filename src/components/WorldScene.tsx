@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { CameraTarget } from "../domain/camera";
 import { TERRAIN } from "../domain/nodeStyle";
-import { IDLE_FPS, initialTier, QUALITY_PROFILES } from "../domain/quality";
+import { IDLE_FPS, initialTier } from "../domain/quality";
 import type {
   City,
   CityMeta,
@@ -16,7 +16,7 @@ import type {
 import { buildShoreField } from "../layout/shore";
 import type { WorldLayout } from "../layout/types";
 import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
-import { useQualityTier, useUiStore } from "../store/uiStore";
+import { useQualityProfile, useUiStore } from "../store/uiStore";
 import { BridgeMesh, deckWidth } from "./BridgeMesh";
 import { BuildingAnimations } from "./buildings/BuildingAnimations";
 import { CameraAnimator } from "./CameraAnimator";
@@ -158,7 +158,7 @@ export function WorldScene({
   }, [rendererAttempt, handleDeviceLost]);
   const renderMode = useUiStore((s) => s.renderMode);
   const idle = useUiStore((s) => s.idle);
-  const profile = QUALITY_PROFILES[useQualityTier()];
+  const profile = useQualityProfile();
   const fps = idle ? IDLE_FPS : renderMode === "office" ? 30 : 60;
   // Overlay that hosts every drei <Html>; state (not ref) so children re-render once it exists.
   const [portalEl, setPortalEl] = useState<HTMLDivElement | null>(null);

@@ -54,8 +54,9 @@ preview and Chromium — see `docs/render-performance.md`. Docker and `just` rec
   meshes never rebuild matrices, instanced draws over per-object meshes. Measure before and after
   (`?perf=1`, `docs/render-performance.md`).
 - **Render budgets come from `src/domain/quality.ts`** (pixels, AO, bloom, shadows, light and
-  vehicle counts), read through `useQualityProfile()`; never a local constant. Headless scripts
-  force `quality=high` so measurements stay comparable.
+  vehicle counts), read through `useQualityProfile()` (the tier merged with the user's Tweaks
+  overrides); never a local constant. Headless scripts force `quality=high` so measurements stay
+  comparable.
 - `glass-ui-solid` components are **never imported** (no `solid-js`); only its extracted CSS is used.
 - Palettes stay ≤ `#7a` per channel (bloom threshold 0.8); biomes never touch roads, kerbs,
   liveness colours or heatmap greys.

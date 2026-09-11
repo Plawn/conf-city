@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { LIVENESS_TONE } from "../domain/nodeStyle";
 import { QUALITY_LABELS, type QualityChoice } from "../domain/quality";
+import { hasOverrides } from "../domain/qualityOverrides";
 import type { Alert } from "../domain/telemetry";
 import type { LivenessStatus, NodeTelemetry } from "../domain/types";
 import type { ProviderInfo } from "../hooks/useTelemetryStream";
 import { formatRelative } from "../lib/time";
 import { type RenderMode, useQualityTier, useUiStore, type ViewMode } from "../store/uiStore";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { TweaksPanel } from "./TweaksPanel";
 import { Badge, Button, cx, GlassCard, GlassPanel, SegmentedControl, Tooltip } from "./ui";
 
 const ORDER: LivenessStatus[] = ["healthy", "degraded", "down", "unknown"];
@@ -77,10 +79,11 @@ export function StatusBar({
   const quality = useUiStore((s) => s.quality);
   const setQuality = useUiStore((s) => s.setQuality);
   const idle = useUiStore((s) => s.idle);
+  const renderOverrides = useUiStore((s) => s.renderOverrides);
   const tier = useQualityTier();
   const displayLabel = `${renderMode === "office" ? "Office" : "Smooth"} · ${
     quality === "auto" ? `Auto (${QUALITY_LABELS[tier].toLowerCase()})` : QUALITY_LABELS[tier]
-  }${idle ? " · idle" : ""}`;
+  }${idle ? " · idle" : ""}${hasOverrides(renderOverrides) ? " · tweaked" : ""}`;
 
   return (
     <div className="absolute left-1/2 top-4 z-30 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2">
@@ -212,6 +215,7 @@ export function StatusBar({
                 keeps its cadence, for wall displays.
               </span>
             </div>
+            <TweaksPanel />
           </div>
         </GlassCard>
       )}

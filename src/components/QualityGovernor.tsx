@@ -20,17 +20,18 @@ const IDLE_CHECK_MS = 1000;
 const ACTIVITY_EVENTS = ["pointermove", "pointerdown", "wheel", "keydown", "touchstart"] as const;
 
 /**
- * Render scale from the tier's pixel budget and the canvas size. Only a tier or
- * layout change touches it: ClusteredLighting rebuilds its buffers on resize.
+ * Render scale from the effective pixel budget (tier plus tweaks) and the canvas
+ * size. Only a budget or layout change touches it: ClusteredLighting rebuilds its buffers on resize.
  */
 export function RenderScale() {
-  const profile = useQualityProfile();
+  // Destructured so a tweak to another budget never re-runs the resize.
+  const { maxPixels, maxDpr } = useQualityProfile();
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
   const setDpr = useThree((s) => s.setDpr);
   useEffect(() => {
-    setDpr(resolveDpr(profile, width, height, window.devicePixelRatio));
-  }, [profile, width, height, setDpr]);
+    setDpr(resolveDpr({ maxPixels, maxDpr }, width, height, window.devicePixelRatio));
+  }, [maxPixels, maxDpr, width, height, setDpr]);
   return null;
 }
 

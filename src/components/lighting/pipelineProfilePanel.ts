@@ -1,5 +1,6 @@
 import type { WebGPURenderer } from "three/webgpu";
-import { selectTier, useUiStore } from "../../store/uiStore";
+import { formatTweaks } from "../../domain/qualityOverrides";
+import { selectProfile, selectTier, useUiStore } from "../../store/uiStore";
 import { PipelineProfiler } from "./PipelineProfiler";
 import { pipelineSpeedscope, summarizePipeline } from "./profileReport";
 import { isWebGPU, rendererDeviceInfo, renderParams } from "./renderer";
@@ -19,6 +20,10 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
       gpuTimestamps: profiler.supported,
       tier: selectTier(state),
       qualityChoice: state.quality,
+      // The tier alone no longer describes the budgets: record the tweaks too.
+      tweaks: formatTweaks(state.renderOverrides),
+      overrides: state.renderOverrides,
+      profile: selectProfile(state),
       renderMode: state.renderMode,
       width: renderer.domElement.width,
       height: renderer.domElement.height,
@@ -54,24 +59,31 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
     get resolving() {
       return profiler.resolving;
     },
-    report: () => ({
-      version: 1,
-      startedAt,
-      startedWith,
-      endedWith: metadata(),
-      skippedWhileReadingGpu: profiler.skippedFrames,
-      error: profiler.error,
-      summary: summarizePipeline(profiler.frames),
-      frames: profiler.frames,
-      notes: [
-        "Only work inside the 3D render pipeline is captured; simulation and DOM are excluded.",
-        "GPU values are native per-pass durations, not wall-clock timestamps or GPU utilization.",
-        "Frames rendered during asynchronous readback are not sampled. No GPU wait is inserted.",
-        "CPU pass scopes include nested submissions: do not add them together.",
-        "Scene GPU cost includes geometry, water, materials and local light shading together.",
-        "Missing GPU timestamps remain null; summaries and flamegraphs use complete frames only.",
-      ],
-    }),
+    report: () => {
+      const endedWith = metadata();
+      return {
+        version: 1,
+        startedAt,
+        startedWith,
+        endedWith,
+        // A budget changed mid-capture: the samples mix two pipelines.
+        changedDuringCapture:
+          JSON.stringify(startedWith.profile) !== JSON.stringify(endedWith.profile),
+        skippedWhileReadingGpu: profiler.skippedFrames,
+        error: profiler.error,
+        summary: summarizePipeline(profiler.frames),
+        frames: profiler.frames,
+        notes: [
+          "Only work inside the 3D render pipeline is captured; simulation and DOM are excluded.",
+          "GPU values are native per-pass durations, not wall-clock timestamps or GPU utilization.",
+          "Frames rendered during asynchronous readback are not sampled. No GPU wait is inserted.",
+          "CPU pass scopes include nested submissions: do not add them together.",
+          "Scene GPU cost includes geometry, water, materials and local light shading together.",
+          "Missing GPU timestamps remain null; summaries and flamegraphs use complete frames only.",
+          "Tweaks are recorded in `startedWith.tweaks`; `changedDuringCapture` flags a mid-capture change.",
+        ],
+      };
+    },
     speedscope: () => pipelineSpeedscope(profiler.frames),
   };
 }
@@ -101,7 +113,7 @@ export function attachPipelineProfilePanel(renderer: WebGPURenderer) {
   title.textContent = "3D pipeline · GPU pass costs";
   const instructions = document.createElement("p");
   instructions.textContent =
-    "Let the scene warm up, then record 10 s. Keep quality, resolution and time of day fixed.";
+    "Let the scene warm up, then record 10 s. Keep quality, tweaks, resolution and time of day fixed: the active tweaks are stored in the report, and changing one mid-capture mixes two pipelines.";
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   const controls = document.createElement("div");
@@ -146,6 +158,7 @@ export function attachPipelineProfilePanel(renderer: WebGPURenderer) {
     report.disabled = profiler.recording || profiler.resolving || !summary.capturedFrames;
     flame.disabled = report.disabled || !summary.gpuMeanMs;
     const phase = profiler.recording ? "Recording" : profiler.resolving ? "Reading GPU" : "Ready";
+    const tweaks = formatTweaks(useUiStore.getState().renderOverrides);
     status.textContent = profiler.error
       ? `Capture error: ${profiler.error}`
       : !profiler.supported
@@ -153,7 +166,8 @@ export function attachPipelineProfilePanel(renderer: WebGPURenderer) {
         : `${phase} · ${summary.completeGpuFrames}/${summary.capturedFrames} complete GPU samples` +
           (summary.gpuMeanMs === null
             ? ""
-            : ` · mean ${summary.gpuMeanMs.toFixed(2)} ms · p95 ${summary.gpuP95Ms!.toFixed(2)} ms`);
+            : ` · mean ${summary.gpuMeanMs.toFixed(2)} ms · p95 ${summary.gpuP95Ms!.toFixed(2)} ms`) +
+          (tweaks ? ` · tweaks: ${tweaks}` : "");
     rows.replaceChildren();
     for (const group of summary.groups) {
       const row = document.createElement("div");

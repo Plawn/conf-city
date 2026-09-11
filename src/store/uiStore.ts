@@ -4,8 +4,16 @@ import {
   isQualityChoice,
   QUALITY_PROFILES,
   type QualityChoice,
+  type QualityProfile,
   type QualityTier,
 } from "../domain/quality";
+import {
+  hasOverrides,
+  mergeQualityProfile,
+  normalizeOverrides,
+  parseTweaks,
+  type QualityOverrides,
+} from "../domain/qualityOverrides";
 
 export type ToastTone = "ok" | "warn" | "danger" | "info";
 
@@ -41,6 +49,37 @@ function savedQuality(): QualityChoice {
   }
 }
 
+const TWEAKS_KEY = "conf-city-tweaks";
+
+/** `?tweaks=` wins at load (and is not stored, so an empty value loads clean); otherwise remembered. */
+function savedOverrides(): QualityOverrides {
+  try {
+    if (typeof window === "undefined") {
+      return {};
+    }
+    const forced = new URLSearchParams(window.location.search).get("tweaks");
+    if (forced !== null) {
+      return parseTweaks(forced);
+    }
+    const stored = localStorage.getItem(TWEAKS_KEY);
+    return stored ? normalizeOverrides(JSON.parse(stored)) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistOverrides(overrides: QualityOverrides) {
+  try {
+    if (hasOverrides(overrides)) {
+      localStorage.setItem(TWEAKS_KEY, JSON.stringify(overrides));
+    } else {
+      localStorage.removeItem(TWEAKS_KEY);
+    }
+  } catch {
+    // Rendering still works in browsers that disallow local storage.
+  }
+}
+
 export interface Toast {
   id: string;
   tone: ToastTone;
@@ -62,6 +101,8 @@ interface UiState {
   quality: QualityChoice;
   /** Tier the governor currently applies in "auto" mode. */
   autoTier: QualityTier;
+  /** User "Tweaks" applied on top of the tier's budgets; persisted. */
+  renderOverrides: QualityOverrides;
   /** Window unfocused or pointer inactive: the automatic display drops to the idle cadence. */
   idle: boolean;
 
@@ -76,6 +117,11 @@ interface UiState {
   setRenderMode: (mode: RenderMode) => void;
   setQuality: (quality: QualityChoice) => void;
   setAutoTier: (tier: QualityTier) => void;
+  setRenderOverride: <K extends keyof QualityOverrides>(
+    key: K,
+    value: QualityOverrides[K] | undefined,
+  ) => void;
+  resetRenderOverrides: () => void;
   setIdle: (idle: boolean) => void;
 }
 
@@ -91,6 +137,7 @@ export const useUiStore = create<UiState>((set) => ({
   renderMode: savedRenderMode(),
   quality: savedQuality(),
   autoTier: "balanced",
+  renderOverrides: savedOverrides(),
   idle: false,
 
   select: (addr) => set({ selectedNode: addr }),
@@ -121,6 +168,21 @@ export const useUiStore = create<UiState>((set) => ({
     set({ quality });
   },
   setAutoTier: (autoTier) => set({ autoTier }),
+  setRenderOverride: (key, value) =>
+    set((s) => {
+      const renderOverrides = { ...s.renderOverrides };
+      if (value === undefined) {
+        delete renderOverrides[key];
+      } else {
+        renderOverrides[key] = value;
+      }
+      persistOverrides(renderOverrides);
+      return { renderOverrides };
+    }),
+  resetRenderOverrides: () => {
+    persistOverrides({});
+    set({ renderOverrides: {} });
+  },
   setIdle: (idle) => set({ idle }),
 }));
 
@@ -132,6 +194,28 @@ export function useQualityTier(): QualityTier {
   return useUiStore(selectTier);
 }
 
-export function useQualityProfile() {
-  return QUALITY_PROFILES[useQualityTier()];
+let cachedProfile: {
+  tier: QualityTier;
+  overrides: QualityOverrides;
+  profile: QualityProfile;
+} | null = null;
+
+/** Tier merged with the tweaks; one-entry cache so the identity is stable for `Object.is`. */
+export const selectProfile = (
+  s: Pick<UiState, "quality" | "autoTier" | "renderOverrides">,
+): QualityProfile => {
+  const tier = selectTier(s);
+  if (cachedProfile?.tier !== tier || cachedProfile.overrides !== s.renderOverrides) {
+    cachedProfile = {
+      tier,
+      overrides: s.renderOverrides,
+      profile: mergeQualityProfile(QUALITY_PROFILES[tier], s.renderOverrides),
+    };
+  }
+  return cachedProfile.profile;
+};
+
+/** Every render budget is read here: the tier's profile with the user's tweaks on top. */
+export function useQualityProfile(): QualityProfile {
+  return useUiStore(selectProfile);
 }

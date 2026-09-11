@@ -145,6 +145,34 @@ sampled frames. Automated functional checks use `bun scripts/check-profile.ts`
 `CHROMIUM_PATH`, `CITY_OUTPUT` and `GPU_SOFTWARE=1` supported. Software GPU captures
 validate attribution and export only, not performance on an integrated GPU.
 
+### Tweaks
+
+The Display popover in the status bar has a **Tweaks** section: one control per render
+budget, on top of the selected tier, with a `· tweaked` label while any is active.
+Tweaks persist in `localStorage` under `conf-city-tweaks`. `?tweaks=ao:0,bloomScale:0.25,volume:0`
+wins at load and is not stored — an empty `?tweaks=` therefore loads clean. Booleans are
+written `0` / `1`. Precedence:
+
+| Layer | Effect |
+| --- | --- |
+| Quality tier | The baseline budgets, never edited |
+| Tweaks | Raise or lower any single budget |
+| URL kill-switches (`ao=0`, `bloom=0`, `volume=0`, `shadows=0`, `lights=N`, `localLights=0`) | Applied at the point of use; they only ever lower |
+
+A/B recipe: fix the tier, load `?profile=1&quality=high&idle=0`, warm up, record a baseline,
+change one tweak, wait for the shader compile hitch to pass, record again. The report carries
+`startedWith.tweaks` / `startedWith.profile`; `changedDuringCapture` is `true` when a budget
+moved mid-capture, which invalidates the samples.
+
+What a tweak costs: AO samples, AO denoise, volume and bloom scale rebuild the whole node
+pipeline (compile hitch); pixels, DPR, shadow map size and shadow Hz apply live; point lights
+and vehicle spots rebuild the light pool; cars and trucks reset the traffic simulation.
+
+Headless runs take the same grammar through the URL, e.g. `CITY_PARAMS="&tweaks=ao:0"`;
+`check-profile.ts` and `check-lighting.ts` merge it before asserting which passes must run.
+In `auto` quality the governor still steps the tier under tweaks, so pin a tier while measuring.
+
+
 ## Reproducible comparison
 
 Build and serve the application, then run browser measurements sequentially:

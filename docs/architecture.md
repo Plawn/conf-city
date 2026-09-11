@@ -28,6 +28,8 @@ domain/types.ts            Domain models; re-exports telemetry types from @proxy
 domain/camera.ts           CameraTarget { lookAt, distance?, nonce? } (nonce re-triggers the same target)
 domain/quality.ts          QUALITY_PROFILES (eco|balanced|high budgets), resolveDpr, initialTier, createGovernor,
                            idle detection — see render-performance.md
+domain/qualityOverrides.ts User "Tweaks" over the tier: QualityOverrides, OVERRIDE_RANGES, mergeQualityProfile,
+                           parseTweaks / formatTweaks (`?tweaks=ao:0,volume:0`) — see render-performance.md
 domain/telemetry.ts        MetricSample (history ring buffer), Alert
 domain/nodeStyle.ts        NODE_STYLE (colour/scale/models per type; first model = default), LIVENESS_COLORS,
                            TERRAIN (Y layers + road/water/bridge colours), VEHICLE_TINTS, PORT_ASSETS, nodeAddress()
@@ -47,7 +49,9 @@ domain/solar.ts            Sun position from suncalc + luxon (PARIS default, pre
 ```
 store/uiStore.ts           zustand: selectedNode, cameraTarget, logPanel, toasts, viewMode, renderMode (office 30 fps /
                            smooth 60 fps, persisted), quality (auto|eco|balanced|high, persisted, `?quality=`
-                           wins at load), autoTier + idle (written by QualityGovernor)
+                           wins at load), autoTier + idle (written by QualityGovernor), renderOverrides
+                           (Tweaks, persisted under "conf-city-tweaks", `?tweaks=` wins at load);
+                           selectProfile / useQualityProfile merge the tier with them
 store/lightingStore.ts     Solar location + clock (live | preview), location persisted
 store/mobilityStore.ts     Per-world Infrastructure (finished constructions) + ingress overrides, persisted under
                            "conf-city-mobility-v1"; live stats / jobs / events for the City evolution panel
@@ -207,9 +211,11 @@ a fresh Map would re-run discovery → `layoutWorld` → every route → empty t
 - Telemetry stays in `useTelemetryStream`; `world` / `visibleCities` / `search` stay in `App`.
 - Camera moves go through `setCamera({ lookAt, distance, nonce })`; `nonce` re-triggers the same target.
 - Rendering quality: `quality` is the user's choice, `autoTier` what the governor applies in Auto,
-  `useQualityTier()` / `useQualityProfile()` resolve the one in effect. Consumers (lighting pipeline,
-  sun and local lights, lighthouse, traffic, render scale) rebuild from the profile; nothing reads
-  budgets elsewhere.
+  `renderOverrides` the user's Tweaks (`src/domain/qualityOverrides.ts`). `selectProfile(state)` merges
+  tier and tweaks behind a one-entry cache so the identity stays stable, and `useQualityProfile()`
+  returns it. Consumers (lighting pipeline, sun and local lights, lighthouse, traffic, render scale)
+  rebuild from the profile — destructuring the budgets they read so an unrelated tweak costs nothing;
+  nothing reads budgets elsewhere.
 - Keyboard: `/` focus search, `Esc` close drawer → logs → clear search, `R` reset, `F` fit, `L` logs.
 
 ## Glass UI (CSS only)

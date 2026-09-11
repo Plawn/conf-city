@@ -1,6 +1,8 @@
 /** Functional capture check; SwiftShader timings never qualify target-hardware performance. */
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
+import { isQualityTier, QUALITY_PROFILES } from "../src/domain/quality";
+import { mergeQualityProfile, parseTweaks } from "../src/domain/qualityOverrides";
 import { chromiumArgs } from "./chromium-args";
 import { installLightingFixture, previewLighting } from "./lighting-fixture";
 
@@ -10,6 +12,13 @@ const output = process.env.CITY_OUTPUT ?? `out/profile/${backend}`;
 const params = process.env.CITY_PARAMS ?? "";
 const quality = process.env.CITY_QUALITY ?? "eco";
 const day = process.env.CITY_CASE === "noon";
+// Tweaks decide which passes the pipeline builds, so expect the tier merged with them.
+const expected = isQualityTier(quality)
+  ? mergeQualityProfile(
+      QUALITY_PROFILES[quality],
+      parseTweaks(new URLSearchParams(params).get("tweaks")),
+    )
+  : null;
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH,
   args: chromiumArgs(backend, software),
@@ -57,7 +66,7 @@ try {
     }
     const groups = report.summary.groups.map((group) => group.name);
     const required = ["Scene / materials / lighting"];
-    if (!params.includes("bloom=0")) {
+    if (!params.includes("bloom=0") && (expected?.bloomScale ?? 1) > 0) {
       required.push("Bloom");
     }
     if (!params.includes("localLights=0")) {
@@ -66,7 +75,7 @@ try {
     if (day && !params.includes("shadows=0")) {
       required.push("Shadows");
     }
-    if (quality === "high") {
+    if (expected?.ao.enabled) {
       required.push("Contact shading");
     }
     for (const name of required) {

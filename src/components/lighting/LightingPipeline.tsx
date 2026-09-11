@@ -48,7 +48,8 @@ export function LightingPipeline() {
   const { gl, scene, camera, get } = useThree();
   const renderer = gpuRenderer(gl);
   const runtime = useLighting();
-  const profile = useQualityProfile();
+  // Destructured: the pipeline is rebuilt only for the budgets it actually reads.
+  const { ao: aoBudget, volume: volumeBudget, bloomScale } = useQualityProfile();
   useEffect(() => {
     if (renderParams.get("profile") !== "1") {
       return;
@@ -75,20 +76,18 @@ export function LightingPipeline() {
     const emission = scenePass.getTextureNode("emissive");
     // Contact shading is the tier's call: eco skips the half-resolution GTAO and the
     // full-resolution denoise entirely rather than running them at a lower quality.
-    const shading = profile.ao.enabled && renderParams.get("ao") !== "0";
+    const shading = aoBudget.enabled && renderParams.get("ao") !== "0";
     const ambient = shading ? ao(depth, normals, camera) : null;
     let occlusion: Node<"vec4"> | null = null;
     let filtered: ReturnType<typeof denoise> | null = null;
     if (ambient) {
       ambient.resolutionScale = 0.5;
-      ambient.samples.value = isWebGPU(renderer)
-        ? profile.ao.samples
-        : Math.min(8, profile.ao.samples);
+      ambient.samples.value = isWebGPU(renderer) ? aoBudget.samples : Math.min(8, aoBudget.samples);
       ambient.radius.value = 0.9;
       ambient.scale.value = 1;
       ambient.useTemporalFiltering = false;
       occlusion = ambient.getTextureNode() as unknown as Node<"vec4">;
-      if (profile.ao.denoise) {
+      if (aoBudget.denoise) {
         filtered = denoise(ambient.getTextureNode(), depth, normals, camera);
         filtered.radius.value = 3;
         occlusion = filtered as unknown as Node<"vec4">;
@@ -156,12 +155,15 @@ export function LightingPipeline() {
       () => volume.visible,
       () => runtime.frameWork.volumeBlurPasses++,
     );
-    if (isWebGPU(renderer) && profile.volume && renderParams.get("volume") !== "0") {
+    if (isWebGPU(renderer) && volumeBudget && renderParams.get("volume") !== "0") {
       color = color.add(volumeBlur.getTextureNode().rgb);
     }
+    // A zero scale would allocate zero-sized mips, so no bloom node at all then.
     const glow =
-      renderParams.get("bloom") === "0" ? null : bloom(vec4(color, beauty.a), 0.25, 0.3, 1.15);
-    glow?.setResolutionScale(profile.bloomScale);
+      renderParams.get("bloom") === "0" || bloomScale <= 0
+        ? null
+        : bloom(vec4(color, beauty.a), 0.25, 0.3, 1.15);
+    glow?.setResolutionScale(bloomScale);
     const pipeline = new RenderPipeline(renderer);
     pipeline.outputColorTransform = false;
     const antialias = fxaa(renderOutput(vec4(glow ? color.add(glow.rgb) : color, beauty.a)));
@@ -185,7 +187,7 @@ export function LightingPipeline() {
       beamRange,
       antialias,
     };
-  }, [renderer, scene, camera, runtime.frameWork, profile]);
+  }, [renderer, scene, camera, runtime.frameWork, aoBudget, volumeBudget, bloomScale]);
   useEffect(
     () => () => {
       resources.pipeline.dispose();
