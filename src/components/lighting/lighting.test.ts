@@ -5,8 +5,13 @@ import { readSolarLocation, useLightingStore } from "../../store/lightingStore";
 import { createSim } from "../traffic/sim";
 import { createBeaconGeometry } from "./beaconGeometry";
 import { createLightingRuntime } from "./runtime";
-import { BrakeTracker, selectLights } from "./selection";
-import { fitShadowBounds, ShadowBoundsCache } from "./shadowBounds";
+import { BrakeTracker, nightGate, selectLights } from "./selection";
+import {
+  fitShadowBounds,
+  frustumCorners,
+  regionNeedsRefit,
+  ShadowBoundsCache,
+} from "./shadowBounds";
 import { createVehicleLights } from "./VehicleLights";
 
 test("solar storage validates data and tolerates unavailable storage", () => {
@@ -63,8 +68,11 @@ test("shadow camera encloses tall casters and receivers even with grazing sun", 
 
 test("shadow center is stable for subtexel translations", () => {
   const bounds = new Box3(new Vector3(-10, -10, -40), new Vector3(10, 10, -20));
-  const a = fitShadowBounds(bounds, new Matrix4());
-  const b = fitShadowBounds(bounds.clone().translate(new Vector3(0.001, 0.001, 0)), new Matrix4());
+  const { region: _a, ...a } = fitShadowBounds(bounds, new Matrix4());
+  const { region: _b, ...b } = fitShadowBounds(
+    bounds.clone().translate(new Vector3(0.001, 0.001, 0)),
+    new Matrix4(),
+  );
   expect(a).toEqual(b);
 });
 
@@ -104,42 +112,125 @@ test("shadow bounds reuse static transforms and follow growth, visibility and la
   scene.updateMatrixWorld();
   const cache = new ShadowBoundsCache();
   const bounds = new Box3();
-  cache.collect(scene, bounds);
+  expect(cache.collect(scene, bounds)).toBe(true);
   expect(bounds.min.toArray()).toEqual([9, -1, -1]);
   expect(bounds.max.toArray()).toEqual([11, 1, 1]);
 
   const apply = spyOn(Box3.prototype, "applyMatrix4");
   try {
-    cache.collect(scene, bounds);
+    expect(cache.collect(scene, bounds)).toBe(false);
     expect(apply).not.toHaveBeenCalled();
     mesh.scale.y = 5;
     scene.updateMatrixWorld();
-    cache.collect(scene, bounds);
+    expect(cache.collect(scene, bounds)).toBe(true);
     expect(apply).toHaveBeenCalledTimes(1);
     expect(bounds.max.y).toBe(5);
   } finally {
     apply.mockRestore();
   }
   group.visible = false;
-  cache.collect(scene, bounds);
+  expect(cache.collect(scene, bounds)).toBe(true);
   expect(bounds.isEmpty()).toBe(true);
+  expect(cache.collect(scene, bounds)).toBe(false);
   group.visible = true;
   const late = new Mesh(geometry);
   late.receiveShadow = true;
   late.position.z = 20;
   scene.add(late);
   scene.updateMatrixWorld();
-  cache.collect(scene, bounds);
+  expect(cache.collect(scene, bounds)).toBe(true);
   expect(bounds.max.z).toBe(21);
   late.removeFromParent();
-  cache.collect(scene, bounds);
+  expect(cache.collect(scene, bounds)).toBe(true);
   expect(bounds.max.z).toBe(1);
   const replacement = new BoxGeometry(4, 4, 4);
   mesh.geometry = replacement;
-  cache.collect(scene, bounds);
+  expect(cache.collect(scene, bounds)).toBe(true);
   expect(bounds.max.y).toBe(10);
   geometry.dispose();
   replacement.dispose();
+});
+
+test("shadow fit narrows to the framed view and keeps the world fit otherwise", () => {
+  const bounds = new Box3(new Vector3(-200, -1, -200), new Vector3(200, 30, 200));
+  const lightView = new Matrix4()
+    .lookAt(new Vector3(100, 300, 200), new Vector3(), new Vector3(0, 1, 0))
+    .setPosition(new Vector3(100, 300, 200))
+    .invert();
+  const world = fitShadowBounds(bounds, lightView, 2048);
+  const closeUp = [
+    new Vector3(-10, 0, -10),
+    new Vector3(10, 0, -10),
+    new Vector3(-10, 0, 10),
+    new Vector3(10, 0, 10),
+    new Vector3(-12, 20, -12),
+    new Vector3(12, 20, 12),
+  ];
+  const zoomed = fitShadowBounds(bounds, lightView, 2048, closeUp);
+  expect(zoomed.left).toBeGreaterThan(world.left);
+  expect(zoomed.right).toBeLessThan(world.right);
+  expect(zoomed.bottom).toBeGreaterThan(world.bottom);
+  expect(zoomed.top).toBeLessThan(world.top);
+  expect(zoomed.near).toBe(world.near);
+  expect(zoomed.far).toBe(world.far);
+  for (const point of closeUp) {
+    const p = point.clone().applyMatrix4(lightView);
+    expect(p.x).toBeGreaterThan(zoomed.left + 4);
+    expect(p.x).toBeLessThan(zoomed.right - 4);
+    expect(p.y).toBeGreaterThan(zoomed.bottom + 4);
+    expect(p.y).toBeLessThan(zoomed.top - 4);
+  }
+  const everything = [new Vector3(-900, -50, -900), new Vector3(900, 200, 900)];
+  const { region: _r, ...framedAll } = fitShadowBounds(bounds, lightView, 2048, everything);
+  const { region: _w, ...worldOnly } = world;
+  expect(framedAll).toEqual(worldOnly);
+  const outside = [new Vector3(500, 0, 500), new Vector3(600, 0, 600)];
+  const { region: _o, ...missed } = fitShadowBounds(bounds, lightView, 2048, outside);
+  expect(missed).toEqual(worldOnly);
+});
+
+test("view region refits only when uncovered or much smaller", () => {
+  const fit = {
+    left: -100,
+    right: 100,
+    bottom: -50,
+    top: 50,
+    near: 1,
+    far: 10,
+    region: { minX: -90, maxX: 90, minY: -40, maxY: 40 },
+  };
+  expect(regionNeedsRefit(null, fit.region)).toBe(true);
+  expect(regionNeedsRefit(fit, { minX: -60, maxX: 60, minY: -30, maxY: 30 })).toBe(false);
+  expect(regionNeedsRefit(fit, { minX: -60, maxX: 120, minY: -30, maxY: 30 })).toBe(true);
+  expect(regionNeedsRefit(fit, { minX: -20, maxX: 20, minY: -10, maxY: 10 })).toBe(true);
+});
+
+test("frustum corners are pulled in to the reach distance", () => {
+  const eye = new Vector3(0, 50, 100);
+  const cameraWorld = new Matrix4()
+    .lookAt(eye, new Vector3(), new Vector3(0, 1, 0))
+    .setPosition(eye);
+  const projection = new Matrix4().makePerspective(-1, 1, 1, -1, 1, 5000);
+  const corners = frustumCorners(projection.clone().invert(), cameraWorld, 300, []);
+  expect(corners).toHaveLength(8);
+  for (const corner of corners.slice(0, 4)) {
+    expect(corner.distanceTo(eye)).toBeCloseTo(Math.sqrt(3), 3);
+  }
+  for (const corner of corners.slice(4)) {
+    expect(corner.distanceTo(eye)).toBeCloseTo(300, 3);
+  }
+  const reused = frustumCorners(projection.clone().invert(), cameraWorld, 300, corners);
+  expect(reused).toBe(corners);
+});
+
+test("night gate has hysteresis around dusk", () => {
+  expect(nightGate(false, 0)).toBe(false);
+  expect(nightGate(false, 0.02)).toBe(false);
+  expect(nightGate(false, 0.05)).toBe(true);
+  expect(nightGate(true, 0.02)).toBe(true);
+  expect(nightGate(true, 0.01)).toBe(true);
+  expect(nightGate(true, 0.005)).toBe(false);
+  expect(nightGate(true, 1)).toBe(true);
 });
 
 test("shadow bounds do not recursively include excluded children of a mesh", () => {

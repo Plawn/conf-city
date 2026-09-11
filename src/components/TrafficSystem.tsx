@@ -20,6 +20,7 @@ import { trafficStats } from "./traffic/lifecycle";
 import { reconfigureSim } from "./traffic/reconfigure";
 import { advance, createSim, type Pool, type TrafficRoute } from "./traffic/sim";
 import { useVehicleGeometry, VEHICLE_MODELS } from "./traffic/useVehicleGeometry";
+import { createVehicleShadows } from "./traffic/vehicleShadows";
 
 export type { TrafficRoute } from "./traffic/sim";
 
@@ -40,7 +41,9 @@ function makeMesh(
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = false; // instances move every frame; the mesh bounds never follow
-  mesh.castShadow = true;
+  // Vehicles are not sun casters: a blob decal follows each one instead, so the
+  // sun shadow map only re-renders when the static world changes.
+  mesh.castShadow = false;
   mesh.count = 0;
   return mesh;
 }
@@ -136,6 +139,20 @@ export function TrafficSystem({
   );
   useEffect(() => () => carMesh.dispose(), [carMesh]);
   useEffect(() => () => truckMesh.dispose(), [truckMesh]);
+  const shadows = useMemo(
+    () => ({
+      cars: createVehicleShadows(maxCars, 1),
+      trucks: createVehicleShadows(maxTrucks, TRUCK_SCALE),
+    }),
+    [maxCars, maxTrucks],
+  );
+  useEffect(
+    () => () => {
+      shadows.cars.dispose();
+      shadows.trucks.dispose();
+    },
+    [shadows],
+  );
 
   const simRef = useRef<{
     sim: ReturnType<typeof createSim>;
@@ -237,6 +254,10 @@ export function TrafficSystem({
       vehicleLights.trucks.update(s.trucks, dt);
       writeMatrices(s.cars, carMesh, 1);
       writeMatrices(s.trucks, truckMesh, TRUCK_SCALE);
+      shadows.cars.setSunPower(lighting.sunPower.value);
+      shadows.trucks.setSunPower(lighting.sunPower.value);
+      shadows.cars.update(s.cars);
+      shadows.trucks.update(s.trucks);
       if (timing.carsDirty) {
         writeColors(s.cars, carMesh);
         timing.carsDirty = false;
@@ -250,6 +271,8 @@ export function TrafficSystem({
       <primitive object={vehicleLights.trucks.group} />
       <primitive object={carMesh} />
       <primitive object={truckMesh} />
+      <primitive object={shadows.cars.mesh} />
+      <primitive object={shadows.trucks.mesh} />
     </>
   );
 }

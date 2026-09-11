@@ -29,8 +29,12 @@ before another frame can reuse the render object with its new geometry. This avo
 Three r185's old-geometry disposal deleting the replacement's vertex buffers.
 
 `?perf=1` exposes `buildingAnimationVisits` and `buildingInstanceWrites` alongside
-the existing counters. Frozen lighting and unchanged healthy telemetry should
-eventually produce zero for both. Continuous alerts intentionally remain active.
+the existing counters, and `shadows a+b/s`: sun and lighthouse shadow-map renders per
+second (`sunShadowRenders`, `beaconShadowRenders`). Frozen lighting and unchanged
+healthy telemetry should eventually produce zero for all of them; the sun map renders
+at most `shadowHz` times per second during an orbit and about once a minute in live
+time, never at night; the lighthouse map only at night. Continuous alerts
+intentionally remain active.
 The renderer reports its actual adapter in `__CITY_PERF__.adapter`, and the scene
 inspection API includes building identities, colors, heights and screen positions.
 These diagnostics do not run in normal use.
@@ -52,8 +56,8 @@ render four to eight times the pixels of a 1080p screen.
 | Rendered pixels / render scale | ≤ 1.2 Mpx, ≤ 1× | ≤ 2.4 Mpx, ≤ 1.5× | ≤ 5 Mpx, ≤ 2× |
 | Contact shading (GTAO) | off | 8 samples + denoise | 16 samples + denoise |
 | Bloom mip chain | ¼ resolution | ½ resolution | ½ resolution |
-| Sun shadow map / cadence | 1024² @ 4 Hz | 2048² @ 6 Hz | 2048² @ 6 Hz |
-| Lighthouse shadow / volume | none / cone | 512² / raymarched | 512² / raymarched |
+| Sun shadow map / refresh ceiling | 1024² ≤ 4 Hz | 2048² ≤ 6 Hz | 2048² ≤ 6 Hz |
+| Lighthouse shadow (refreshed at night, frozen by day) / volume | none / cone | 512² / raymarched | 512² / raymarched |
 | Clustered points / vehicle spots (WebGPU) | 96 / 4 | 256 / 8 | 1024 / 16 |
 | Cars / trucks | 120 / 30 | 240 / 60 | 240 / 60 |
 
@@ -95,8 +99,9 @@ fps, CPU ms, GPU ms and draws from the HUD, then load `?perf=1` alone and confir
 Open `?profile=1&quality=eco&idle=0` on the target machine, select Office (30 fps),
 and let shaders and traffic warm up. In the **3D pipeline** panel, click **Record
 10 s**. The panel shows average GPU milliseconds per sampled frame and the share
-of each pass family: scene/materials/lighting, sun and lighthouse shadows, clustered
-light compute, bloom, contact shading, volume, composition and antialiasing.
+of each pass family: scene/materials/lighting, sun and lighthouse shadows (including
+the `VSMVertical`/`VSMHorizontal` blur passes), clustered light compute, bloom,
+contact shading, volume, composition and antialiasing.
 Pass details remain available in the export. Repeat with a frozen day/night
 preview and during camera motion, keeping the viewport and quality fixed.
 
@@ -190,10 +195,14 @@ animation wakeup, error pulses, spatial culling, shared geometry lifetime, concu
 renderer initialization and frame-budget summaries.
 
 `GPU_SOFTWARE=1` selects SwiftShader for functional checks, never hardware
-qualification. The local account currently cannot open `/dev/dri/renderD128`;
-Chromium therefore selects software rendering even outside the execution sandbox.
-This prevents confirming the 30 fps target on the Radeon until the browser has
-access to that device. No persistent device permissions are changed by these tools.
+qualification. Without it the scripts launch Chromium with the flags from
+`scripts/chromium-args.ts` (`--use-angle=vulkan --enable-features=Vulkan
+--disable-vulkan-surface`): on Linux, headless Chromium silently falls back to
+SwiftShader on both backends without them. The account running the scripts must be
+able to open `/dev/dri/renderD128` (member of the `render` group, or a temporary
+`setfacl -m u:<user>:rw` on the device); `__CITY_PERF__.adapter` in the report says
+which device actually rendered. On the reference machine Dawn reports the Radeon
+Barcelo as `amd` / `rdna-2`, so the Auto tier starts at `high` in WebGPU.
 
 The capture helper removes WebGPU's 256-byte row padding, allowing comparison at
 arbitrary viewport widths, including 800 pixels.
@@ -218,6 +227,37 @@ memory. CPU timings from a single software-rendered run are too noisy to establi
 a speedup; hardware frame time and the 30 fps target remain unqualified.
 Raw reports, samples, worlds and captures are in the ignored local directories
 `out/optimization/large/before` and `out/optimization/large/after`.
+
+### Fast shadows (2026-09-11)
+
+Measured headless on the Radeon Barcelo (WebGPU, Vulkan through ANGLE), Chromium
+1228, 1280×800 at DPR 1, `quality=high`, `idle=0`, the production world of three
+cities (26 nodes, 12 bridges) framed with fit-all, a frozen 14:00 or 01:00 preview
+and a 10 s capture. Medians over four captures each; GPU times come from the
+pipeline profiler, frame times from the `?perf=1` samples. Zero browser errors.
+
+| Median | Before noon | After noon | Before night | After night |
+| --- | ---: | ---: | ---: | ---: |
+| GPU per frame | 17.2 ms | 14.3 ms | 17.3 ms | 17.4 ms |
+| Scene / materials / lighting | 8.5 ms | 4.6 ms | 8.6 ms | 8.7 ms |
+| Composition / antialiasing | 3.6 ms | 4.0 ms | 3.6 ms | 3.7 ms |
+| Bloom | 3.3 ms | 3.5 ms | 3.3 ms | 3.3 ms |
+| Contact shading | 1.3 ms | 1.7 ms | 1.3 ms | 1.3 ms |
+| Frame interval p95 | 32.9 ms | 19.6 ms | 32.6 ms | 33.4 ms |
+| Draw calls | 167 | 112 | 118 | 119 |
+| Sun map renders per 10 s | n/a | 0 | n/a | 0 |
+| Lighthouse map renders per 10 s | n/a | 0 | n/a | 130 |
+
+By day the scene pass halves: the sixteen vehicle spots leave the shader, the sun
+map is no longer redrawn and vehicles no longer cast into it (55 draws fewer), and
+each fragment reads one VSM texel instead of five compares. At night nothing moved
+because the cost sits in the local lights themselves, not in their shadows:
+`localLights=0` brings the night scene pass to 3.4 ms on both builds while
+`shadows=0` changes nothing. The next lever for the night is the per-fragment
+evaluation of the vehicle spots, which are not clustered like the point lights.
+Contact shading stays around 10 % of the frame, so the half-resolution denoise
+remains unimplemented. Raw rows, the matrix script and the world are in
+`out/profile/fast-shadows`.
 
 Final validation passed 221 unit tests, lint, application and benchmark-script type
 checks, and the production build. Browser checks at 800×500 passed building

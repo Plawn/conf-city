@@ -1,5 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import { chromium, expect } from "@playwright/test";
+import { chromiumArgs } from "./chromium-args";
 import {
   fixtureWorld,
   installLightingFixture,
@@ -13,23 +14,7 @@ const output = process.env.CITY_OUTPUT ?? `out/buildings/${backend}`;
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH,
-  args: [
-    "--no-sandbox",
-    "--enable-unsafe-webgpu",
-    ...(software
-      ? [
-          "--enable-unsafe-swiftshader",
-          ...(backend === "webgl"
-            ? ["--use-angle=swiftshader"]
-            : [
-                "--use-angle=vulkan",
-                "--use-vulkan=swiftshader",
-                "--enable-features=Vulkan",
-                "--disable-vulkan-surface",
-              ]),
-        ]
-      : []),
-  ],
+  args: chromiumArgs(backend, software),
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 });
 await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));

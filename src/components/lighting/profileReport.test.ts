@@ -60,6 +60,8 @@ test("native pass labels separate scene shading, shadows, clustering and post-pr
   expect(passGroup("City scene (MRT / materials / lights)")).toBe("Scene / materials / lighting");
   expect(passGroup("Sun shadow")).toBe("Shadows");
   expect(passGroup("Lighthouse shadow")).toBe("Shadows");
+  expect(passGroup("VSMVertical")).toBe("Shadows");
+  expect(passGroup("VSMHorizontal")).toBe("Shadows");
   expect(passGroup("Update Clustered Lights", true)).toBe("Light clustering");
   expect(passGroup("Bloom [ Blur Horizontal - 0 ]")).toBe("Bloom");
   expect(passGroup("Render Pipeline")).toBe("Composition / antialiasing");

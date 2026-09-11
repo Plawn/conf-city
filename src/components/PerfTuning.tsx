@@ -28,6 +28,8 @@ export interface LightingPerfSample {
   volumeBlurPasses: number;
   buildingAnimationVisits: number;
   buildingInstanceWrites: number;
+  sunShadowRenders: number;
+  beaconShadowRenders: number;
   clusterDispatches: number;
   clusteredPointLightVisits: number;
   draws: number;
@@ -73,6 +75,17 @@ declare global {
   }
 }
 
+/** Sun + lighthouse shadow map renders per second over the recent window. */
+function shadowRenders(recent: LightingPerfSample[]): string {
+  const span = recent.length > 1 ? (recent.at(-1)!.time - recent[0]!.time) / 1000 : 0;
+  if (span <= 0) {
+    return "0+0";
+  }
+  const sun = recent.reduce((sum, s) => sum + s.sunShadowRenders, 0) / span;
+  const beacon = recent.reduce((sum, s) => sum + s.beaconShadowRenders, 0) / span;
+  return `${sun.toFixed(1)}+${beacon.toFixed(1)}`;
+}
+
 /** CPU submission time and GPU timestamps are deliberately reported separately. */
 export function PerfHud() {
   const renderer = gpuRenderer(useThree((s) => s.gl));
@@ -83,6 +96,8 @@ export function PerfHud() {
     renderer.info.reset();
     runtime.frameWork.volumePasses = 0;
     runtime.frameWork.volumeBlurPasses = 0;
+    runtime.frameWork.sunShadowRenders = 0;
+    runtime.frameWork.beaconShadowRenders = 0;
     if (renderer.lighting instanceof ActiveClusteredLighting) {
       renderer.lighting.work.dispatches = 0;
       renderer.lighting.work.pointLightVisits = 0;
@@ -162,7 +177,7 @@ export function PerfHud() {
       const recent = samples.filter((s) => now - s.time < 2000 && s.intervalMs > 0);
       const frameMs = recent.reduce((sum, s) => sum + s.intervalMs, 0) / Math.max(1, recent.length);
       const quality = metrics.quality;
-      box.textContent = `${metrics.backend} · ${quality.choice === "auto" ? `auto/${quality.tier}` : quality.tier}${quality.idle ? " (idle)" : ""} · ${(1000 / Math.max(1, frameMs)).toFixed(0)} fps · ${samples.at(-1)!.cpuMs.toFixed(1)} ms CPU · ${latestGpu == null ? "GPU n/a" : `${latestGpu.gpuMs.toFixed(1)} ms GPU (async)`} · ${render.drawCalls} draws · ${(memory.total / 1048576).toFixed(1)} MiB`;
+      box.textContent = `${metrics.backend} · ${quality.choice === "auto" ? `auto/${quality.tier}` : quality.tier}${quality.idle ? " (idle)" : ""} · ${(1000 / Math.max(1, frameMs)).toFixed(0)} fps · ${samples.at(-1)!.cpuMs.toFixed(1)} ms CPU · ${latestGpu == null ? "GPU n/a" : `${latestGpu.gpuMs.toFixed(1)} ms GPU (async)`} · ${render.drawCalls} draws · ${(memory.total / 1048576).toFixed(1)} MiB · shadows ${shadowRenders(recent)}/s`;
       if (
         !resolving &&
         renderParams.get("profile") !== "1" &&

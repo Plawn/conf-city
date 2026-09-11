@@ -18,7 +18,8 @@ export function passGroup(name: string, compute = false): string {
   if (compute) {
     return /cluster/i.test(name) ? "Light clustering" : "Other compute";
   }
-  if (/shadow/i.test(name)) {
+  // VSM blur quads are named `VSMVertical` / `VSMHorizontal` by three, without "shadow".
+  if (/shadow|vsm/i.test(name)) {
     return "Shadows";
   }
   if (/bloom/i.test(name)) {

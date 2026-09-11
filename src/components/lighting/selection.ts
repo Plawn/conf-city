@@ -74,3 +74,12 @@ export class BrakeTracker {
     return this.speeds.size;
   }
 }
+
+/**
+ * Whether night-only light work (lighthouse shadow, vehicle spotlights) is active.
+ * Hysteresis keeps the material recompile that follows a topology change to one
+ * per dusk and one per dawn, never a flicker around the threshold.
+ */
+export function nightGate(previous: boolean, night: number): boolean {
+  return previous ? night >= 0.01 : night > 0.03;
+}

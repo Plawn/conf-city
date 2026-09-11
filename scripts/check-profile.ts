@@ -1,6 +1,7 @@
 /** Functional capture check; SwiftShader timings never qualify target-hardware performance. */
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
+import { chromiumArgs } from "./chromium-args";
 import { installLightingFixture, previewLighting } from "./lighting-fixture";
 
 const backend = process.env.CITY_BACKEND ?? "webgpu";
@@ -11,23 +12,7 @@ const quality = process.env.CITY_QUALITY ?? "eco";
 const day = process.env.CITY_CASE === "noon";
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH,
-  args: [
-    "--no-sandbox",
-    "--enable-unsafe-webgpu",
-    ...(software
-      ? [
-          "--enable-unsafe-swiftshader",
-          ...(backend === "webgl"
-            ? ["--use-angle=swiftshader"]
-            : [
-                "--use-angle=vulkan",
-                "--use-vulkan=swiftshader",
-                "--enable-features=Vulkan",
-                "--disable-vulkan-surface",
-              ]),
-        ]
-      : []),
-  ],
+  args: chromiumArgs(backend, software),
 });
 try {
   const page = await browser.newPage({ viewport: { width: 800, height: 500 } });

@@ -43,6 +43,11 @@ zebra + stop line on the incoming lane of every crossing, give-way ring. Bridge 
 `exits`. Y ladder in `TERRAIN`: zone 0.03 < road 0.08 < markings < pavement 0.13 < overlay.
 `StreetLights` follows the `lit` classes.
 
+Vehicles do not cast into the sun shadow map. `traffic/vehicleShadows.ts` draws one instanced
+blob decal per pool (flat plane, radial alpha, 0.36 × 0.72 of the normalised vehicle, scaled
+with trucks) at the full pool pose, lifted 6 mm above the deck; opacity follows the sun power
+(see `docs/lighting.md`). One extra draw per pool, and the sun map stays valid while traffic moves.
+
 ## Driving geometry (`geo/drivable.ts`, `geo/path.ts`)
 
 `makeDriver(networks)` turns a city route, a ring loop or a bridge crossing into a `DrivePath`

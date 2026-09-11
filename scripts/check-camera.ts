@@ -4,6 +4,7 @@
  */
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
+import { chromiumArgs } from "./chromium-args";
 import {
   benchmarkDpr,
   benchmarkDuration,
@@ -27,23 +28,7 @@ const output = process.env.CITY_OUTPUT ?? `out/camera/${backend}`;
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH,
-  args: [
-    "--no-sandbox",
-    "--enable-unsafe-webgpu",
-    ...(software
-      ? [
-          "--enable-unsafe-swiftshader",
-          ...(backend === "webgl"
-            ? ["--use-angle=swiftshader"]
-            : [
-                "--use-angle=vulkan",
-                "--use-vulkan=swiftshader",
-                "--enable-features=Vulkan",
-                "--disable-vulkan-surface",
-              ]),
-        ]
-      : []),
-  ],
+  args: chromiumArgs(backend, software),
 });
 const page = await browser.newPage({
   viewport: benchmarkViewport,

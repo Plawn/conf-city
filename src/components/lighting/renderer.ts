@@ -1,6 +1,6 @@
 import type { WebGLRenderer } from "three";
 import { DynamicLighting } from "three/addons/lighting/DynamicLighting.js";
-import { ACESFilmicToneMapping, PCFShadowMap, WebGPURenderer } from "three/webgpu";
+import { ACESFilmicToneMapping, VSMShadowMap, WebGPURenderer } from "three/webgpu";
 import { ActiveClusteredLighting } from "./ActiveClusteredLighting";
 
 export const renderParams = new URLSearchParams(
@@ -74,7 +74,9 @@ export async function createRenderer(
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFShadowMap;
+  // Variance maps: one bilinear read per fragment instead of five compares, and the
+  // blur is paid per map render (rare) rather than per shaded pixel (every frame).
+  renderer.shadowMap.type = VSMShadowMap;
   renderer.lighting = isWebGPU(renderer)
     ? new ActiveClusteredLighting(1024, 32, 24, 64)
     : new DynamicLighting({ maxDirectionalLights: 1, maxPointLights: 8, maxSpotLights: 9 });

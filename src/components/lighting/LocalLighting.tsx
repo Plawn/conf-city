@@ -3,7 +3,12 @@ import { useEffect, useMemo } from "react";
 import { Frustum, Group, Matrix4, PointLight, Sphere, SpotLight, Vector3 } from "three";
 import { useQualityProfile } from "../../store/uiStore";
 import { gpuRenderer, isWebGPU, renderParams } from "./renderer";
-import { BEACON_VOLUME_LAYER, type LocalLightSource, useLighting } from "./runtime";
+import {
+  BEACON_VOLUME_LAYER,
+  type LocalLightSource,
+  SHADOW_CASTER_LAYER,
+  useLighting,
+} from "./runtime";
 import { LightCandidates } from "./selection";
 
 const BEACON_SHADOW_HZ = 15;
@@ -57,15 +62,22 @@ export function LocalLighting() {
     const beacon = runtime.beaconLight;
     beacon.shadow.camera.name = "Lighthouse shadow";
     beacon.layers.enable(BEACON_VOLUME_LAYER);
-    beacon.castShadow = gpu && profile.beaconShadow && renderParams.get("shadows") !== "0";
+    // Casts for the component's lifetime; night only changes the intensity uniform and refresh.
+    const shadowCapable = gpu && profile.beaconShadow && renderParams.get("shadows") !== "0";
+    beacon.castShadow = shadowCapable;
+    beacon.shadow.needsUpdate = shadowCapable;
+    beacon.shadow.intensity = runtime.nightLights ? 1 : 0;
     beacon.shadow.mapSize.set(512, 512);
     // The sweep reads fine at 15 Hz; re-rendering the 512² map every frame does not.
     beacon.shadow.autoUpdate = false;
     beacon.shadow.camera.near = 0.15;
-    // Retain world casters when the volume pass temporarily selects layer 10.
-    beacon.shadow.camera.layers.enable(BEACON_VOLUME_LAYER);
-    beacon.shadow.bias = -0.0002;
+    // Non-default mask: keeps world casters during the layer-10 volume pass, excludes the volume.
+    beacon.shadow.camera.layers.enable(SHADOW_CASTER_LAYER);
+    // VSM: no depth compare, so no constant bias; `radius` is the blur in texels.
+    beacon.shadow.bias = 0;
     beacon.shadow.normalBias = 0.03;
+    beacon.shadow.radius = 2;
+    beacon.shadow.blurSamples = 6;
     group.add(beacon, beacon.target);
     const beaconSlot: Slot = { light: beacon, id: null, fade: 0 };
     return {
@@ -73,6 +85,7 @@ export function LocalLighting() {
       points,
       spots,
       beacon: beaconSlot,
+      shadowCapable,
       pointLimit,
       selected: new Set<string>(),
       occupied: new Set<string>(),
@@ -106,6 +119,14 @@ export function LocalLighting() {
   useFrame(({ camera, clock }, delta) => {
     const r = resources;
     const night = runtime.night.value;
+    // Vehicle spots exist at night only: one recompile per transition. The lighthouse map
+    // is frozen by day and hidden through its intensity uniform, so `castShadow` never flips.
+    r.beacon.light.shadow.intensity = runtime.nightLights ? 1 : 0;
+    for (const slot of r.spots) {
+      if (slot.light.visible !== runtime.nightLights) {
+        slot.light.visible = runtime.nightLights;
+      }
+    }
     if (clock.elapsedTime >= r.nextSelection) {
       r.nextSelection = clock.elapsedTime + 0.2;
       camera.updateMatrixWorld();
@@ -207,8 +228,13 @@ export function LocalLighting() {
     }
     assign(r.beacon, "beacon");
     runtime.shadowBeaconId = r.beacon.id;
-    if (r.beacon.light.castShadow && clock.elapsedTime >= r.nextBeaconShadow) {
+    if (
+      r.beacon.light.castShadow &&
+      runtime.nightLights &&
+      clock.elapsedTime >= r.nextBeaconShadow
+    ) {
       r.beacon.light.shadow.needsUpdate = true;
+      runtime.frameWork.beaconShadowRenders++;
       r.nextBeaconShadow = clock.elapsedTime + 1 / BEACON_SHADOW_HZ;
     }
     // Fade-out can temporarily keep departing sources. Enforce the total fallback budget.
