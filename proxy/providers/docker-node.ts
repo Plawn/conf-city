@@ -28,6 +28,7 @@ import {
   sampleOf,
 } from "./docker-api.ts";
 import { HostStatsReader } from "./host-stats.ts";
+import { bytesToMb, round } from "./units.ts";
 
 /** Label Swarm puts on every task container, holding the service name. */
 const SERVICE_LABEL = "com.docker.swarm.service.name";
@@ -125,7 +126,7 @@ async function collectMetrics(): Promise<Record<string, MetricSnapshot> | null> 
           }
         }
 
-        totalMemMb += memUsedBytes(stats.memory_stats) / (1024 * 1024);
+        totalMemMb += bytesToMb(memUsedBytes(stats.memory_stats));
         count++;
       }
 
@@ -138,7 +139,7 @@ async function collectMetrics(): Promise<Record<string, MetricSnapshot> | null> 
       // cpu/net stay absent until a second poll gives us a delta.
       const snap: MetricSnapshot = { memoryMb: Math.round(totalMemMb) };
       if (hasCpu) {
-        snap.cpu = Math.round(totalCpu * 10) / 10;
+        snap.cpu = round(totalCpu, 1);
       }
       if (hasNet) {
         snap.netRxKbps = Math.round(rxKbps);

@@ -1,15 +1,14 @@
 import type { LogEntry } from "../../protocol.ts";
 import type { DockerClient } from "../docker-api.ts";
 import { getLogLevel } from "./level.ts";
-import type { LogQuery, LogSource, LogTarget } from "./types.ts";
+import { type LogQuery, type LogSource, type LogTarget, MESSAGE_MAX } from "./types.ts";
 
 /** Services polled per tick — the Docker API is one request per service, so this bounds the fan-out. */
 const SAMPLE_SIZE = 5;
 const TAIL = 20;
-const MESSAGE_MAX = 500;
 
 /** Parse Docker multiplexed log stream (8-byte header per frame). */
-export function parseDockerLogStream(buf: ArrayBuffer): string[] {
+function parseDockerLogStream(buf: ArrayBuffer): string[] {
   const view = new DataView(buf);
   const decoder = new TextDecoder();
   const lines: string[] = [];

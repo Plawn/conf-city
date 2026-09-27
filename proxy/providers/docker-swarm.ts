@@ -11,6 +11,7 @@ import { BaseProvider } from "./base.ts";
 import { DockerClient } from "./docker-api.ts";
 import type { LogTarget } from "./logsources/index.ts";
 import { makeLogSource } from "./logsources/index.ts";
+import { bytesToMb, nanoToCores, round } from "./units.ts";
 
 // ── Docker Swarm API types ──
 
@@ -212,8 +213,8 @@ function groupTasksIntoTopology(
         inferredLinkServices: explicitLinks
           ? []
           : inferLinksFromEnv(svc.Spec.TaskTemplate.ContainerSpec.Env, serviceNames, svc.Spec.Name),
-        cpuLimit: nanoCpus ? Math.round((nanoCpus / 1e9) * 100) / 100 : undefined,
-        memLimitMb: memBytes ? Math.round(memBytes / (1024 * 1024)) : undefined,
+        cpuLimit: nanoCpus ? nanoToCores(nanoCpus) : undefined,
+        memLimitMb: memBytes ? Math.round(bytesToMb(memBytes)) : undefined,
         serviceId: svc.ID,
         swarmNodeId: task.NodeID,
         containerIds: [],
@@ -248,8 +249,8 @@ async function refreshTopology() {
       const r = n.Description.Resources;
       nextCityMeta[n.Description.Hostname] = {
         label: n.Description.Hostname,
-        cpuCores: r?.NanoCPUs ? Math.round((r.NanoCPUs / 1e9) * 100) / 100 : undefined,
-        memMb: r?.MemoryBytes ? Math.round(r.MemoryBytes / (1024 * 1024)) : undefined,
+        cpuCores: r?.NanoCPUs ? nanoToCores(r.NanoCPUs) : undefined,
+        memMb: r?.MemoryBytes ? Math.round(bytesToMb(r.MemoryBytes)) : undefined,
         biome: n.Spec.Labels?.["confcity.biome"],
       };
     }
@@ -425,7 +426,7 @@ function collectMetrics(): Record<string, MetricSnapshot> | null {
     const replicas = entry.containerIds.length;
     if (replicas > 0) {
       if (entry.cpuLimit) {
-        snap.cpuLimit = Math.round(entry.cpuLimit * replicas * 100) / 100;
+        snap.cpuLimit = round(entry.cpuLimit * replicas, 2);
       }
       if (entry.memLimitMb) {
         snap.memLimitMb = entry.memLimitMb * replicas;

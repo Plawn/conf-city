@@ -7,6 +7,7 @@ import type {
   NodeMeta,
 } from "../protocol.ts";
 import { BaseProvider } from "./base.ts";
+import { round } from "./units.ts";
 
 // ── Load topology from sample.json ──
 
@@ -179,11 +180,11 @@ function collectMetrics(): Record<string, MetricSnapshot> {
     // cpu is expressed like Docker: % of one core, can exceed 100 on multi-core limits
     const cpuPct = (s.cpu / 100) * node.cpuLimit * 100;
     out[node.address] = {
-      cpu: Math.round(cpuPct * 10) / 10,
+      cpu: round(cpuPct, 1),
       memoryMb: Math.round(Math.min(s.memoryMb, node.memLimitMb)),
       rps: Math.round(s.rps),
-      latencyMs: Math.round(s.latencyMs * 10) / 10,
-      errorRate: Math.round(s.errorRate * 10000) / 10000,
+      latencyMs: round(s.latencyMs, 1),
+      errorRate: round(s.errorRate, 4),
       cpuLimit: node.cpuLimit,
       memLimitMb: node.memLimitMb,
       netRxKbps: Math.round(s.netRx),
@@ -235,14 +236,14 @@ function collectCityMetrics(): Record<string, CityMetrics> {
       disk.write = walk(disk.write, 10, 0, 400);
     }
     out[cityId] = {
-      cpuUsedCores: Math.round(usedCores * 100) / 100,
+      cpuUsedCores: round(usedCores, 2),
       memUsedMb: Math.round(Math.min(meta.memMb ?? Infinity, memMb + overhead.memMb)),
-      load1: Math.round(usedCores * 1.2 * 100) / 100,
+      load1: round(usedCores * 1.2, 2),
       ...(disk && {
         diskUsedMb: Math.round(disk.usedMb),
         diskTotalMb: disk.totalMb,
-        diskReadMbPerSec: Math.round(disk.read * 100) / 100,
-        diskWriteMbPerSec: Math.round(disk.write * 100) / 100,
+        diskReadMbPerSec: round(disk.read, 2),
+        diskWriteMbPerSec: round(disk.write, 2),
       }),
       at,
     };

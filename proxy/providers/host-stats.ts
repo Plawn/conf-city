@@ -12,6 +12,7 @@
 import { statfsSync } from "node:fs";
 
 import type { CityMetrics } from "../protocol.ts";
+import { bytesToMb, round } from "./units.ts";
 
 /** Where the host's procfs is mounted inside the container. */
 const HOST_PROC = process.env.HOST_PROC || "/host/proc";
@@ -25,7 +26,6 @@ const HOST_FS = process.env.HOST_FS || "/hostfs";
 
 /** Sector size used by /proc/diskstats counters — fixed at 512 bytes, always. */
 const SECTOR_BYTES = 512;
-const MB = 1024 * 1024;
 
 /** Cumulative bytes read/written across the machine's disks. */
 interface DiskIoSample {
@@ -161,8 +161,8 @@ export class HostStatsReader {
         return null;
       }
       return {
-        usedMb: Math.round(((fs.blocks - fs.bfree) * fs.bsize) / MB),
-        totalMb: Math.round(total / MB),
+        usedMb: Math.round(bytesToMb((fs.blocks - fs.bfree) * fs.bsize)),
+        totalMb: Math.round(bytesToMb(total)),
       };
     } catch {
       if (!this.warnedFs) {
@@ -214,7 +214,7 @@ export class HostStatsReader {
         // Counters only go up; a decrease means the host was rebooted under us.
         if (dTotal > 0 && dIdle >= 0) {
           const busyRatio = Math.max(0, Math.min(1, (dTotal - dIdle) / dTotal));
-          out.cpuUsedCores = Math.round(busyRatio * this.cores * 100) / 100;
+          out.cpuUsedCores = round(busyRatio * this.cores, 2);
         }
       }
     }
@@ -256,10 +256,8 @@ export class HostStatsReader {
         const dt = (cur.at - prevIo.at) / 1000;
         // Counters only go up; a decrease means the host rebooted or a disk went away.
         if (dt > 0 && cur.readBytes >= prevIo.readBytes && cur.writeBytes >= prevIo.writeBytes) {
-          out.diskReadMbPerSec =
-            Math.round(((cur.readBytes - prevIo.readBytes) / MB / dt) * 100) / 100;
-          out.diskWriteMbPerSec =
-            Math.round(((cur.writeBytes - prevIo.writeBytes) / MB / dt) * 100) / 100;
+          out.diskReadMbPerSec = round(bytesToMb(cur.readBytes - prevIo.readBytes) / dt, 2);
+          out.diskWriteMbPerSec = round(bytesToMb(cur.writeBytes - prevIo.writeBytes) / dt, 2);
         }
       }
     }
