@@ -1,4 +1,4 @@
-import { ringRadii } from "../../geo/roadStyle";
+import { CLASS_STYLE, ringRadii } from "../../geo/roadStyle";
 import { drivingRadius } from "../../geo/roundabouts";
 import { vecKey } from "../../layout/geometry";
 import type { Roundabout } from "../../layout/types";
@@ -54,7 +54,8 @@ const RING_SPACING = 1.4;
  * them look empty and stop-start.
  */
 function ringCapacity(r: Roundabout): number {
-  return Math.max(1, Math.floor((2 * Math.PI * drivingRadius(r)) / RING_SPACING));
+  const perLane = Math.floor((2 * Math.PI * drivingRadius(r)) / RING_SPACING);
+  return Math.max(1, perLane * CLASS_STYLE[r.klass].lanes);
 }
 
 /** Bake the entry/exit arc lengths of each roundabout's protected crossing area. */

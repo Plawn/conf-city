@@ -12,8 +12,10 @@ import {
   samplePath,
   slewLimit,
 } from "@/geo/path";
+import { laneOffsets } from "@/geo/roadStyle";
 import type { Vec2 } from "@/layout/types";
 import { TAU } from "@/lib/math";
+import { HIT_RADIUS } from "@/sim/traffic/params";
 
 test("a lane offset rides the radius of its own side of the arc", () => {
   const left = arcPiece([0, 0], 2, 0, Math.PI / 2);
@@ -81,5 +83,21 @@ test("a corner too tight for a lane merges it inwards instead of folding it", ()
   const lanes = points.slice(1).map((): [number, number] => [0.25, 0.9]);
   const capped = capLaneOffsets(points, lanes);
   expect(Math.max(...capped.map((l) => l[1]))).toBeLessThanOrEqual(1 - MIN_DRIVEN_RADIUS + 1e-6);
-  expect(Math.max(...capped.map((l) => l[0]))).toBeCloseTo(0.2, 6);
+  // Lane 0 moves in with it, down to the centreline, rather than being ridden over.
+  expect(Math.min(...capped.map((l) => l[0]))).toBe(0);
+  for (const [a, b] of capped) {
+    expect(a).toBeLessThanOrEqual(b);
+  }
+});
+
+test("a boulevard's two lanes keep their spacing round a tight right turn", () => {
+  const points: Vec2[] = Array.from({ length: 19 }, (_, i) => {
+    const a = (i * Math.PI) / 36;
+    return [1.2 * Math.cos(a), 1.2 * Math.sin(a)];
+  });
+  const lanes = points.slice(1).map((): [number, number] => laneOffsets("boulevard"));
+  for (const [a, b] of capLaneOffsets(points, lanes)) {
+    expect(b).toBeLessThanOrEqual(1.2 - MIN_DRIVEN_RADIUS + 1e-6);
+    expect(b - a).toBeGreaterThanOrEqual(HIT_RADIUS);
+  }
 });

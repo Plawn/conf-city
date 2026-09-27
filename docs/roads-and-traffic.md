@@ -84,13 +84,17 @@ and `TrafficSystem` all take their geometry from here.
 - A route enters and leaves a roundabout by a small circle (`entryRadius()`, base 0.6, grown by the lane offset) tangent to the leg
   and to the driving circle; a leg too short shrinks it, then falls back to the radial arc.
   `next`/`prev` are never moved. `DrivePath.ring[i]` flags the steps on the ring lane.
+  `drivingRadius` sits inward of the tarmac's middle by the class's mean lane offset, so the
+  one-way ring is ridden across its middle rather than on its outer half; that also leaves a deck
+  end pinned at `outer` room for a full entry circle.
 - `geo/path.ts` keeps a path as segments + circular arcs until the last moment: an arc's offset is a
   concentric arc, whereas offsetting a polyline folds it when the local radius drops below the
   offset (that fold made outer-lane vehicles appear to reverse).
 - Vehicles keep to their own right, `(-dz, dx)` in `sim/traffic/frame.ts` — the *negative* side of
   `offsetPolyline`; roundabouts circulate counter-clockwise seen from above. Lane offsets per class
   come from `laneOffsets()` (boulevard: two lanes each way) and are interpolated over `LANE_BLEND`
-  at every class change and ring junction.
+  at every class change and ring junction. A corner too tight for a lane (`capLaneOffsets`) moves
+  both lanes inward together, so a boulevard's two keep their spacing.
 
 ## Simulation (`sim/traffic/`, pure, `bun test`)
 
@@ -113,8 +117,9 @@ SoA pools with swap-remove; vehicle identity is a stable id, never a pool index.
   lane-sampled budget (`budget.ts`) or the space is exhausted. Rates: links follow the source node's
   throughput, unlinked buildings a fixed trickle, the ring's ambient loops the **host CPU**
   (`cityUsage().cpuPct`). Telemetry absent or stale (30 s) produces no service traffic.
-- Roundabouts (`sim/traffic/junctions.ts`): one reserved crossing at a time per roundabout, the exit
-  checked before admission, at most three approaching vehicles per physical entry.
+- Roundabouts (`sim/traffic/junctions.ts`): as many reservations as the ring holds vehicles
+  (`ringCapacity`, circumference / `RING_SPACING` per lane), the exit checked before admission, at
+  most three approaching vehicles per physical entry; the merge itself is the pass-1 ring priority.
 
 `upgradeLayout` / `reconfigure.ts` widen lanes or add a deck without resetting the fleet: identity,
 age and progress survive. Hiding a city stops its entries and removes its traffic.

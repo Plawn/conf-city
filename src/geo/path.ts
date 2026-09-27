@@ -219,7 +219,12 @@ export function capLaneOffsets(
       return pair;
     }
     const max = Math.max(0, radius - MIN_DRIVEN_RADIUS);
-    return [Math.min(pair[0], max), Math.min(pair[1], max)] as [number, number];
+    if (pair[1] <= max) {
+      return pair;
+    }
+    // Two lanes shift inward together: squeezing only the outer one onto the inner is a collision.
+    const gap = pair[1] - pair[0];
+    return [Math.max(0, Math.min(pair[0], max - gap)), max] as [number, number];
   });
   const inner = slewLimit(
     capped.map((p) => p[0]),
