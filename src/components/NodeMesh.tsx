@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { memo, useCallback, useMemo, useState } from "react";
 import type { BuildingVariant } from "../domain/buildingVariant";
 import { nodeIncident } from "../domain/incidents";
@@ -19,7 +18,7 @@ import { InstancedBuilding } from "./buildings/InstancedBuilding";
 import { NodeModel, PORT_SCALE, PortModel } from "./buildings/NodeModel";
 import { SelectionRing } from "./buildings/SelectionRing";
 import type { VisualState } from "./buildings/visuals";
-import { useHtmlPortal } from "./htmlPortal";
+import { SceneLabel } from "./SceneLabel";
 import { Badge } from "./ui";
 
 export const NodeMesh = memo(
@@ -44,7 +43,6 @@ export const NodeMesh = memo(
     bearing?: number;
   }) {
     const [hovered, setHovered] = useState(false);
-    const portal = useHtmlPortal();
     const selected = useUiStore((s) => s.selectedNode === addr);
     const select = useUiStore((s) => s.select);
     const mode = useUiStore((s) => s.viewMode);
@@ -138,11 +136,8 @@ export const NodeMesh = memo(
         {selected && <SelectionRing radius={ringRadius + 0.3} />}
 
         {hovered && !selected && (
-          <Html
+          <SceneLabel
             position={[0, (isPort ? PORT_SCALE : config.scale) * 1.6 + 0.8, 0]}
-            center
-            portal={portal}
-            style={{ pointerEvents: "none" }}
             zIndexRange={[20, 0]}
           >
             <div
@@ -220,7 +215,7 @@ export const NodeMesh = memo(
               )}
               <div className="mt-1 text-[10px] text-surface-500">click for details</div>
             </div>
-          </Html>
+          </SceneLabel>
         )}
       </group>
     );

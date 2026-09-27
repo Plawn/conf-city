@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -6,7 +5,7 @@ import { type CityUsage, usageTooltip } from "../../domain/metrics/cityUsage";
 import { heatColor } from "../../domain/metrics/format";
 import { containerCount, smokeRate, tankLevel } from "../../domain/metrics/props";
 import type { UtilityPlot, UtilitySlot } from "../../layout/types";
-import { useHtmlPortal } from "../htmlPortal";
+import { SceneLabel } from "../SceneLabel";
 import {
   CONTAINER_SHADES,
   containerGeometry,
@@ -53,7 +52,6 @@ const PUFF_SLOW = 0.16;
 const PUFF_FAST = 0.55;
 
 export function UtilityDistrict({ plot, usage }: { plot: UtilityPlot; usage: CityUsage }) {
-  const portal = useHtmlPortal();
   const [hover, setHover] = useState<"cpu" | "mem" | "disk" | null>(null);
   // Slot 0 is the lighthouse's; the three gauges take the rest of the waterfront.
   const [, plant, tower, quay] = plot.slots;
@@ -87,20 +85,17 @@ export function UtilityDistrict({ plot, usage }: { plot: UtilityPlot; usage: Cit
         <Quay diskPct={usage.diskPct} />
       </Installation>
       {hover && (
-        <Html
+        <SceneLabel
           position={[
             (hover === "cpu" ? plant : hover === "mem" ? tower : quay).center[0],
             3.4 * plot.scale,
             (hover === "cpu" ? plant : hover === "mem" ? tower : quay).center[1],
           ]}
-          center
-          portal={portal}
-          style={{ pointerEvents: "none" }}
         >
           <div className="whitespace-nowrap rounded border border-white/10 bg-black/70 px-2 py-1 text-[11px] text-surface-200">
             {usageTooltip(usage, hover)}
           </div>
-        </Html>
+        </SceneLabel>
       )}
     </>
   );

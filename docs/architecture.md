@@ -170,6 +170,7 @@ UsageBar.tsx, MetricCard.tsx, Sparkline.tsx, NodeDrawer.tsx, LogPanel.tsx, Statu
 DragOverlay.tsx, CameraAnimator.tsx, ConnectionStatus.tsx, PerfTuning.tsx (PerfHud, `?perf=1`)
 logs/                      useLogBackfill (history on open / filter / range), useResizable, HighlightText
 htmlPortal.ts              Every drei <Html> renders in one z-10 overlay under the panels
+SceneLabel.tsx             Centred, click-through <Html> in that overlay: every in-scene label
 ```
 
 Sub-folders:

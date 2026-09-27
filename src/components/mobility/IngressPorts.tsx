@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -6,7 +5,7 @@ import { TERRAIN } from "../../domain/nodeStyle";
 import type { NodeTelemetry } from "../../domain/types";
 import type { Vec2, WorldLayout } from "../../layout/types";
 import { liveTelemetry } from "../../sim/traffic/demand";
-import { useHtmlPortal } from "../htmlPortal";
+import { SceneLabel } from "../SceneLabel";
 import { useShipGeometry } from "../traffic/useShipGeometry";
 
 const MAX_BOATS = 24;
@@ -48,7 +47,6 @@ export function IngressPorts({
   telemetry?: Map<string, NodeTelemetry>;
   visibleCities: Set<string>;
 }) {
-  const portal = useHtmlPortal();
   const { geometry, material } = useShipGeometry();
   const hull = useRef<THREE.InstancedMesh>(null);
   const wake = useRef<THREE.InstancedMesh>(null);
@@ -153,17 +151,11 @@ export function IngressPorts({
   return (
     <group name="internet-ingress">
       {targets.map((t) => (
-        <Html
-          key={t.address}
-          position={[t.label[0], 3.4, t.label[1]]}
-          center
-          portal={portal}
-          style={{ pointerEvents: "none" }}
-        >
+        <SceneLabel key={t.address} position={[t.label[0], 3.4, t.label[1]]}>
           <span className="whitespace-nowrap rounded bg-slate-950/85 px-2 py-0.5 text-[10px] text-cyan-200">
             ⚓ Internet · ingress RX
           </span>
-        </Html>
+        </SceneLabel>
       ))}
       <instancedMesh
         name="ingress-ships"

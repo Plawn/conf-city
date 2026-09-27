@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -9,10 +8,10 @@ import { heatColor } from "../../domain/metrics/format";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import type { UtilitySlot } from "../../layout/types";
 import { useQualityProfile } from "../../store/uiStore";
-import { useHtmlPortal } from "../htmlPortal";
 import { createBeaconGeometry } from "../lighting/beaconGeometry";
 import { gpuRenderer, isWebGPU, renderParams } from "../lighting/renderer";
 import { createLightSource, useLighting } from "../lighting/runtime";
+import { SceneLabel } from "../SceneLabel";
 import { NO_RAYCAST } from "../three/instancing";
 
 /**
@@ -68,7 +67,6 @@ export function Lighthouse({
   scale: number;
   usage: CityUsage;
 }) {
-  const portal = useHtmlPortal();
   const lighting = useLighting();
   const reducedMotion = useReducedMotion();
   const gpu = isWebGPU(gpuRenderer(useThree((s) => s.gl)));
@@ -189,12 +187,7 @@ export function Lighthouse({
         </group>
       )}
       {hover && (
-        <Html
-          position={[0, LAMP_Y + 1.2, 0]}
-          center
-          portal={portal}
-          style={{ pointerEvents: "none" }}
-        >
+        <SceneLabel position={[0, LAMP_Y + 1.2, 0]}>
           <div className="whitespace-nowrap rounded border border-white/10 bg-black/70 px-2 py-1 text-[11px] text-surface-200">
             <div className="font-semibold" style={{ color }}>
               {worst == null ? "No machine data" : `Worst: ${Math.round(worst * 100)}%`}
@@ -206,7 +199,7 @@ export function Lighthouse({
               <div className="text-surface-400">{usageTooltip(usage, "disk")}</div>
             )}
           </div>
-        </Html>
+        </SceneLabel>
       )}
     </group>
   );

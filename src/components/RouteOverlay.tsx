@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
@@ -6,7 +5,7 @@ import { formatKbps } from "../domain/metrics/format";
 import { LINK_COLORS, TERRAIN } from "../domain/nodeStyle";
 import type { NodeTelemetry, ResolvedLink } from "../domain/types";
 import { buildRibbon } from "./geo/ribbon";
-import { useHtmlPortal } from "./htmlPortal";
+import { SceneLabel } from "./SceneLabel";
 
 const ERROR_THRESHOLD = 0.05;
 const ERROR_COLOR = "#ff4d5e";
@@ -33,7 +32,6 @@ export function RouteOverlay({
   fromTelemetry?: NodeTelemetry;
 }) {
   const [hovered, setHovered] = useState(false);
-  const portal = useHtmlPortal();
 
   const { geometry, midPoint } = useMemo(() => {
     const geometry = buildRibbon(points, TERRAIN.roadWidth + HIT_MARGIN);
@@ -109,7 +107,7 @@ export function RouteOverlay({
       </mesh>
 
       {hovered && (
-        <Html position={midPoint} center portal={portal} style={{ pointerEvents: "none" }}>
+        <SceneLabel position={midPoint}>
           <div
             className="glass-morphic-subtle whitespace-nowrap rounded-xl px-3 py-1.5 text-[12px] text-white"
             style={{ borderColor: hasError ? ERROR_COLOR : baseColor }}
@@ -128,7 +126,7 @@ export function RouteOverlay({
               </div>
             )}
           </div>
-        </Html>
+        </SceneLabel>
       )}
     </>
   );

@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import {
@@ -8,11 +7,10 @@ import {
   type StationAccess,
 } from "../../sim/mobility/station";
 import { buildRibbon } from "../geo/ribbon";
-import { useHtmlPortal } from "../htmlPortal";
+import { SceneLabel } from "../SceneLabel";
 
 /** Every mesh comes from the same `StationAccess` the passengers walk. */
 export function MetroStation({ access }: { access: StationAccess }) {
-  const portal = useHtmlPortal();
   const stairs = useMemo(
     () => buildRibbon([access.stairFoot, access.stairTop], 0.8),
     [access.stairFoot, access.stairTop],
@@ -48,16 +46,11 @@ export function MetroStation({ access }: { access: StationAccess }) {
         <boxGeometry args={[0.5, 1.2, 0.5]} />
         <meshStandardMaterial color="#408b8e" transparent opacity={0.55} />
       </mesh>
-      <Html
-        position={[access.door[0], access.door[1] + 0.55, access.door[2]]}
-        center
-        portal={portal}
-        style={{ pointerEvents: "none" }}
-      >
+      <SceneLabel position={[access.door[0], access.door[1] + 0.55, access.door[2]]}>
         <span className="rounded bg-emerald-950/90 px-1.5 text-[10px] font-bold text-emerald-200">
           M{access.index + 1}
         </span>
-      </Html>
+      </SceneLabel>
     </group>
   );
 }

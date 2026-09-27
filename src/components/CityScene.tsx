@@ -1,4 +1,3 @@
-import { Html } from "@react-three/drei";
 import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { BIOMES, DEFAULT_BIOME } from "../domain/biome";
@@ -22,11 +21,11 @@ import { computeBounds } from "../layout/bounds";
 import { type CityLayout, type GroupZone, linkKey, type Vec2 } from "../layout/types";
 import { fnv1a } from "../lib/random";
 import { BuildingBatches } from "./buildings/BuildingBatches";
-import { useHtmlPortal } from "./htmlPortal";
 import { IslandMesh } from "./IslandMesh";
 import { NodeMesh } from "./NodeMesh";
 import { RoadNetworkMesh } from "./RoadNetworkMesh";
 import { RouteOverlay } from "./RouteOverlay";
+import { SceneLabel } from "./SceneLabel";
 import { Badge, Tooltip } from "./ui";
 import { Lighthouse } from "./utilities/Lighthouse";
 import { UtilityDistrict } from "./utilities/UtilityDistrict";
@@ -69,7 +68,6 @@ export function CityScene({
   /** Bridge decks leaving this city, so the bridgehead pavements open for them. */
   exits?: DeckExit[];
 }) {
-  const portal = useHtmlPortal();
   const cityNodes = useMemo(() => nodes.filter((n) => n.cityId === city.id), [nodes, city.id]);
   const biome = BIOMES[layout?.biome ?? DEFAULT_BIOME];
   // One look per building, fixed by its address and the island's biome — never per tick.
@@ -191,12 +189,7 @@ export function CityScene({
       )}
 
       {/* City name label + capacity gauge */}
-      <Html
-        position={[anchor[0], 4, anchor[1]]}
-        center
-        portal={portal}
-        style={{ pointerEvents: "none" }}
-      >
+      <SceneLabel position={[anchor[0], 4, anchor[1]]}>
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-[0.2em] text-surface-200 backdrop-blur-sm">
           <span>{city.name}</span>
           {/* A machine can be worth a badge with no visible service: the host sample
@@ -231,7 +224,7 @@ export function CityScene({
             </span>
           )}
         </div>
-      </Html>
+      </SceneLabel>
 
       {/* The machine itself, on its reserved coastal plot: the beacon burns the
         worst of CPU / memory / disk, readable from across the room. */}
@@ -282,8 +275,6 @@ export function CityScene({
  * `z` is mirrored on the way in and the `-π/2` rotation around X puts it back.
  */
 function ZoneSlab({ zone, color, opacity }: { zone: GroupZone; color: string; opacity: number }) {
-  const portal = useHtmlPortal();
-
   const geometry = useMemo(() => {
     if (zone.outline.length < 3) {
       return null;
@@ -326,20 +317,14 @@ function ZoneSlab({ zone, color, opacity }: { zone: GroupZone; color: string; op
       <mesh geometry={geometry} renderOrder={1}>
         <meshStandardMaterial color={color} transparent opacity={opacity} depthWrite={false} />
       </mesh>
-      <Html
-        position={[zone.center[0], 0.02, zone.center[1]]}
-        center
-        portal={portal}
-        style={{ pointerEvents: "none" }}
-        zIndexRange={[5, 0]}
-      >
+      <SceneLabel position={[zone.center[0], 0.02, zone.center[1]]} zIndexRange={[5, 0]}>
         <div
           className="whitespace-nowrap rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-[0.18em]"
           style={{ color, background: "rgba(0,0,0,0.35)" }}
         >
           {zone.name}
         </div>
-      </Html>
+      </SceneLabel>
     </group>
   );
 }
