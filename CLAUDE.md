@@ -23,7 +23,7 @@ bun run dev          # Vite dev server (port 4000)
 bun run build        # typecheck + production build to dist/
 bun run typecheck    # tsc --noEmit
 bun run lint         # biome check .   (lint:fix / format to write)
-bun test             # pure-TS tests (layout, traffic sim, domain, mobility…)
+bun test             # pure-TS tests in tests/ (mirrors src/; fixtures in tests/fixtures/)
 bun run proxy        # telemetry proxy (port 4001)
 bun run dummy        # dummy data provider
 bun run sync:glass   # regenerate src/styles/glass-ui.css (also on postinstall)

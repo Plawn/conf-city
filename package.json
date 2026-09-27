@@ -11,6 +11,7 @@
     "lint:fix": "biome check --write --unsafe --only=style/useBlockStatements . && biome check --write .",
     "format": "biome format --write .",
     "preview": "vite preview",
+    "test": "bun test tests",
     "proxy": "bun proxy/server.ts",
     "dummy": "bun proxy/providers/dummy.ts",
     "sync:glass": "bun scripts/sync-glass-css.ts",

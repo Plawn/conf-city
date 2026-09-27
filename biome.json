@@ -11,6 +11,7 @@
       "src/**",
       "proxy/**",
       "scripts/**",
+      "tests/**",
       "vite.config.ts",
       "bun-env.d.ts",
       "package.json",
