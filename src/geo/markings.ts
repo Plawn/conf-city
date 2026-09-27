@@ -1,8 +1,8 @@
 import { TERRAIN } from "../domain/nodeStyle";
-import type { Driveway, Vec2 } from "../layout/types";
+import type { Driveway, Roundabout, Vec2 } from "../layout/types";
 import { projectOnPolyline } from "./polyline";
 import { type Arm, type GraphNode, ON_LINE } from "./roadGraph";
-import { CLASS_STYLE } from "./roadStyle";
+import { CLASS_STYLE, ringRadii } from "./roadStyle";
 
 /**
  * Where the painted markings and the pavement openings of a run go, as arc-length
@@ -157,4 +157,51 @@ export function drivewayRun(d: Driveway): [Vec2, Vec2] | null {
   }
   const from: Vec2 = [d.mouth[0] + (dx / length) * setback, d.mouth[1] + (dz / length) * setback];
   return [from, d.door];
+}
+
+/** Radius of the give-way line on a roundabout's tarmac, and the width of that line. */
+export const RING_GIVE_WAY_INSET = 0.14;
+export const RING_GIVE_WAY_WIDTH = 0.16;
+
+/**
+ * A roundabout's paint, as angle intervals on its circle: give-way dashes across each
+ * entry lane only (vehicles keep right, so an arm of bearing `b` enters on the side of
+ * `b − π/2`), and on a two-lane ring a dashed circle between its lanes, broken at the arms.
+ */
+export function roundaboutMarks(
+  r: Roundabout,
+  arms: { bearing: number; halfWidth: number }[],
+): { giveWay: Interval[]; laneRadius: number | null; lanes: Interval[] } {
+  const { inner, outer } = ringRadii(r);
+  const rg = outer - RING_GIVE_WAY_INSET;
+  const giveWay: Interval[] = [];
+  for (const { bearing, halfWidth } of arms) {
+    for (const [d0, d1] of giveWayDashes(LINE_WIDTH, Math.min(halfWidth - EDGE_INSET, rg))) {
+      giveWay.push([bearing - Math.asin(d1 / rg), bearing - Math.asin(d0 / rg)]);
+    }
+  }
+  if (CLASS_STYLE[r.klass].lanes < 2) {
+    return { giveWay, laneRadius: null, lanes: [] };
+  }
+  const mid = (inner + outer) / 2;
+  const open = arms.map(({ bearing, halfWidth }) => ({
+    bearing,
+    half: Math.asin(Math.min(1, halfWidth / outer)) + LANE_DASH_LENGTH / mid,
+  }));
+  const step = LANE_DASH_PERIOD / mid;
+  const count = Math.floor((2 * Math.PI) / step);
+  const lanes: Interval[] = [];
+  for (let k = 0; k < count; k++) {
+    const a0 = k * step;
+    const a1 = a0 + LANE_DASH_LENGTH / mid;
+    const blocked = open.some(({ bearing, half }) =>
+      [a0, a1].some(
+        (a) => Math.abs(Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing))) < half,
+      ),
+    );
+    if (!blocked) {
+      lanes.push([a0, a1]);
+    }
+  }
+  return { giveWay, laneRadius: mid, lanes };
 }

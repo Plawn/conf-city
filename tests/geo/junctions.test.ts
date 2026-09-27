@@ -99,7 +99,7 @@ describe("road graph", () => {
     expect(Math.max(...xs)).toBeCloseTo(3.9);
   });
 
-  test("a roundabout cuts every arm at its tarmac ring and opens the pavement for a deck", () => {
+  test("a roundabout flares its street arms into the ring and cuts a deck square", () => {
     const rb: Roundabout = { center: [0, 0], radius: 1.2, klass: "avenue" };
     const graph = buildRoadGraph(
       [
@@ -127,9 +127,15 @@ describe("road graph", () => {
     const pieces = junctionPieces(node, PAVEMENT, FILLET);
     expect(pieces.asphalt).toBeNull();
     expect(pieces.pavements).toHaveLength(3);
-    for (const r of pieces.reach) {
-      expect(r).toBeCloseTo(2.05, 6);
-    }
+    // The deck (virtual arm) stops at the tarmac; the streets reach past it by their flare.
+    const deck = node.arms.findIndex((a) => a.run < 0);
+    pieces.reach.forEach((r, k) => {
+      if (k === deck) {
+        expect(r).toBeCloseTo(2.05, 6);
+      } else {
+        expect(r).toBeGreaterThan(2.1);
+      }
+    });
     // No crescent: every apron runs from the square cut down to the tarmac circle.
     expect(pieces.aprons).toHaveLength(6);
     const ring = pieces.ring!;
@@ -142,11 +148,30 @@ describe("road graph", () => {
       expect(Math.min(...radii)).toBeCloseTo(2.05, 6);
       expect(Math.max(...radii)).toBeGreaterThan(2.05);
     }
-    // The kerb of each pavement piece starts on an arm's asphalt edge at the cut.
+    // The kerb of each pavement piece starts on an arm's asphalt edge at the cut, never dips
+    // inside the tarmac circle, and bends smoothly into it (the flare is tangent at both ends).
+    const reaches = new Set(pieces.reach.map((r) => r.toFixed(6)));
     for (const p of pieces.pavements) {
       const start = p.inner[0]!;
       const along = Math.max(Math.abs(start[0]), Math.abs(start[1]));
-      expect(along).toBeCloseTo(2.05, 6);
+      expect(reaches.has(along.toFixed(6))).toBe(true);
+      for (const q of p.inner) {
+        expect(Math.hypot(q[0], q[1])).toBeGreaterThan(2.05 - 1e-6);
+      }
+    }
+    const flared = pieces.pavements.find((p) => {
+      const [x, z] = p.inner[0]!;
+      return Math.max(Math.abs(x), Math.abs(z)) > 2.1;
+    })!;
+    for (let i = 1; i + 1 < flared.inner.length; i++) {
+      const [a, b, c] = [flared.inner[i - 1]!, flared.inner[i]!, flared.inner[i + 1]!];
+      const turn = Math.abs(
+        Math.atan2(
+          (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]),
+          (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]),
+        ),
+      );
+      expect(turn).toBeLessThan(0.35);
     }
   });
 

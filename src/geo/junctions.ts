@@ -16,9 +16,10 @@ import { ringRadii } from "./roadStyle";
  * node instead. `reach[k]` says how far along arm `k` the piece extends, so the
  * caller can cut the run there and let the two meet on the same line.
  *
- * Roundabouts are simpler: every arm is cut square at the outer radius, two
- * aprons fill the corners between that cut and the circle, and the pavement is
- * the annulus outside it, following the arm's kerb down to the circle.
+ * Roundabouts are simpler: a straight arm flares into the ring by a kerb circle
+ * tangent to its edge and to the tarmac (a curved ring arm or a deck is cut square
+ * at the outer radius); two aprons fill between that cut and the circle, and the
+ * pavement is the annulus outside it, following the arm's kerb down to the circle.
  */
 
 export interface PavementPiece {
@@ -94,7 +95,7 @@ export function junctionPieces(
   ];
 
   if (node.kind === "roundabout" && node.roundabout) {
-    return roundaboutPieces(node, order, pavement, reach, dir, sideA, sideB, at);
+    return roundaboutPieces(node, order, pavement, fillet, reach, limits, dir, sideA, sideB, at);
   }
 
   if (n === 2) {
@@ -229,11 +230,22 @@ export function junctionPieces(
 
 type Side = (a: number) => Vec2;
 
+/**
+ * The kerb flare of an arm meeting a roundabout: a circle of radius `rho` tangent to the arm's
+ * edge (at `t` along it) and to the tarmac circle (at `phi` past the bearing, on each side).
+ */
+function flareOf(h: number, outer: number, rho: number): { rho: number; t: number; phi: number } {
+  const t = Math.sqrt((outer + rho) ** 2 - (h + rho) ** 2);
+  return { rho, t, phi: Math.atan2(h + rho, t) };
+}
+
 function roundaboutPieces(
   node: GraphNode,
   order: { arm: GraphNode["arms"][number]; index: number }[],
   pavement: number,
+  fillet: number,
   reach: number[],
+  limits: number[] | undefined,
   dir: Side,
   sideA: Side,
   sideB: Side,
@@ -243,8 +255,25 @@ function roundaboutPieces(
   const back = outer + pavement;
   const n = order.length;
   const θ = order.map((o) => o.arm.bearing);
+  // Straight lattice arms flare into the ring; curved ring arms and bridge decks are cut square.
+  const flares = order.map(({ arm, index }) => {
+    const f = flareOf(arm.halfWidth, outer, fillet);
+    const fits = !arm.ring && arm.run >= 0 && fillet > pavement && f.t <= (limits?.[index] ?? f.t);
+    return fits ? f : null;
+  });
+  const square = (k: number) => Math.asin(Math.min(0.99, order[k]!.arm.halfWidth / outer));
+  const halfAngle = (k: number) => flares[k]?.phi ?? square(k);
+  // Two flares that would meet inside their gap fall back to square cuts.
+  for (let k = 0; k < n && n > 1; k++) {
+    const next = (k + 1) % n;
+    const gap = next === 0 ? θ[0]! + TAU - θ[k]! : θ[next]! - θ[k]!;
+    if (halfAngle(k) + halfAngle(next) > gap - 0.05) {
+      flares[k] = null;
+      flares[next] = null;
+    }
+  }
   // Half the angle an arm's asphalt covers on the circle, shrunk where two arms would overlap.
-  const α = order.map((o) => Math.asin(Math.min(0.99, o.arm.halfWidth / outer)));
+  const α = order.map((_, k) => halfAngle(k));
   const gapStart: number[] = [];
   const gapEnd: number[] = [];
   for (let k = 0; k < n; k++) {
@@ -291,19 +320,54 @@ function roundaboutPieces(
     return out;
   };
 
+  /**
+   * The kerb from arm `k`'s edge down to the circle on side `sign` (+1 = A), `lift` outward of
+   * the asphalt edge; empty for a square cut. Runs edge → circle, circle point excluded.
+   */
+  const kerb = (k: number, sign: 1 | -1, lift: number): Vec2[] => {
+    const f = flares[k];
+    if (!f) {
+      return [];
+    }
+    const b = θ[k]!;
+    const s = sign > 0 ? sideA(b) : sideB(b);
+    const h = order[k]!.arm.halfWidth;
+    const c = at(node.pos, s, h + f.rho, dir(b), f.t);
+    const aEdge = Math.atan2(-s[1], -s[0]);
+    const toC = Math.atan2(c[1] - node.pos[1], c[0] - node.pos[0]) + Math.PI;
+    const sweep = Math.atan2(Math.sin(toC - aEdge), Math.cos(toC - aEdge));
+    return arcPoints(c, f.rho - lift, aEdge, aEdge + sweep, ARC_STEP).slice(0, -1);
+  };
+  const cut = (k: number) => flares[k]?.t ?? outer;
+
   const aprons: JunctionPieces["aprons"] = [];
   const pavements: PavementPiece[] = [];
   for (let k = 0; k < n; k++) {
     const { arm, index } = order[k]!;
-    reach[index] = outer;
+    const t = cut(k);
+    reach[index] = t;
     const h = arm.halfWidth;
     const b = arm.bearing;
     const { a, m, e } = marks[k]!;
+    const axis: Vec2[] = flares[k] ? [at(node.pos, [0, 0], 0, dir(b), t)] : [];
     aprons.push({
       arm: index,
-      points: [at(node.pos, sideA(b), h, dir(b), outer), ...range(m, e).reverse()],
+      points: [
+        ...axis,
+        at(node.pos, sideA(b), h, dir(b), t),
+        ...kerb(k, 1, 0).slice(1),
+        ...range(m, e).reverse(),
+      ],
     });
-    aprons.push({ arm: index, points: [...range(a, m), at(node.pos, sideB(b), h, dir(b), outer)] });
+    aprons.push({
+      arm: index,
+      points: [
+        ...range(a, m),
+        ...axis,
+        at(node.pos, sideB(b), h, dir(b), t),
+        ...kerb(k, -1, 0).slice(1),
+      ],
+    });
   }
   for (let k = 0; k < n; k++) {
     const next = (k + 1) % n;
@@ -323,24 +387,37 @@ function roundaboutPieces(
           : Math.asin(Math.min(1, lateral / back));
       return b + sign * t;
     };
-    const o0 = corner(here.bearing, here.halfWidth, 1);
-    let o1 = corner(there.bearing, there.halfWidth, -1);
-    while (o1 < o0) {
-      o1 += TAU;
-    }
-    if (o1 - o0 > TAU) {
+    // Each corner unwrapped next to its own end of the gap; crossed corners leave no block side.
+    const near = (a: number, to: number) => a + TAU * Math.round((to - a) / TAU);
+    const o0 = flares[k]
+      ? gapStart[k]!
+      : near(corner(here.bearing, here.halfWidth, 1), gapStart[k]!);
+    const o1 = flares[next]
+      ? gapEnd[k]!
+      : near(corner(there.bearing, there.halfWidth, -1), gapEnd[k]!);
+    if (o1 <= o0) {
       continue;
     }
+    const t0 = cut(k);
+    const t1 = cut(next);
+    const hereKerb = kerb(k, 1, 0);
+    const thereKerb = kerb(next, -1, 0).reverse();
     pavements.push({
       inner: [
-        at(node.pos, sideA(here.bearing), here.halfWidth, dir(here.bearing), outer),
+        ...(hereKerb.length > 0
+          ? hereKerb
+          : [at(node.pos, sideA(here.bearing), here.halfWidth, dir(here.bearing), t0)]),
         ...range(i0, i1),
-        at(node.pos, sideB(there.bearing), there.halfWidth, dir(there.bearing), outer),
+        ...(thereKerb.length > 0
+          ? thereKerb
+          : [at(node.pos, sideB(there.bearing), there.halfWidth, dir(there.bearing), t1)]),
       ],
       outer: [
-        at(node.pos, sideA(here.bearing), here.halfWidth + pavement, dir(here.bearing), outer),
+        at(node.pos, sideA(here.bearing), here.halfWidth + pavement, dir(here.bearing), t0),
+        ...kerb(k, 1, pavement).slice(1),
         ...arcPoints(node.pos, back, o0, o1, ARC_STEP),
-        at(node.pos, sideB(there.bearing), there.halfWidth + pavement, dir(there.bearing), outer),
+        ...kerb(next, -1, pavement).slice(1).reverse(),
+        at(node.pos, sideB(there.bearing), there.halfWidth + pavement, dir(there.bearing), t1),
       ],
     });
   }
