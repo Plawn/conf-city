@@ -1,4 +1,5 @@
 import type { ResolvedLink } from "../domain/types";
+import { arcLength } from "../geo/polyline";
 import {
   footprintRadius,
   PITCH,
@@ -768,20 +769,18 @@ function ringArc(ring: Vec2[], a: Vec2, b: Vec2): Vec2[] {
     return [a];
   }
   const n = ring.length;
-  const walk = (step: 1 | -1): { points: Vec2[]; length: number } => {
+  const walk = (step: 1 | -1): Vec2[] => {
     const points: Vec2[] = [a];
-    let length = 0;
     for (let i = ia; i !== ib; ) {
       const j = (i + step + n) % n;
-      length += Math.hypot(ring[j]![0] - ring[i]![0], ring[j]![1] - ring[i]![1]);
       points.push(ring[j]!);
       i = j;
     }
-    return { points, length };
+    return points;
   };
   const cw = walk(1);
   const ccw = walk(-1);
-  return cw.length <= ccw.length ? cw.points : ccw.points;
+  return arcLength(cw) <= arcLength(ccw) ? cw : ccw;
 }
 
 /**
