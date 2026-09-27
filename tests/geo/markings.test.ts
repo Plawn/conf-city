@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { TERRAIN } from "@/domain/nodeStyle";
 import {
+  armMarking,
   crossingIntervals,
   DASH_LENGTH,
   DASH_PERIOD,
@@ -8,6 +9,7 @@ import {
   drivewayRun,
   EDGE_INSET,
   endMargin,
+  giveWayDashes,
   isCrossing,
   MARGIN_JUNCTION,
   MARGIN_PLAIN,
@@ -16,10 +18,11 @@ import {
   pavementSpans,
   zebraOffsets,
 } from "@/geo/markings";
-import type { GraphNode } from "@/geo/roadGraph";
+import type { Arm, GraphNode } from "@/geo/roadGraph";
 import { CLASS_STYLE } from "@/geo/roadStyle";
 import type { Driveway, Vec2 } from "@/layout/types";
 
+const arm = (ring: boolean) => ({ ring }) as Arm;
 const node = (kind: GraphNode["kind"], arms: number): GraphNode =>
   ({ pos: [0, 0], kind, arms: Array.from({ length: arms }, () => ({})) }) as GraphNode;
 
@@ -27,8 +30,28 @@ test("only a junction of three arms or more is a crossing", () => {
   expect(isCrossing(node("junction", 3))).toBe(true);
   expect(isCrossing(node("junction", 2))).toBe(false);
   expect(isCrossing(node("roundabout", 4))).toBe(false);
-  expect(endMargin(node("junction", 4))).toBe(MARGIN_JUNCTION);
-  expect(endMargin(node("end", 1))).toBe(MARGIN_PLAIN);
+  expect(endMargin(armMarking(node("junction", 4), arm(false)))).toBe(MARGIN_JUNCTION);
+  expect(endMargin(armMarking(node("end", 1), arm(false)))).toBe(MARGIN_PLAIN);
+});
+
+test("a spur joining the ring road gets a give-way line and the ring no zebra", () => {
+  const spur = arm(false);
+  const merge = { pos: [0, 0], kind: "junction", arms: [arm(true), arm(true), spur] } as GraphNode;
+  expect(armMarking(merge, merge.arms[0])).toBe("none");
+  expect(armMarking(merge, spur)).toBe("giveWay");
+  const cross = {
+    pos: [0, 0],
+    kind: "junction",
+    arms: [arm(true), arm(false), arm(false)],
+  } as GraphNode;
+  expect(armMarking(cross, cross.arms[0])).toBe("crossing");
+  const dashes = giveWayDashes(0.38, 0.06);
+  expect(dashes.length).toBeGreaterThan(0);
+  for (const [a, b] of dashes) {
+    expect(a).toBeGreaterThanOrEqual(0.06);
+    expect(b).toBeLessThanOrEqual(0.38);
+    expect(b).toBeGreaterThan(a);
+  }
 });
 
 test("dashes are centred between the margins and never overrun them", () => {

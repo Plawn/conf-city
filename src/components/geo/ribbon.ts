@@ -6,14 +6,17 @@ import * as THREE from "three";
  * The width is always taken horizontally — the perpendicular of a segment
  * `(dx, dy, dz)` is the normalised `(dz, 0, -dx)` — so a deck that rises in Y keeps
  * its ground footprint. At interior points the two adjacent perpendiculars are
- * averaged (naive miter, no length compensation): road corners are 90°/45° only,
- * where the visible pinch is negligible.
+ * averaged and stretched by 1/cos of the half turn, like `offsetPolyline`, so the
+ * edges stay parallel to the centreline and meet the pavement kerbs.
  *
  * The result is indexed with position + normal (+Y) + uv, matching the attribute
  * set of the built-in geometries it gets merged with (`mergeGeometries` refuses a
  * mix of indexed and non-indexed inputs, or heterogeneous attributes).
  * `u` runs in world units along the path, `v` is 0 on the right, 1 on the left.
  */
+/** Sharper corners than this stretch no further (a 120° turn). */
+const MAX_MITER = 2;
+
 export function buildRibbon(
   points: [number, number, number][],
   width: number,
@@ -70,8 +73,12 @@ export function buildRibbon(
       pz = segBefore[1] + segAfter[1];
       const len = Math.hypot(px, pz);
       if (len > 1e-6) {
-        px /= len;
-        pz /= len;
+        const miter = Math.min(
+          MAX_MITER,
+          1 / Math.max(1e-6, (px * segAfter[0] + pz * segAfter[1]) / len),
+        );
+        px = (px / len) * miter;
+        pz = (pz / len) * miter;
       } else {
         // 180° turn back on itself: keep the incoming perpendicular.
         px = segBefore[0];
