@@ -1,6 +1,6 @@
 import { junctionFlowing } from "./junctions";
+import type { Pool, Sim } from "./pool";
 import { laneGeometry } from "./routeGeometry";
-import type { Pool, Sim } from "./sim";
 
 export const RETIRE_SECONDS = 1.5;
 export const STUCK_SECONDS = 20;

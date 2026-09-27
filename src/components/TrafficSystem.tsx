@@ -13,8 +13,9 @@ import { createVisibleClock } from "../lib/visibleClock";
 import { congestionSignals } from "../sim/traffic/congestion";
 import { writeDemand } from "../sim/traffic/demand";
 import { trafficStats } from "../sim/traffic/lifecycle";
+import type { Pool, TrafficRoute } from "../sim/traffic/pool";
 import { reconfigureSim } from "../sim/traffic/reconfigure";
-import { advance, createSim, type Pool, type TrafficRoute } from "../sim/traffic/sim";
+import { advance, createSim } from "../sim/traffic/sim";
 import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
 import { useLighting } from "./lighting/runtime";
 import { createVehicleLights } from "./lighting/VehicleLights";
@@ -22,7 +23,7 @@ import { useMobilityParticipant } from "./mobility/MobilitySimulation";
 import { useVehicleGeometry, VEHICLE_MODELS } from "./traffic/useVehicleGeometry";
 import { createVehicleShadows } from "./traffic/vehicleShadows";
 
-export type { TrafficRoute } from "../sim/traffic/sim";
+export type { TrafficRoute } from "../sim/traffic/pool";
 
 /** Both GLBs are normalised to the same length — without this the truck looks like a car. */
 const TRUCK_SCALE = 1.25;
@@ -77,7 +78,7 @@ function writeColors(pool: Pool, mesh: THREE.InstancedMesh): void {
 /**
  * Instanced traffic along a set of routes: one InstancedMesh per model, one
  * useFrame for everything, no React state per vehicle. The simulation itself —
- * following, yielding, spawning — lives in `sim/traffic/sim.ts`.
+ * following, yielding, spawning — lives in `sim/traffic/` (`sim.ts`, `frame.ts`).
  *
  * Spawn rate follows the source node's throughput — or `ambientRate` for the
  * routes that have no source, the ring road's loops; vehicles are removed when

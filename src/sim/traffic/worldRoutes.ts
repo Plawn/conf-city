@@ -3,7 +3,7 @@ import type { ResolvedLink, World } from "../../domain/types";
 import { deckClass, makeDriver } from "../../geo/drivable";
 import { linkKey, type Vec2, type WorldLayout } from "../../layout/types";
 import { fnv1a } from "../../lib/random";
-import type { TrafficRoute } from "./sim";
+import type { TrafficRoute } from "./pool";
 
 export function worldIdentity(world: World): string {
   return fnv1a(

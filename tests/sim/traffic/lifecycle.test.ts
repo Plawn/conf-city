@@ -3,8 +3,9 @@ import { mulberry32 } from "@/lib/random";
 import { trafficBudgets } from "@/sim/traffic/budget";
 import { writeDemand } from "@/sim/traffic/demand";
 import { trafficStats } from "@/sim/traffic/lifecycle";
+import type { TrafficRoute } from "@/sim/traffic/pool";
 import { reconfigureSim } from "@/sim/traffic/reconfigure";
-import { advance, createSim, type TrafficRoute } from "@/sim/traffic/sim";
+import { advance, createSim } from "@/sim/traffic/sim";
 
 const routes: TrafficRoute[] = [
   {

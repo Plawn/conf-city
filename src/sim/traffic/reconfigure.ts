@@ -1,6 +1,7 @@
 import { projectTrajectory } from "../mobility/trajectory";
+import { place, type Sim, type TrafficRoute } from "./pool";
 import { laneGeometry, RIDE_HEIGHT } from "./routeGeometry";
-import { createSim, place, type Sim, type TrafficRoute } from "./sim";
+import { createSim } from "./sim";
 
 /** Upgrade lanes or topology without resetting the fleet; preserve identities and lifetimes. */
 export function reconfigureSim(

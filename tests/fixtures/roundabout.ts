@@ -1,6 +1,6 @@
 import { makeDriver } from "@/geo/drivable";
 import type { RoadNetwork, Vec2 } from "@/layout/types";
-import type { TrafficRoute } from "@/sim/traffic/sim";
+import type { TrafficRoute } from "@/sim/traffic/pool";
 export function roundaboutRoutes(): TrafficRoute[] {
   const ew: Vec2[] = [
     [-8, 0],

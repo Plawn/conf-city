@@ -26,7 +26,7 @@ import { driveAroundRoundabouts, roundaboutArcAt, roundaboutAround } from "./rou
  * its road class allows (`Lanes`), so the vehicles neither drift sideways in a
  * turn nor ride a boulevard as if it were a lane. Each step also says whether it
  * circulates on a roundabout (`ring`), which is what gives it priority over the
- * traffic entering (`sim/traffic/sim.ts`).
+ * traffic entering (`sim/traffic/frame.ts`).
  */
 
 export type Vec3 = [number, number, number];

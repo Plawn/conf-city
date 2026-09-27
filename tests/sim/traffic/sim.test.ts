@@ -3,14 +3,9 @@ import { TERRAIN } from "@/domain/nodeStyle";
 import { makeDriver } from "@/geo/drivable";
 import type { RoadNetwork, Vec2 } from "@/layout/types";
 import { mulberry32 } from "@/lib/random";
-import {
-  advance,
-  createSim,
-  MIN_GAP,
-  type Pool,
-  type Sim,
-  type TrafficRoute,
-} from "@/sim/traffic/sim";
+import { MIN_GAP } from "@/sim/traffic/params";
+import type { Pool, Sim, TrafficRoute } from "@/sim/traffic/pool";
+import { advance, createSim } from "@/sim/traffic/sim";
 
 const Y = TERRAIN.roadY;
 

@@ -8,7 +8,8 @@ import {
 import type { CityLayout, WorldLayout } from "@/layout/types";
 import { congestionSignals } from "@/sim/traffic/congestion";
 import { trafficStats } from "@/sim/traffic/lifecycle";
-import { createSim, type TrafficRoute } from "@/sim/traffic/sim";
+import type { TrafficRoute } from "@/sim/traffic/pool";
+import { createSim } from "@/sim/traffic/sim";
 
 const route: TrafficRoute = {
   key: "a-to-b",

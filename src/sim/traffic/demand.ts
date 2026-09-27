@@ -1,6 +1,6 @@
 import { type Infrastructure, METRO_SHARE } from "../../domain/mobility";
 import type { CityMeta, CityMetrics, NodeTelemetry } from "../../domain/types";
-import type { Sim, TrafficRoute } from "./sim";
+import type { Sim, TrafficRoute } from "./pool";
 
 export function liveTelemetry(t: NodeTelemetry | undefined, now: number): t is NodeTelemetry {
   return !!t && t.liveness !== "down" && t.liveness !== "unknown" && now - t.lastSeen < 30_000;

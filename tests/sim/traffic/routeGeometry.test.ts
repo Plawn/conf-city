@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import { createPose, samplePose, sampleTrajectory } from "@/sim/mobility/trajectory";
+import { place, type TrafficRoute } from "@/sim/traffic/pool";
 import { reconfigureSim } from "@/sim/traffic/reconfigure";
 import { buildRouteGeom, RIDE_HEIGHT } from "@/sim/traffic/routeGeometry";
-import { advance, createSim, place, type TrafficRoute } from "@/sim/traffic/sim";
+import { advance, createSim } from "@/sim/traffic/sim";
 
 test("lane paths stay continuous through sharp turns, width transitions and loop closure", () => {
   const g = buildRouteGeom(

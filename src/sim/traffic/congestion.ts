@@ -2,7 +2,7 @@ import type { ConstructionPressure } from "../../domain/mobility";
 import { pointInPolygon } from "../../layout/geometry";
 import type { WorldLayout } from "../../layout/types";
 import type { TrafficStats } from "./lifecycle";
-import type { Sim, TrafficRoute } from "./sim";
+import type { Sim, TrafficRoute } from "./pool";
 
 /** Assign queues to where they physically wait, including the city accesses of inter-city trips. */
 export function congestionSignals(

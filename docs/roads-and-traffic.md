@@ -61,12 +61,12 @@ and `TrafficSystem` all take their geometry from here.
 - `geo/path.ts` keeps a path as segments + circular arcs until the last moment: an arc's offset is a
   concentric arc, whereas offsetting a polyline folds it when the local radius drops below the
   offset (that fold made outer-lane vehicles appear to reverse).
-- Vehicles keep to their own right, `(-dz, dx)` in `sim/traffic/sim.ts` — the *negative* side of
+- Vehicles keep to their own right, `(-dz, dx)` in `sim/traffic/frame.ts` — the *negative* side of
   `offsetPolyline`; roundabouts circulate counter-clockwise seen from above. Lane offsets per class
   come from `laneOffsets()` (boulevard: two lanes each way) and are interpolated over `LANE_BLEND`
   at every class change and ring junction.
 
-## Simulation (`sim/traffic/sim.ts`, pure, `bun test`)
+## Simulation (`sim/traffic/`, pure, `bun test`)
 
 One shared simulation for every city and bridge, stepped at a fixed 30 Hz by `sim/mobility/engine.ts`.
 SoA pools with swap-remove; vehicle identity is a stable id, never a pool index.

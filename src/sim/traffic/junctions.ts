@@ -3,8 +3,8 @@ import { drivingRadius } from "../../geo/roundabouts";
 import { vecKey } from "../../layout/geometry";
 import type { Roundabout } from "../../layout/types";
 import { createPose, sampleTrajectory } from "../mobility/trajectory";
-import { type LaneGeom, laneGeometry, RIDE_HEIGHT } from "./routeGeometry";
-import type { Pool, RouteGeom, Sim, TrafficRoute } from "./sim";
+import type { Pool, Sim, TrafficRoute } from "./pool";
+import { type LaneGeom, laneGeometry, RIDE_HEIGHT, type RouteGeom } from "./routeGeometry";
 
 interface Passage {
   key: string;

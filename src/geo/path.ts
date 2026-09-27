@@ -14,7 +14,7 @@ import { EPS } from "../lib/math";
  * whole thing sampled — at a bounded change of heading rather than a bounded
  * chord, which is what the eye and the simulation actually care about.
  *
- * "Right" here is the driver's right, `(-dz, dx)`, the side `sim/traffic/sim.ts`
+ * "Right" here is the driver's right, `(-dz, dx)`, the side `sim/traffic/frame.ts`
  * keeps to — *not* the `(dz, -dx)` of `offsetPolyline`.
  */
 

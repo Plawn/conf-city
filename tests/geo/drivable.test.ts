@@ -251,7 +251,7 @@ describe("driven lanes", () => {
 
   /**
    * The path a vehicle in `lane` actually drives, offset to the driver's right
-   * — the same `(-dz, dx)` side `sim/traffic/sim.ts` uses.
+   * — the same `(-dz, dx)` side `sim/traffic/frame.ts` uses.
    */
   function drivenLane(path: ReturnType<ReturnType<typeof makeDriver>["street"]>, lane: number) {
     return buildRouteGeom(path.points, path.lanes, path.ring, false)!.lanes[lane === 1 ? 1 : 0];

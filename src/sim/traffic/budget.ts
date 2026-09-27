@@ -1,4 +1,4 @@
-import type { TrafficRoute } from "./sim";
+import type { TrafficRoute } from "./pool";
 
 /** Sample physical lanes, not route count: duplicate links don't manufacture capacity. */
 export function trafficBudgets(routes: TrafficRoute[], hardLimit: number) {

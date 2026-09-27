@@ -109,7 +109,9 @@ See `roads-and-traffic.md` for the road model and its invariants.
 geo/                       Road driving geometry: roadStyle (CLASS_STYLE, lanes, ring radii), polyline, path
                            (segments + arcs kept exact until offset), roadGraph, junctions, roundabouts,
                            drivable (THE junction of streets, roundabouts and bridges → DrivePath)
-sim/traffic/               sim.ts (SoA simulation), worldRoutes.ts (one route set for the whole world,
+sim/traffic/               sim.ts (createSim, spawn, decide/move, advance), params.ts (tuning constants), pool.ts
+                           (TrafficRoute, Sim, SoA Pool, place), frame.ts (probes, spatial hash, speedLimitAhead
+                           priority rules), worldRoutes.ts (one route set for the whole world,
                            upgradeLayout), routeGeometry.ts (lane trajectories), demand.ts (telemetry → spawn
                            rates, staleness), budget.ts (lane-sampled population budget), lifecycle.ts (finite
                            journeys, stuck retirement), congestion.ts (local jams), junctions.ts (roundabout
