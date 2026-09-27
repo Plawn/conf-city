@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ERROR_RATE_THRESHOLD, nodeIncident } from "../domain/incidents";
-import { formatKbps, formatMb, netKbps } from "../domain/metrics";
+import { ERROR_RATE_THRESHOLD, nodeIncident, TELEMETRY_STALE_MS } from "../domain/incidents";
+import { formatCores, formatKbps, formatMb, formatPercent, netKbps } from "../domain/metrics";
 import { LIVENESS_TONE, NODE_STYLE, nodeAddress } from "../domain/nodeStyle";
 import type { MetricSample } from "../domain/telemetry";
 import type { NodeTelemetry, PositionedNode } from "../domain/types";
@@ -11,8 +11,6 @@ import { useUiStore } from "../store/uiStore";
 import { MetricCard } from "./MetricCard";
 import { UsageBar } from "./UsageBar";
 import { Badge, Button, Drawer } from "./ui";
-
-const STALE_MS = 30_000;
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => Date.now());
@@ -65,7 +63,7 @@ export function NodeDrawer({
     [addr, history, historyVersion],
   );
   const now = useNow();
-  const stale = t ? now - t.lastSeen > STALE_MS : false;
+  const stale = t ? now - t.lastSeen > TELEMETRY_STALE_MS : false;
   const custom = t?.metrics.custom ? Object.entries(t.metrics.custom) : [];
 
   return (
@@ -118,7 +116,7 @@ export function NodeDrawer({
               <span aria-hidden="true">🔥 </span>
               {incident.label}
               {(t?.metrics.errorRate ?? 0) > ERROR_RATE_THRESHOLD &&
-                ` · ${(t!.metrics.errorRate! * 100).toFixed(2)}% errors`}
+                ` · ${formatPercent(t!.metrics.errorRate!, 2)} errors`}
             </div>
           )}
 
@@ -159,7 +157,7 @@ export function NodeDrawer({
                       label="CPU"
                       value={t.metrics.cpu / 100}
                       max={t.metrics.cpuLimit}
-                      format={(v) => `${v.toFixed(2)} core${v >= 2 ? "s" : ""}`}
+                      format={(v) => formatCores(v, 2)}
                     />
                   )}
                   {t.metrics.memoryMb != null && (

@@ -46,7 +46,7 @@ export interface TrainSchedule {
   untilArrival: number;
 }
 
-export function createSchedule(): TrainSchedule {
+function createSchedule(): TrainSchedule {
   return {
     stop: 0,
     station: 0,
@@ -154,7 +154,7 @@ export function reconfigureMetroFleet(fleet: MetroFleet, route: Trajectory): voi
   updateMetroPoses(fleet);
 }
 
-export function updateMetroPoses(fleet: MetroFleet): void {
+function updateMetroPoses(fleet: MetroFleet): void {
   for (let train = 0; train < TRAINS; train++) {
     for (let wagon = 0; wagon < 2; wagon++) {
       samplePose(

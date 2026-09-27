@@ -7,8 +7,10 @@ import { nodeIncident } from "../domain/incidents";
 import {
   type CityMax,
   cpuSaturation,
+  formatCores,
   formatKbps,
   formatMb,
+  formatPercent,
   heatColor,
   heatValue,
   memoryHeight,
@@ -37,10 +39,8 @@ import {
 import { useHtmlPortal } from "./htmlPortal";
 import { Badge } from "./ui";
 
-export const NODE_CONFIG = NODE_STYLE;
-
 // Preload every model a variant may pick
-for (const config of Object.values(NODE_CONFIG)) {
+for (const config of Object.values(NODE_STYLE)) {
   for (const m of config.models) {
     useGLTF.preload(m.path);
   }
@@ -97,7 +97,7 @@ function PortModel({
   // called conditionally — so drei is handed a model we know exists and its
   // scene is ignored, the quay coming from `harbourGeometry()` instead.
   const glb = PORT_ASSETS.harbour;
-  const { scene } = useGLTF(glb ?? NODE_CONFIG.app.modelPath);
+  const { scene } = useGLTF(glb ?? NODE_STYLE.app.modelPath);
 
   // `glb` is a module constant (`PORT_ASSETS.harbour`), so it is not a dependency:
   // swapping it means a reload, and the two branches below are picked once.
@@ -168,7 +168,7 @@ function NodeModel({
   isDiscovered?: boolean;
   fireIntensity: number;
 }) {
-  const config = NODE_CONFIG[type];
+  const config = NODE_STYLE[type];
   const { scene } = useGLTF(variant.model);
   const visualRef = useRef(visual);
   visualRef.current = visual;
@@ -441,7 +441,7 @@ export const NodeMesh = memo(
     const selected = useUiStore((s) => s.selectedNode === addr);
     const select = useUiStore((s) => s.select);
     const mode = useUiStore((s) => s.viewMode);
-    const config = NODE_CONFIG[node.type];
+    const config = NODE_STYLE[node.type];
     const m = telemetry?.metrics;
     const incident = nodeIncident(telemetry);
 
@@ -567,10 +567,7 @@ export const NodeMesh = memo(
                       <span className="text-right font-mono">
                         {m.cpu.toFixed(0)}%
                         {m.cpuLimit ? (
-                          <span className="text-surface-500">
-                            {" "}
-                            / {m.cpuLimit} core{m.cpuLimit > 1 ? "s" : ""}
-                          </span>
+                          <span className="text-surface-500"> / {formatCores(m.cpuLimit)}</span>
                         ) : null}
                       </span>
                     </>
@@ -609,9 +606,7 @@ export const NodeMesh = memo(
                   {m.errorRate != null && (
                     <>
                       <span>Err</span>
-                      <span className="text-right font-mono">
-                        {(m.errorRate * 100).toFixed(2)}%
-                      </span>
+                      <span className="text-right font-mono">{formatPercent(m.errorRate, 2)}</span>
                     </>
                   )}
                 </div>

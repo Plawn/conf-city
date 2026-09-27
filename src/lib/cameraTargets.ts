@@ -3,7 +3,7 @@ import type { PositionedNode } from "../domain/types";
 import type { CityBounds } from "../layout/bounds";
 import type { WorldLayout } from "../layout/types";
 
-export const DEFAULT_CAMERA_DISTANCE = 30;
+const DEFAULT_CAMERA_DISTANCE = 30;
 
 export function resetTarget(): CameraTarget {
   return { lookAt: [0, 0, 0], distance: DEFAULT_CAMERA_DISTANCE, nonce: Date.now() };

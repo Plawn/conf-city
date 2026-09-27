@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ERROR_RATE_THRESHOLD, nodeIncident, telemetryUncertain } from "../../domain/incidents";
+import { formatPercent } from "../../domain/metrics";
 import { nodeAddress } from "../../domain/nodeStyle";
 import type { City, NodeTelemetry, PositionedNode } from "../../domain/types";
 import { useUiStore } from "../../store/uiStore";
@@ -116,7 +117,7 @@ export function AttentionPanel({
                   >
                     {incident.label}
                     {(t.metrics.errorRate ?? 0) > ERROR_RATE_THRESHOLD &&
-                      ` · ${(t.metrics.errorRate! * 100).toFixed(2)}% errors`}
+                      ` · ${formatPercent(t.metrics.errorRate!, 2)} errors`}
                   </span>
                   {(!connected || telemetryUncertain(t, now)) && (
                     <span className="block text-[10px] text-surface-400">Last reported state</span>

@@ -25,6 +25,7 @@ src/                             Frontend
 
 ```
 domain/types.ts            Domain models; re-exports telemetry types from @proxy/protocol
+domain/viewMode.ts         ViewMode: health colours or a heatmap of one resource
 domain/camera.ts           CameraTarget { lookAt, distance?, nonce? } (nonce re-triggers the same target)
 domain/quality.ts          QUALITY_PROFILES (eco|balanced|high budgets), resolveDpr, initialTier, createGovernor,
                            idle detection — see render-performance.md
@@ -36,7 +37,7 @@ domain/nodeStyle.ts        NODE_STYLE (colour/scale/models per type; first model
 domain/biome.ts            BIOMES (harbour|meadow|dunes|tundra|basalt) + resolveBiome(s) — see biomes.md
 domain/buildingVariant.ts  Per-building render variety seeded on the address (model, yaw, scale, tint)
 domain/color.ts            hexToHsl / hslToHex / shiftHsl / darken
-domain/metrics.ts          Saturation, cityMax, heatValue/heatColor, cityUsage, disk gauges — see telemetry-visuals.md
+domain/metrics.ts          Saturation, cityMax, heatValue/heatColor, cityUsage, disk gauges, formatMb/Percent/Cores — see telemetry-visuals.md
 domain/incidents.ts        nodeIncident / telemetryUncertain: one truth for alerts, attention list and fires
                            (ERROR_RATE_THRESHOLD 1 %, TELEMETRY_STALE_MS 30 s)
 domain/mobility.ts         Construction state machine: pressure → job → upgrade (road widening, second deck,

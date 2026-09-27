@@ -1,6 +1,6 @@
 import { clamp01 } from "../lib/math";
-import type { ViewMode } from "../store/uiStore";
 import type { CityMeta, CityMetrics, MetricSnapshot, NodeTelemetry } from "./types";
+import type { ViewMode } from "./viewMode";
 
 /** CPU saturation 0..1+ : usage vs allocated cores (Docker-style cpu% = 100 per core). */
 export function cpuSaturation(m: MetricSnapshot | undefined): number | undefined {
@@ -131,6 +131,16 @@ export function formatRank(mode: ViewMode, v: number): string {
 
 export function formatMb(mb: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
+/** `0.0123` → `"1.23%"` with `digits = 2`. */
+export function formatPercent(ratio: number, digits = 0): string {
+  return `${(ratio * 100).toFixed(digits)}%`;
+}
+
+/** `"1 core"`, `"1.50 cores"`: `digits` fixes the decimals, raw number otherwise; plural above 1. */
+export function formatCores(n: number, digits?: number): string {
+  return `${digits == null ? n : n.toFixed(digits)} core${n > 1 ? "s" : ""}`;
 }
 
 /** Disk throughput. Megabytes per second, the unit disks are read in. */

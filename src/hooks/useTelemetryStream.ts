@@ -10,7 +10,7 @@ const DEFAULT_PROXY_URL =
     : "ws://localhost:4001/ws/frontend";
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 10_000;
-export const HISTORY_LEN = 60;
+const HISTORY_LEN = 60;
 /**
  * Lines kept client-side. Roomier than a pure live tail needs, because a 24h backfill lands
  * in the same buffer and must not immediately evict everything arriving live.
@@ -103,7 +103,7 @@ function mergeTelemetryUpdate(
  * `replace` is the snapshot semantics (an entry absent from the batch is gone);
  * without it the batch is a delta merged over the previous map.
  */
-export function reconcileMeta<T>(
+function reconcileMeta<T>(
   prev: Map<string, T>,
   batch: Record<string, T>,
   replace: boolean,

@@ -4,7 +4,7 @@ import { ERROR_RATE_THRESHOLD } from "../../domain/incidents";
 import { heatColor } from "../../domain/metrics";
 import { LIVENESS_COLORS } from "../../domain/nodeStyle";
 import type { NodeTelemetry, NodeType } from "../../domain/types";
-import type { ViewMode } from "../../store/uiStore";
+import type { ViewMode } from "../../domain/viewMode";
 
 export interface MaterialVisual {
   color: THREE.Color;

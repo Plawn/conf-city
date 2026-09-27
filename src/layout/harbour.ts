@@ -82,7 +82,7 @@ export interface HarbourRequest {
  * True when the straight corridor `from → to`, widened by `LANE_HALF_WIDTH` on
  * each side, touches no island: a ship can sail it without running aground.
  */
-export function seaLane(from: Vec2, to: Vec2, islands: Vec2[][]): boolean {
+function seaLane(from: Vec2, to: Vec2, islands: Vec2[][]): boolean {
   const dx = to[0] - from[0];
   const dz = to[1] - from[1];
   const length = Math.hypot(dx, dz);

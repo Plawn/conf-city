@@ -2,23 +2,21 @@ import { create } from "zustand";
 import type { CameraTarget } from "../domain/camera";
 import {
   isQualityChoice,
-  QUALITY_PROFILES,
   type QualityChoice,
   type QualityProfile,
   type QualityTier,
 } from "../domain/quality";
 import {
+  effectiveProfile,
   hasOverrides,
-  mergeQualityProfile,
   normalizeOverrides,
   parseTweaks,
   type QualityOverrides,
 } from "../domain/qualityOverrides";
+import type { ViewMode } from "../domain/viewMode";
 
 export type ToastTone = "ok" | "warn" | "danger" | "info";
 
-/** What the buildings encode: health colours, or a heatmap of one resource. */
-export type ViewMode = "health" | "cpu" | "memory" | "network";
 export type RenderMode = "office" | "smooth";
 
 function savedRenderMode(): RenderMode {
@@ -209,7 +207,7 @@ export const selectProfile = (
     cachedProfile = {
       tier,
       overrides: s.renderOverrides,
-      profile: mergeQualityProfile(QUALITY_PROFILES[tier], s.renderOverrides),
+      profile: effectiveProfile(tier, s.renderOverrides),
     };
   }
   return cachedProfile.profile;

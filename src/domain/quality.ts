@@ -172,7 +172,7 @@ export function stepTier(tier: QualityTier, delta: -1 | 1): QualityTier {
   return QUALITY_TIERS[Math.max(0, Math.min(QUALITY_TIERS.length - 1, index))]!;
 }
 
-export function compareTiers(a: QualityTier, b: QualityTier): number {
+function compareTiers(a: QualityTier, b: QualityTier): number {
   return QUALITY_TIERS.indexOf(a) - QUALITY_TIERS.indexOf(b);
 }
 
@@ -322,10 +322,8 @@ export function createGovernor(options: GovernorOptions) {
   };
 }
 
-export type Governor = ReturnType<typeof createGovernor>;
-
 /** Pointer inactivity after which an automatic display drops to the idle cadence. */
-export const IDLE_AFTER_MS = 120_000;
+const IDLE_AFTER_MS = 120_000;
 export const IDLE_FPS = 15;
 
 export function isIdle(

@@ -53,7 +53,7 @@ export const TWEAK_CONTROLS: readonly TweakControl[] = [
 ];
 
 /** The tier's own value for a key, flattening the nested `ao` block. */
-export function tierValue(profile: QualityProfile, key: OverrideKey): TweakValue {
+function tierValue(profile: QualityProfile, key: OverrideKey): TweakValue {
   if (key === "ao") {
     return profile.ao.enabled ? profile.ao.samples : 0;
   }

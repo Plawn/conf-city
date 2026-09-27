@@ -1,5 +1,6 @@
 import { formatRank, heatColor as heat, RANK_LABEL } from "../../domain/metrics";
-import { useUiStore, type ViewMode } from "../../store/uiStore";
+import type { ViewMode } from "../../domain/viewMode";
+import { useUiStore } from "../../store/uiStore";
 import { SegmentedControl } from "../ui";
 
 export interface ConsumerRow {

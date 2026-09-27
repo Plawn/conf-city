@@ -7,7 +7,7 @@ import { ActiveClusteredLighting } from "./ActiveClusteredLighting";
 export const renderParams = new URLSearchParams(
   typeof window === "undefined" ? "" : window.location.search,
 );
-export const forceWebGL = renderParams.get("renderer") === "webgl";
+const forceWebGL = renderParams.get("renderer") === "webgl";
 export const gpuRenderer = (renderer: unknown) => renderer as WebGPURenderer;
 export function isWebGPU(renderer: WebGPURenderer): boolean {
   return (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;

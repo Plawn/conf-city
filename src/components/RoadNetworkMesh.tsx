@@ -2,7 +2,8 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { TERRAIN } from "../domain/nodeStyle";
-import type { Driveway, RoadClass, RoadSegment, Roundabout, Vec2 } from "../layout/types";
+import { heavier } from "../layout/roads";
+import type { Driveway, RoadSegment, Roundabout, Vec2 } from "../layout/types";
 import { junctionPieces } from "./geo/junctions";
 import { loopWall, polygonCap } from "./geo/polygon";
 import {
@@ -13,7 +14,7 @@ import {
   subPolyline,
 } from "./geo/polyline";
 import { buildRibbon } from "./geo/ribbon";
-import { buildRoadGraph, type DeckExit, type GraphNode } from "./geo/roadGraph";
+import { buildRoadGraph, type DeckExit, type GraphNode, ON_LINE } from "./geo/roadGraph";
 import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "./geo/roadStyle";
 import { StreetLights } from "./StreetLights";
 
@@ -65,7 +66,6 @@ const STOP_AT = 0.9;
 const STOP_WIDTH = 0.12;
 /** Half the pavement gap at a driveway mouth: the driveway plus a kerb drop each side. */
 const MOUTH_GAP = TERRAIN.drivewayWidth / 2 + 0.1;
-const ON_LINE = 0.01;
 /** A stable empty default: a fresh `[]` per render would rebuild the whole network every frame. */
 const NO_EXITS: DeckExit[] = [];
 
@@ -116,9 +116,6 @@ function band(points: Vec2[], d0: number, d1: number, y: number): THREE.BufferGe
   }
   return ribbon(offsetPolyline(points, (d0 + d1) / 2), Math.abs(d1 - d0), y);
 }
-
-const heavier = (a: RoadClass, b: RoadClass): RoadClass =>
-  CLASS_STYLE[a].width >= CLASS_STYLE[b].width ? a : b;
 
 /** A crossing that gets a zebra and a stop line on every arm. */
 const isCrossing = (node: GraphNode) => node.kind === "junction" && node.arms.length >= 3;

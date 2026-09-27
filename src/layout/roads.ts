@@ -87,7 +87,7 @@ const DOOR_MARGIN = 0.2;
 const DEEP_WEIGHT = 0.25;
 
 /** World position of the corner `(ci, cj)` of the lattice. */
-export function cornerPos(ci: number, cj: number): Vec2 {
+function cornerPos(ci: number, cj: number): Vec2 {
   return [ci * PITCH + ROAD_OFFSET, cj * PITCH + ROAD_OFFSET];
 }
 
@@ -428,7 +428,8 @@ function classOf(uses: number): RoadClass {
 
 const CLASS_RANK: Record<RoadClass, number> = { street: 0, avenue: 1, boulevard: 2 };
 
-function heavier(a: RoadClass, b: RoadClass): RoadClass {
+/** The busier of two road classes. */
+export function heavier(a: RoadClass, b: RoadClass): RoadClass {
   return CLASS_RANK[a] >= CLASS_RANK[b] ? a : b;
 }
 

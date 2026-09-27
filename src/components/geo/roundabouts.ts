@@ -100,7 +100,7 @@ function tangentDistance(R: number, rho: number): number {
  * How far from the centre a route point has to be for the arc to aim at it:
  * outside the tarmac, and far enough that the full blend still fits.
  */
-export function legReach(r: Roundabout): number {
+function legReach(r: Roundabout): number {
   const R = drivingRadius(r);
   // `roundaboutAround` — and so `drivable.ts`'s corner rounding — counts
   // everything within `outer + APPROACH` as part of the roundabout and refuses
@@ -144,7 +144,7 @@ function blend(R: number, legLen: number, want: number): { rho: number; phi: num
 }
 
 /** The pieces a route follows through one roundabout: entry blend, ring, exit blend. */
-export function roundaboutPieces(r: Roundabout, prev: Vec2, next: Vec2): PathPiece[] {
+function roundaboutPieces(r: Roundabout, prev: Vec2, next: Vec2): PathPiece[] {
   const [cx, cz] = r.center;
   const enter = Math.atan2(prev[1] - cz, prev[0] - cx);
   const exit = Math.atan2(next[1] - cz, next[0] - cx);

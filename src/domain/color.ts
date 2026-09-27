@@ -8,7 +8,7 @@ import { clamp01 } from "../lib/math";
 export type Rgb = [number, number, number];
 export type Hsl = [number, number, number];
 
-export function hexToRgb(hex: string): Rgb {
+function hexToRgb(hex: string): Rgb {
   const h = hex.replace("#", "");
   const full =
     h.length === 3
@@ -21,7 +21,7 @@ export function hexToRgb(hex: string): Rgb {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
-export function rgbToHex([r, g, b]: Rgb): string {
+function rgbToHex([r, g, b]: Rgb): string {
   const to = (v: number) =>
     Math.round(clamp01(v) * 255)
       .toString(16)

@@ -55,20 +55,6 @@ const on = (centre: Vec2, radius: number, a: number): Vec2 => [
   centre[1] + radius * Math.sin(a),
 ];
 
-export function pieceStart(p: PathPiece): Vec2 {
-  return p.kind === "line" ? p.a : on(p.centre, p.radius, p.a0);
-}
-
-export function pieceEnd(p: PathPiece): Vec2 {
-  return p.kind === "line" ? p.b : on(p.centre, p.radius, p.a1);
-}
-
-export function pieceLength(p: PathPiece): number {
-  return p.kind === "line"
-    ? Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1])
-    : Math.abs(p.a1 - p.a0) * p.radius;
-}
-
 /**
  * The radius a driver offset `d` to their right actually rides on. A left turn
  * (the offset on the outside) widens it, a right turn tightens it; a straight

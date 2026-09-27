@@ -160,7 +160,7 @@ export const QUAY_RUN = 26;
  * to recognise. The ring is walked in its own winding order, so the two ways of
  * the quay are each other's reverse and the pair reads as one road.
  */
-export function alongRing(spur: Vec2[], ring: Vec2[]): Vec2[] {
+function alongRing(spur: Vec2[], ring: Vec2[]): Vec2[] {
   const mouth = spur[spur.length - 1];
   if (!mouth || ring.length < 3) {
     return spur;

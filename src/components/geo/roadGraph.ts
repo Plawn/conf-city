@@ -61,7 +61,8 @@ export interface DeckExit {
 const END_OVERHANG = 0.9;
 /** Radius of the curve replacing a lattice bend. */
 const BEND_RADIUS = 1.5;
-const ON_LINE = 0.01;
+/** Distance under which a point counts as lying on a centreline. */
+export const ON_LINE = 0.01;
 
 function bearingOf(from: Vec2, to: Vec2): number {
   return Math.atan2(to[1] - from[1], to[0] - from[0]);

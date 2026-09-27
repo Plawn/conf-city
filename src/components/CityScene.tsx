@@ -3,7 +3,14 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { BIOMES, DEFAULT_BIOME } from "../domain/biome";
 import { type BuildingVariant, buildingVariant } from "../domain/buildingVariant";
-import { cityMax, cityUsage, formatMb, saturationTone, usageTooltip } from "../domain/metrics";
+import {
+  cityMax,
+  cityUsage,
+  formatCores,
+  formatMb,
+  saturationTone,
+  usageTooltip,
+} from "../domain/metrics";
 import { nodeAddress, TERRAIN } from "../domain/nodeStyle";
 import type {
   City,
@@ -205,7 +212,7 @@ export function CityScene({
                 <Badge tone={saturationTone(usage.cpuPct != null ? usage.cpuPct / 100 : undefined)}>
                   {usage.cpuPct != null
                     ? `${Math.round(usage.cpuPct)}% CPU`
-                    : `${usage.cpuUsedCores.toFixed(1)} cores`}
+                    : formatCores(usage.cpuUsedCores, 1)}
                 </Badge>
               </Tooltip>
               <Tooltip label={usageTooltip(usage, "mem")}>

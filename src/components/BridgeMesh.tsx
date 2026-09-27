@@ -16,8 +16,6 @@ import { CLASS_STYLE } from "./geo/roadStyle";
 export function deckWidth(klass: RoadClass = DECK_CLASS): number {
   return CLASS_STYLE[klass].width;
 }
-/** The plain deck's width, kept as a constant for callers that predate the upgrade. */
-export const DECK_WIDTH = deckWidth();
 /** Rails sit on the deck's own edges (±width/2), so only their height is a constant. */
 const RAIL_HEIGHT = 0.15;
 /** One pylon roughly every PYLON_SPACING world units of span. */
