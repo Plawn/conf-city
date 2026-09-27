@@ -32,6 +32,8 @@ domain/quality.ts          QUALITY_PROFILES (eco|balanced|high budgets), resolve
 domain/qualityOverrides.ts User "Tweaks" over the tier: QualityOverrides, OVERRIDE_RANGES, mergeQualityProfile,
                            parseTweaks / formatTweaks (`?tweaks=ao:0,volume:0`) — see render-performance.md
 domain/telemetry.ts        MetricSample (history ring buffer), Alert
+domain/telemetryMerge.ts   mergeTelemetryUpdate, reconcileMeta (Map identity kept when unchanged), pushSample,
+                           appendLogs, mergeCityMetrics
 domain/nodeStyle.ts        NODE_STYLE (colour/scale/models per type; first model = default), LIVENESS_COLORS,
                            TERRAIN (Y layers + road/water/bridge colours), VEHICLE_TINTS, PORT_ASSETS, nodeAddress()
 domain/biome.ts            BIOMES (harbour|meadow|dunes|tundra|basalt) + resolveBiome(s) — see biomes.md
@@ -61,6 +63,8 @@ store/mobilityStore.ts     Per-world Infrastructure (finished constructions) + i
                            "conf-city-mobility-v1"; live stats / jobs / events for the City evolution panel
 hooks/useTelemetryStream.ts WebSocket to the proxy → telemetry, nodeMeta, cityMeta, cityMetrics, logs, history,
                            requestSnapshot, subscribeLogs, queryLogs (backfill), canQueryLogs
+hooks/telemetryMessages.ts handleMessage(msg, ctx): one proxy message → the hook's setters, in a fixed order
+hooks/telemetryTypes.ts    ProviderInfo, LogQueryOptions, TelemetryState, PendingQuery
 hooks/useAlerts.ts         Diffs liveness / errorRate per tick → Alert list (30 s cooldown)
 hooks/useKeyboardShortcuts.ts  `/` search, Esc, R reset, F fit, L logs (ignored while typing)
 hooks/useHashState.ts      #cities=a,b&node=city/id ↔ state
@@ -227,8 +231,9 @@ Frontend → proxy:  subscribe:logs, unsubscribe:logs, query:logs, request:snaps
 ```
 
 The proxy re-broadcasts a full snapshot every 5 s. `useTelemetryStream` keeps `nodeMeta` / `cityMeta`
-Map identity unless an entry really changed and bumps `telemetryKeysVersion` only on new keys;
-a fresh Map would re-run discovery → `layoutWorld` → every route → empty the traffic pools.
+Map identity unless an entry really changed (`reconcileMeta`, `domain/telemetryMerge.ts`) and bumps
+`telemetryKeysVersion` only on new keys; a fresh Map would re-run discovery → `layoutWorld` → every
+route → empty the traffic pools.
 
 ## UI state
 

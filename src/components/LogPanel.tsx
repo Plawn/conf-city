@@ -1,7 +1,7 @@
 import { logKey } from "@proxy/logKey";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntry } from "../domain/types";
-import type { LogQueryOptions } from "../hooks/useTelemetryStream";
+import type { LogQueryOptions } from "../hooks/telemetryTypes";
 import { formatClock } from "../lib/time";
 import { useUiStore } from "../store/uiStore";
 import {

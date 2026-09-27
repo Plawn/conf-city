@@ -5,7 +5,7 @@ import { hasOverrides } from "../domain/qualityOverrides";
 import type { Alert } from "../domain/telemetry";
 import type { LivenessStatus, NodeTelemetry } from "../domain/types";
 import type { ViewMode } from "../domain/viewMode";
-import type { ProviderInfo } from "../hooks/useTelemetryStream";
+import type { ProviderInfo } from "../hooks/telemetryTypes";
 import { formatRelative } from "../lib/time";
 import { type RenderMode, useQualityTier, useUiStore } from "../store/uiStore";
 import { ConnectionStatus } from "./ConnectionStatus";
