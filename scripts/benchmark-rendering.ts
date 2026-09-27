@@ -1,5 +1,5 @@
-import { mkdir } from "node:fs/promises";
 import { cpus, release, totalmem } from "node:os";
+import { outputDir } from "./harness";
 import { fixtureWorld } from "./lighting-fixture";
 
 /** Repeatable, sequential measurements: never compete with another browser benchmark. */
@@ -7,8 +7,7 @@ const runs = Number(process.env.CITY_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) {
   throw new Error("CITY_RUNS must be a positive integer");
 }
-const output = process.env.CITY_OUTPUT ?? "out/benchmark-rendering";
-await mkdir(output, { recursive: true });
+const output = await outputDir("out/benchmark-rendering");
 await Bun.write(
   `${output}/machine.json`,
   JSON.stringify(

@@ -1,6 +1,6 @@
 import type { LogEntry } from "../../protocol.ts";
 import { getLogLevel } from "./level.ts";
-import type { LogQuery, LogSource, LogTarget } from "./types.ts";
+import { type LogQuery, type LogSource, type LogTarget, MESSAGE_MAX } from "./types.ts";
 
 /**
  * Fields written by the Docker log collector (Vector's `docker_logs` source, and anything
@@ -10,7 +10,6 @@ import type { LogQuery, LogSource, LogTarget } from "./types.ts";
 const SERVICE_FIELD = "label.com.docker.swarm.service.id";
 const NODE_FIELD = "label.com.docker.swarm.node.id";
 
-const MESSAGE_MAX = 500;
 const DEFAULT_URL = "http://victorialogs:9428";
 const DEFAULT_TIMEOUT_MS = 10_000;
 

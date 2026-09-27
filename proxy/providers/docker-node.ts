@@ -28,6 +28,7 @@ import {
   sampleOf,
 } from "./docker-api.ts";
 import { HostStatsReader } from "./host-stats.ts";
+import { bytesToMb, round } from "./units.ts";
 
 /** Label Swarm puts on every task container, holding the service name. */
 const SERVICE_LABEL = "com.docker.swarm.service.name";
@@ -125,7 +126,7 @@ async function collectMetrics(): Promise<Record<string, MetricSnapshot> | null> 
           }
         }
 
-        totalMemMb += memUsedBytes(stats.memory_stats) / (1024 * 1024);
+        totalMemMb += bytesToMb(memUsedBytes(stats.memory_stats));
         count++;
       }
 
@@ -138,7 +139,7 @@ async function collectMetrics(): Promise<Record<string, MetricSnapshot> | null> 
       // cpu/net stay absent until a second poll gives us a delta.
       const snap: MetricSnapshot = { memoryMb: Math.round(totalMemMb) };
       if (hasCpu) {
-        snap.cpu = Math.round(totalCpu * 10) / 10;
+        snap.cpu = round(totalCpu, 1);
       }
       if (hasNet) {
         snap.netRxKbps = Math.round(rxKbps);
@@ -171,45 +172,23 @@ const provider = new BaseProvider({
   capabilities: ["metrics"],
 });
 
-provider.start();
-
-// Async collection loop (Docker API calls are async; BaseProvider.intervals expects sync).
-let running = true;
+// Node usage and the machine sample travel in the same message.
 const metricsMs = Number(process.env.NODE_METRICS_INTERVAL) || 5_000;
-
-async function metricsLoop() {
-  while (running) {
-    await Bun.sleep(metricsMs);
-    if (!running || !provider.connected) {
-      continue;
-    }
-    try {
-      const now = Date.now();
-      const [data, machine] = await Promise.all([
-        collectMetrics(),
-        hostStats.read(now).catch(() => null),
-      ]);
-      const cities: Record<string, CityMetrics> | undefined = machine
-        ? { [hostname]: machine }
-        : undefined;
-      if (data || cities) {
-        provider.sendMetrics(data ?? {}, cities);
-      }
-    } catch (err) {
-      console.error("[node] Metrics error:", err);
-    }
+provider.every("metrics", metricsMs, async () => {
+  const now = Date.now();
+  const [data, machine] = await Promise.all([
+    collectMetrics(),
+    hostStats.read(now).catch(() => null),
+  ]);
+  const cities: Record<string, CityMetrics> | undefined = machine
+    ? { [hostname]: machine }
+    : undefined;
+  if (data || cities) {
+    provider.sendMetrics(data ?? {}, cities);
   }
-}
+});
 
-function shutdown() {
-  console.log("[node] Shutting down...");
-  running = false;
-  provider.stop();
-}
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
-metricsLoop();
+provider.stopOnSignals("node");
+provider.start();
 
 console.log(`[node] Provider started for "${hostname}" (${hostCpus} cores)`);

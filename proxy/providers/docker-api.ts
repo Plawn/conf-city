@@ -30,10 +30,7 @@ export class DockerClient {
   }
 
   async get<T = unknown>(path: string): Promise<T> {
-    const res = await fetch(this.url(path), this.fetchOpts());
-    if (!res.ok) {
-      throw new Error(`Docker API ${path}: ${res.status} ${res.statusText}`);
-    }
+    const res = await this.getRaw(path);
     return res.json() as Promise<T>;
   }
 

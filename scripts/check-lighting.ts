@@ -1,50 +1,41 @@
 /** Run against `bun run build && bun run preview --port 4174`.
  * GPU_SOFTWARE=1 selects SwiftShader for CI; its timings are not hardware benchmarks.
  */
-import { mkdir } from "node:fs/promises";
-import { chromium } from "@playwright/test";
-import { isQualityTier, QUALITY_PROFILES } from "../src/domain/quality";
-import { mergeQualityProfile, parseTweaks } from "../src/domain/qualityOverrides";
-import { chromiumArgs } from "./chromium-args";
+import { isQualityTier } from "../src/domain/quality";
+import { effectiveProfile, parseTweaks } from "../src/domain/qualityOverrides";
 import {
-  benchmarkDpr,
+  assertHardwareAdapter,
+  benchmarkEnvironment,
+  benchmarkPage,
+  benchmarkParams,
+  cityUrl,
+  launchCheck,
+  lightingSummary,
+  savePng,
+} from "./harness";
+import {
   benchmarkDuration,
   benchmarkFrameBudget,
-  benchmarkRenderMode,
-  benchmarkViewport,
   fixtureWorld,
-  installLightingFixture,
   lightingCases,
   loadBenchmarkWorld,
   previewLighting,
 } from "./lighting-fixture";
 import { summarizePerf } from "./perf-summary";
 
-/** The old fixed budgets equal the `high` tier: keep measurements comparable unless a tier is given. */
-const cityParams = `${process.env.CITY_PARAMS ?? ""}${/quality=/.test(process.env.CITY_PARAMS ?? "") ? "" : "&quality=high"}`;
+const cityParams = benchmarkParams();
 const forcedTier = new URLSearchParams(cityParams).get("quality");
 /** Only a fixed tier is predictable here; "auto" lets the governor pick, so no volume assertion. */
 const volumeAllowed = isQualityTier(forcedTier)
-  ? mergeQualityProfile(
-      QUALITY_PROFILES[forcedTier],
-      parseTweaks(new URLSearchParams(cityParams).get("tweaks")),
-    ).volume
+  ? effectiveProfile(forcedTier, parseTweaks(new URLSearchParams(cityParams).get("tweaks"))).volume
   : forcedTier !== "auto";
 const volumeEnabled = volumeAllowed && !process.env.CITY_PARAMS?.includes("volume=0");
 
-const backend = process.env.CITY_BACKEND ?? "webgpu";
-const software = process.env.GPU_SOFTWARE === "1";
 const sampleCount = process.env.CITY_FRAMES ? Number(process.env.CITY_FRAMES) : null;
-const output = process.env.CITY_OUTPUT ?? `out/lighting/${backend}`;
-await mkdir(output, { recursive: true });
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH,
-  args: chromiumArgs(backend, software),
-});
-const page = await browser.newPage({
-  viewport: benchmarkViewport,
-  deviceScaleFactor: benchmarkDpr,
-});
+const { backend, software, output, browser, page, errors } = await launchCheck(
+  "lighting",
+  benchmarkPage,
+);
 if (process.env.CITY_REDUCED_MOTION === "1") {
   await page.emulateMedia({ reducedMotion: "reduce" });
 }
@@ -53,57 +44,23 @@ if (process.env.CITY_NO_GPU === "1") {
     Object.defineProperty(Navigator.prototype, "gpu", { get: () => undefined }),
   );
 }
-page.setDefaultTimeout(120_000);
-const errors: string[] = [];
-page.on("pageerror", (error) => {
-  errors.push(error.message);
-  console.error(error.message);
-});
-page.on("console", (message) => {
-  if (message.type() === "error" && !message.text().includes("favicon")) {
-    errors.push(message.text());
-    console.error(message.text());
-  }
-});
-await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
-await installLightingFixture(page);
 const results: object[] = [];
-const environment = {
-  browser: browser.version(),
-  viewport: benchmarkViewport,
-  dpr: benchmarkDpr,
-  world: {
-    cities: fixtureWorld.cities.length,
-    nodes: fixtureWorld.cities.reduce((sum, city) => sum + city.nodes.length, 0),
-  },
-  renderMode: benchmarkRenderMode,
-  params: cityParams,
-  adapter: {} as object,
-};
+const environment = benchmarkEnvironment(browser, cityParams);
 try {
-  const base = process.env.CITY_URL ?? "http://127.0.0.1:4174/";
   await page.goto(
-    `${base}?perf=1&renderer=${process.env.CITY_NO_GPU === "1" ? "auto" : backend}${cityParams}`,
+    `${cityUrl}?perf=1&renderer=${process.env.CITY_NO_GPU === "1" ? "auto" : backend}${cityParams}`,
   );
   await page.waitForFunction(
     () => window.__CITY_RENDER__ && (window.__CITY_PERF__?.samples.length ?? 0) > 5,
   );
   await loadBenchmarkWorld(page);
   const actualBackend = await page.evaluate(() => window.__CITY_PERF__!.backend);
-  environment.adapter = await page.evaluate(() => window.__CITY_PERF__!.adapter ?? {});
-  if (
-    (process.env.CITY_ASSERT_BUDGET === "1" || process.env.CITY_ASSERT_60 === "1") &&
-    (software ||
-      !("isFallbackAdapter" in environment.adapter) ||
-      environment.adapter.isFallbackAdapter !== false)
-  ) {
-    throw new Error("Hardware qualification requires a verified hardware rendering adapter");
-  }
+  environment.adapter = await assertHardwareAdapter(page, software);
 
   if (actualBackend !== backend) {
     throw new Error(`Requested ${backend}, received ${actualBackend}`);
   }
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
+  await lightingSummary(page).click();
   // Frame the first lighthouse and its neighbouring streets reproducibly.
   await page.evaluate(() => {
     const api = window.__CITY_RENDER__!;
@@ -217,7 +174,7 @@ try {
       }
       console.log(`Volumetric beam visibility: ${brightness.toFixed(1)}/255`);
     }
-    await Bun.write(`${output}/${label}.png`, Buffer.from(data.split(",")[1]!, "base64"));
+    await savePng(data, `${output}/${label}.png`);
     console.log(
       `${backend} ${label}: ${state.scene.activeLights} lights, ${state.samples.length} frames`,
     );
@@ -240,10 +197,9 @@ try {
         },
         label === "night" && backend === "webgpu" && volumeEnabled,
       );
-      const data = await page.evaluate(() => window.__CITY_RENDER__!.capture());
-      await Bun.write(
+      await savePng(
+        await page.evaluate(() => window.__CITY_RENDER__!.capture()),
         `${output}/transition-${label}.png`,
-        Buffer.from(data.split(",")[1]!, "base64"),
       );
       results.push({
         transition: label,
@@ -342,11 +298,7 @@ try {
   await page.waitForFunction(
     () => window.__CITY_RENDER__ && (window.__CITY_PERF__?.samples.length ?? 0) > 2,
   );
-  if (
-    (await page.locator("summary").filter({ hasText: "Sun & lighting" }).textContent())?.includes(
-      "Preview",
-    )
-  ) {
+  if ((await lightingSummary(page).textContent())?.includes("Preview")) {
     throw new Error("Preview persisted across reload");
   }
   const location = await page.evaluate(() =>

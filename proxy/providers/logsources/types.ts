@@ -1,5 +1,8 @@
 import type { LogEntry } from "../../protocol.ts";
 
+/** Longest message kept from a backend line; the rest is cut. */
+export const MESSAGE_MAX = 500;
+
 /**
  * A node whose logs we want, described with everything the Swarm topology already knows.
  * Log backends identify containers by Swarm labels, so carrying the raw ids here is what
