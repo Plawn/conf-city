@@ -14,7 +14,7 @@ import { createBuilder, type Shade } from "../buildings/colouredBuilder";
  * Everything is modelled in a slot's local frame: the model faces −Z (the open
  * sea, `UtilitySlot.yaw`), stands on y = 0, and fits inside roughly 3.4 along
  * the shore by 2.2 out to the water — the room `layout/utilityPlot.ts`
- * reserves. A cramped island scales the whole group down rather than reshaping
+ * reserves; the power station takes a double slot, 6.8 along the shore. A cramped island scales the whole group down rather than reshaping
  * anything.
  */
 
@@ -30,8 +30,14 @@ const SHADE = {
   timber: [0.6, 0.5, 0.36],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
-/** Sizes the components need back: where the smoke leaves, how tall the tank is. */
-export const PLANT = { chimneyX: 1.05, chimneyTop: 3.1, chimneyRadius: 0.24 } as const;
+/** Where the plant's plumes leave: two cooling-tower lips and a vent stack. */
+export const PLANT = {
+  towers: [
+    { x: -2.25, top: 5.2, lip: 0.74 },
+    { x: -0.05, top: 5.2, lip: 0.74 },
+  ],
+  vent: { x: 2.7, z: -0.45, top: 3.7, radius: 0.13 },
+} as const;
 export const TOWER = { tankY: 1.75, tankHeight: 1.5, tankRadius: 0.68 } as const;
 export const QUAY = {
   /** Boxes the quay holds when the disk is full: 4 along the shore × 3 high. */
@@ -47,26 +53,59 @@ export const QUAY_CAPACITY = QUAY.cols * QUAY.rows * QUAY.layers;
 const utilityBuilder = () =>
   createBuilder({ sides: 10, finish: (merged) => merged.computeVertexNormals() });
 
-/** CPU: a turbine hall with a cooling stack the smoke leaves from. */
+/** Hyperboloid profile of a cooling tower, `[radius, y]` from the foot to the lip. */
+const COOLING_PROFILE: readonly (readonly [number, number])[] = [
+  [1.06, 0],
+  [0.98, 0.8],
+  [0.84, 1.9],
+  [0.7, 3.1],
+  [0.64, 3.7],
+  [0.67, 4.4],
+  [0.74, 5.2],
+];
+
+/** One cooling tower: an outer shell, an inner one so the open top reads hollow, a dark basin. */
+function coolingTower(b: ReturnType<typeof utilityBuilder>, x: number) {
+  const outer = new THREE.LatheGeometry(
+    COOLING_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)),
+    16,
+  );
+  outer.translate(x, 0, 0);
+  b.add(outer, SHADE.concrete);
+  // Reversed profile flips the winding: the inside faces the axis.
+  const inner = new THREE.LatheGeometry(
+    [...COOLING_PROFILE].reverse().map(([r, y]) => new THREE.Vector2(r - 0.06, y)),
+    16,
+  );
+  inner.translate(x, 0, 0);
+  b.add(inner, SHADE.dark);
+  b.pipe(x, 0.35, 0, 0.9, 0.1, SHADE.dark, 16);
+  // The stained band at the foot, where the air intake is.
+  b.pipe(x, 0.2, 0, 1.075, 0.4, SHADE.apron, 16);
+}
+
+/** CPU: a nuclear station — two cooling towers, a reactor dome, a turbine hall and a vent stack. */
 function buildPlant(): THREE.BufferGeometry {
   const b = utilityBuilder();
-  b.box(0, 0.06, 0, 3.2, 0.12, 2.0, SHADE.apron);
-  // The hall, its saw-tooth roof band, and the transformer yard beside the door.
-  b.box(-0.5, 0.62, 0, 1.9, 1.0, 1.4, SHADE.wall);
-  b.box(-0.5, 1.2, 0, 2.0, 0.18, 1.5, SHADE.roof);
-  b.box(-0.5, 0.5, -0.72, 0.7, 0.8, 0.1, SHADE.dark);
-  b.box(0.55, 0.35, 0.4, 0.5, 0.46, 0.5, SHADE.metal);
-  // The stack: a tapered concrete tube with two bands, so it is not a plain pipe.
-  const stack = new THREE.CylinderGeometry(
-    PLANT.chimneyRadius,
-    PLANT.chimneyRadius * 1.5,
-    PLANT.chimneyTop,
-    10,
-  );
-  stack.translate(PLANT.chimneyX, PLANT.chimneyTop / 2, 0);
-  b.add(stack, SHADE.concrete);
-  b.pipe(PLANT.chimneyX, PLANT.chimneyTop - 0.35, 0, PLANT.chimneyRadius + 0.06, 0.16, SHADE.rust);
-  b.pipe(PLANT.chimneyX, PLANT.chimneyTop * 0.55, 0, PLANT.chimneyRadius + 0.07, 0.14, SHADE.rust);
+  b.box(0, 0.06, 0, 6.8, 0.12, 2.2, SHADE.apron);
+  for (const t of PLANT.towers) {
+    coolingTower(b, t.x);
+  }
+  // Containment: a squat cylinder under a hemispherical dome.
+  b.pipe(1.55, 0.85, 0, 0.72, 1.5, SHADE.wall, 16);
+  const dome = new THREE.SphereGeometry(0.72, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  dome.translate(1.55, 1.6, 0);
+  b.add(dome, SHADE.wall);
+  b.pipe(1.55, 1.2, 0, 0.75, 0.08, SHADE.rust, 16);
+  // Turbine hall on the land side of the dome, and its roof.
+  b.box(2.75, 0.62, 0.3, 0.95, 1.0, 1.3, SHADE.wall);
+  b.box(2.75, 1.18, 0.3, 1.0, 0.14, 1.36, SHADE.roof);
+  b.box(2.2, 0.35, 0.72, 0.4, 0.46, 0.4, SHADE.metal);
+  // The vent stack: thin, tall, banded.
+  const v = PLANT.vent;
+  b.pipe(2.7, v.top / 2, v.z, v.radius, v.top, SHADE.concrete);
+  b.pipe(2.7, v.top - 0.25, v.z, v.radius + 0.04, 0.14, SHADE.rust);
+  b.pipe(2.7, v.top * 0.6, v.z, v.radius + 0.04, 0.12, SHADE.rust);
   return b.build();
 }
 
@@ -186,6 +225,7 @@ export const CONTAINER_SHADES: readonly Shade[] = [
 /** The one box too many on a full disk: the only one that is not a livery. */
 export const OVERFLOW_SHADE: Shade = [0.62, 0.22, 0.1];
 
-/** One puff of smoke, and one container. Both are drawn as instances. */
-export const puffGeometry = new THREE.IcosahedronGeometry(0.26, 0);
+/** One puff of smoke, one obstruction light, and one container. All drawn as instances. */
+export const puffGeometry = new THREE.IcosahedronGeometry(0.26, 1);
+export const beaconLightGeometry = new THREE.SphereGeometry(0.15, 8, 6);
 export const containerGeometry = new THREE.BoxGeometry(...QUAY.box);

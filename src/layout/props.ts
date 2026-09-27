@@ -3,7 +3,7 @@ import { NODE_STYLE } from "../domain/nodeStyle";
 import { fnv1a, mulberry32 } from "../lib/random";
 import { distToPolyline, pointInPolygon, polygonBounds } from "./geometry";
 import type { CityLayout, RoadClass, Vec2 } from "./types";
-import { PLOT_RADIUS } from "./utilityPlot";
+import { slotRadius } from "./utilityPlot";
 
 /** One plant or rock, placed on free land. World coordinates, like everything else here. */
 export interface ScatteredProp {
@@ -70,8 +70,8 @@ export function scatterProps(
     circles.push({ at: r.center, r: r.radius + ROAD_MARGIN });
   }
   // The utility district is reserved land, not free land: nothing grows on it.
-  for (const slot of layout.utilityPlot?.slots ?? []) {
-    circles.push({ at: slot.center, r: PLOT_RADIUS });
+  for (const [i, slot] of (layout.utilityPlot?.slots ?? []).entries()) {
+    circles.push({ at: slot.center, r: slotRadius(i) });
   }
   const lines: Array<{ points: Vec2[]; r: number }> = [];
   for (const seg of layout.roads.segments) {

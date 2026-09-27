@@ -35,16 +35,24 @@ import type { RoadNetwork, UtilityPlot, UtilitySlot, Vec2 } from "./types";
  * the water tower and the container quay, in that order along the shore.
  */
 export const SLOT_COUNT = 4;
+/** Shore each slot takes, in `SLOT_SPACING` units: the nuclear plant needs two. */
+export const SLOT_WEIGHTS: readonly number[] = [1, 2, 1, 1];
+const WEIGHT_TOTAL = SLOT_WEIGHTS.reduce((a, w) => a + w, 0);
 /** Room one installation wants along the shore. Less than this and it shrinks. */
 const SLOT_SPACING = 3.4;
 /** Coast the district asks for. A longer headland is not worth more than this. */
-const DISTRICT_LENGTH = SLOT_COUNT * SLOT_SPACING;
+const DISTRICT_LENGTH = WEIGHT_TOTAL * SLOT_SPACING;
 /** Depth an installation wants, from the ring's kerb out to the water. */
 const SLOT_DEPTH = 2.2;
 /** How far it may lean out over the beach — a quay does, a house would not. */
 const BEACH_OVERHANG = 0.6;
-/** Radius the vegetation scatter keeps clear around each slot. */
+/** Radius the vegetation scatter keeps clear around a single-width slot. */
 export const PLOT_RADIUS = 2.6;
+
+/** Radius kept clear around slot `i`: a double slot clears a wider disc. */
+export function slotRadius(i: number): number {
+  return PLOT_RADIUS * Math.max(1, (SLOT_WEIGHTS[i] ?? 1) * 0.8);
+}
 /** Step the ring is walked at. Finer than its vertices: headlands are short. */
 const SAMPLE_STEP = 0.8;
 /** Half an avenue plus its pavement plus a margin: the ring's tarmac, kerb included. */
@@ -146,7 +154,7 @@ function windowScore(window: Sample[], span: number): number {
 }
 
 /**
- * Cuts the waterfront into its slots: `SLOT_COUNT` of them, evenly spread, each
+ * Cuts the waterfront into its slots: `SLOT_COUNT` of them, spread by `SLOT_WEIGHTS`, each
  * on a sample the walk already validated — no point is invented here. A stretch
  * shorter than the district wants is not refused, it is built tighter: `scale`
  * is what the renderer shrinks its models by.
@@ -154,10 +162,14 @@ function windowScore(window: Sample[], span: number): number {
 function district(run: Sample[]): UtilityPlot {
   const t = runLengths(run);
   const span = t.at(-1)!;
-  const step = span / SLOT_COUNT;
+  const step = span / WEIGHT_TOTAL;
   const slots = [];
+  // Each slot stands in the middle of its weighted share of the waterfront.
+  let from = 0;
   for (let i = 0; i < SLOT_COUNT; i++) {
-    slots.push(slotAt(run, t, (i + 0.5) * step));
+    const w = SLOT_WEIGHTS[i] ?? 1;
+    slots.push(slotAt(run, t, (from + w / 2) * step));
+    from += w;
   }
   const mid = slotAt(run, t, span / 2);
   // What the land actually allows, on both axes: how close the neighbours are

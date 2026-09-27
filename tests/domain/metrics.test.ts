@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { type CityUsage, worstUsage } from "@/domain/metrics/cityUsage";
-import { containerCount, smokeRate, tankLevel } from "@/domain/metrics/props";
+import {
+  containerCount,
+  PLUME_FALL_S,
+  PLUME_RISE_S,
+  plumeLevel,
+  smokeRate,
+  smokeSurge,
+  tankLevel,
+} from "@/domain/metrics/props";
 
 function usage(p: Partial<CityUsage>): CityUsage {
   return {
@@ -54,6 +62,33 @@ describe("the utility district's gauges", () => {
       [80, 100],
     ] as const) {
       expect(smokeRate(b)! - smokeRate(a)!).toBeGreaterThan(0.1);
+    }
+  });
+
+  test("the plume builds fast and dies away slowly", () => {
+    const up = plumeLevel(0, 1, PLUME_RISE_S);
+    const down = 1 - plumeLevel(1, 0, PLUME_RISE_S);
+    expect(up).toBeGreaterThan(0.6);
+    expect(down).toBeLessThan(0.15);
+    // A spike still shows half a minute after the load is gone.
+    expect(plumeLevel(1, 0, 30)).toBeGreaterThan(0.4);
+    expect(plumeLevel(1, 0, PLUME_FALL_S * 6)).toBeLessThan(0.01);
+    expect(plumeLevel(0.3, 0.3, 5)).toBeCloseTo(0.3, 9);
+    expect(plumeLevel(0.5, 1, 0)).toBe(0.5);
+    expect(plumeLevel(0.5, 1, -1)).toBe(0.5);
+  });
+
+  test("the surge is quiet under 75 %, full at 95 %, and monotone between", () => {
+    expect(smokeSurge(undefined)).toBeUndefined();
+    expect(smokeSurge(0)).toBe(0);
+    expect(smokeSurge(75)).toBe(0);
+    expect(smokeSurge(95)).toBe(1);
+    expect(smokeSurge(130)).toBe(1);
+    let prev = 0;
+    for (let pct = 75; pct <= 95; pct++) {
+      const s = smokeSurge(pct)!;
+      expect(s).toBeGreaterThanOrEqual(prev);
+      prev = s;
     }
   });
 

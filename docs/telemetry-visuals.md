@@ -27,6 +27,13 @@ that is not a machine measurement gets scaffolding, never a gauge at rest. The l
 coloured by `worstUsage(cityUsage)` and sweeps faster as the machine saturates; it blinks on the
 `services` fallback and stays dark when nothing is measured.
 
+The power station is a nuclear plant on a double waterfront slot (`SLOT_WEIGHTS` in
+`layout/utilityPlot.ts`): two cooling towers taller than the lighthouse, a reactor dome and a vent
+stack. Its plume follows `plumeLevel`, which rises in about 4 s and dies away over about 40 s, so a
+spike is still visible a minute later. The wind lays the plume along the shore, never over the city.
+Past 75 % (`smokeSurge`, full at 95 %) the plume climbs higher and turns sooty, and the towers'
+red obstruction lights blink. The puff count is the `plumePuffs` quality budget.
+
 **Disk is city-level only.** A filesystem belongs to the box, so there is no service-sum fallback
 and no `disk` view mode: the badge (city label + Cities panel) shows used/total %, the panel adds
 aggregated I/O. Buildings are never touched by disk.

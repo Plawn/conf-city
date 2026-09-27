@@ -21,6 +21,33 @@ export function smokeRate(cpuPct: number | undefined): number | undefined {
   return clamp01(cpuPct / 100) ** 0.7;
 }
 
+/** Seconds the plume takes to build up, and to die away — a peak lingers. */
+export const PLUME_RISE_S = 4;
+export const PLUME_FALL_S = 40;
+
+/**
+ * The plume's smoothed strength after `dtSec`, chasing `target` (a `smokeRate`):
+ * fast on the way up so a load shows at once, slow on the way down so a spike is
+ * still hanging over the island a minute later.
+ */
+export function plumeLevel(prev: number, target: number, dtSec: number): number {
+  const tau = target > prev ? PLUME_RISE_S : PLUME_FALL_S;
+  return target + (prev - target) * Math.exp(-Math.max(0, dtSec) / tau);
+}
+
+/**
+ * The saturated regime, 0..1: nothing under 75 % CPU, full at 95 %. What turns
+ * a working plant into one that is visibly struggling — taller, darker plume and
+ * obstruction lights. `undefined` when the CPU is not measured.
+ */
+export function smokeSurge(cpuPct: number | undefined): number | undefined {
+  if (cpuPct == null) {
+    return undefined;
+  }
+  const x = clamp01((cpuPct - 75) / 20);
+  return x * x * (3 - 2 * x);
+}
+
 /** How full the water tower stands, 0..1 — `undefined` when memory is unknown. */
 export function tankLevel(memPct: number | undefined): number | undefined {
   return memPct == null ? undefined : clamp01(memPct / 100);

@@ -49,6 +49,7 @@ export const TWEAK_CONTROLS: readonly TweakControl[] = [
   { key: "beaconShadow", label: "Beacon shadow", choices: ON_OFF },
   { key: "maxCars", label: "Cars", choices: numbers([60, 120, 240, 480]) },
   { key: "maxTrucks", label: "Trucks", choices: numbers([15, 30, 60, 120]) },
+  { key: "plumePuffs", label: "Plume puffs", choices: numbers([20, 36, 56, 96]) },
   { key: "maxDpr", label: "Max DPR", choices: numbers([1, 1.5, 2]) },
 ];
 

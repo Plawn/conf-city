@@ -3,10 +3,19 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { type CityUsage, usageTooltip } from "../../domain/metrics/cityUsage";
 import { heatColor } from "../../domain/metrics/format";
-import { containerCount, smokeRate, tankLevel } from "../../domain/metrics/props";
+import {
+  containerCount,
+  plumeLevel,
+  smokeRate,
+  smokeSurge,
+  tankLevel,
+} from "../../domain/metrics/props";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import type { UtilityPlot, UtilitySlot } from "../../layout/types";
+import { useQualityProfile } from "../../store/uiStore";
 import { SceneLabel } from "../SceneLabel";
 import {
+  beaconLightGeometry,
   CONTAINER_SHADES,
   containerGeometry,
   OVERFLOW_SHADE,
@@ -39,17 +48,30 @@ import {
  * machine, which is the one lie this district must never tell.
  *
  * Cost per island: four static draw calls (three shells and the water), plus
- * one instanced mesh for the smoke and one for the boxes. Geometry is built
+ * instanced meshes for the plume, the obstruction lights and the boxes. Geometry is built
  * once at module load and never rebuilt — the metrics only ever move a
  * transform, a colour or an instance count.
  */
 
-/** Puffs at full load. Fewer than this at 20 % must still read as "running". */
-const MAX_PUFFS = 10;
-const PUFF_RISE = 2.6;
-/** Rises per second, idle → saturated. */
-const PUFF_SLOW = 0.16;
-const PUFF_FAST = 0.55;
+/** Share of the puff budget the vent stack gets; the cooling towers split the rest. */
+const VENT_SHARE = 0.2;
+/** Seconds a steam puff lives at full load, and at rest: a heavy plume hangs longer. */
+const STEAM_LIFE_FULL = 14;
+const STEAM_LIFE_IDLE = 7;
+const VENT_LIFE = 5;
+/** How high steam rises before the wind lays it flat, and how far it then drifts. */
+const STEAM_RISE = 4.2;
+const STEAM_DRIFT = 16;
+/** Wind in the slot frame (x along the shore, −z out to sea): the plume never lies over the city. */
+const WIND = [0.89, -0.45] as const;
+/** Plumes of a saturated machine climb this much higher. */
+const SURGE_RISE = 3;
+/** Golden-ratio phases: whatever prefix of the puffs is lit stays spread along the column. */
+const GOLDEN = 0.618034;
+const STEAM = new THREE.Color("#c3c8ce");
+const SOOT = new THREE.Color("#3a3b40");
+const VENT_SMOKE = new THREE.Color("#8c9096");
+const BLINK_HZ = 1.4;
 
 export function UtilityDistrict({ plot, usage }: { plot: UtilityPlot; usage: CityUsage }) {
   const [hover, setHover] = useState<"cpu" | "mem" | "disk" | null>(null);
@@ -88,7 +110,7 @@ export function UtilityDistrict({ plot, usage }: { plot: UtilityPlot; usage: Cit
         <SceneLabel
           position={[
             (hover === "cpu" ? plant : hover === "mem" ? tower : quay).center[0],
-            3.4 * plot.scale,
+            (hover === "cpu" ? 6 : 3.4) * plot.scale,
             (hover === "cpu" ? plant : hover === "mem" ? tower : quay).center[1],
           ]}
         >
@@ -140,33 +162,126 @@ function UnderConstruction() {
   );
 }
 
-/** CPU: the stack smokes harder, faster and hotter as the machine works. */
+/**
+ * CPU: two cooling towers breathe steam and a vent stack smokes. The plume
+ * follows a smoothed level — quick to build, a minute to die away — so a peak
+ * is still hanging over the island after the load is gone. The steam rises,
+ * then the wind lays it out along the shore as a long trail. Past 75 % the plume climbs
+ * higher, the vent turns sooty and the towers' obstruction lights blink.
+ */
 function Plant({ cpuPct }: { cpuPct: number | undefined }) {
   const puffs = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const puffMaterial = useRef<THREE.MeshStandardMaterial>(null);
+  const lights = useRef<THREE.InstancedMesh>(null);
+  const lightMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const reducedMotion = useReducedMotion();
+  const budget = useQualityProfile().plumePuffs;
   const rate = smokeRate(cpuPct);
+  const surgeTarget = smokeSurge(cpuPct);
+  const state = useRef({ level: rate ?? 0, surge: surgeTarget ?? 0, shade: -1 });
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const colour = useMemo(() => new THREE.Color(), []);
+  const vents = Math.max(1, Math.round(budget * VENT_SHARE));
+  const perTower = Math.max(1, Math.floor((budget - vents) / PLANT.towers.length));
+  const total = vents + perTower * PLANT.towers.length;
 
-  useFrame(() => {
-    const mesh = puffs.current;
-    if (!mesh || rate == null) {
+  useLayoutEffect(() => {
+    const mesh = lights.current;
+    if (!mesh) {
       return;
     }
-    const visible = Math.max(1, Math.round(rate * MAX_PUFFS));
-    mesh.count = visible;
-    const speed = PUFF_SLOW + rate * (PUFF_FAST - PUFF_SLOW);
-    const t = (performance.now() / 1000) * speed;
-    for (let i = 0; i < visible; i++) {
-      // Each puff walks the same climb, offset so the column is continuous.
-      const p = (t + i / visible) % 1;
-      const drift = Math.sin((p + i) * 3.1) * 0.28;
-      dummy.position.set(PLANT.chimneyX + drift * p, PLANT.chimneyTop + p * PUFF_RISE, drift * p);
-      // Grows as it climbs, then thins out — a puff never simply vanishes.
-      dummy.scale.setScalar((0.45 + p * 1.5) * (1 - p * 0.55) * (0.6 + rate * 0.6));
-      dummy.rotation.set(i, p * 2, 0);
+    PLANT.towers.forEach((t, i) => {
+      dummy.position.set(t.x, t.top + 0.05, 0);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    dummy.position.set(PLANT.vent.x, PLANT.vent.top + 0.05, PLANT.vent.z);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(PLANT.towers.length, dummy.matrix);
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [dummy]);
+
+  useFrame((_, delta) => {
+    const mesh = puffs.current;
+    if (!mesh || rate == null || surgeTarget == null) {
+      return;
+    }
+    const s = state.current;
+    s.level = plumeLevel(s.level, rate, delta);
+    s.surge = plumeLevel(s.surge, surgeTarget, delta);
+    const { level, surge } = s;
+    const t = reducedMotion ? 0 : performance.now() / 1000;
+
+    // Steam: every puff keeps its phase; the level only fades the tail in and
+    // out, so a changing load never reshuffles the column.
+    const steamLife = STEAM_LIFE_IDLE + level * (STEAM_LIFE_FULL - STEAM_LIFE_IDLE);
+    const rise = STEAM_RISE + surge * SURGE_RISE;
+    let i = 0;
+    PLANT.towers.forEach((tower, k) => {
+      for (let j = 0; j < perTower; j++, i++) {
+        const p = (t / steamLife + j * GOLDEN + k * 0.37) % 1;
+        const fade = Math.min(1, Math.max(0, level * perTower * 1.15 - j));
+        // Climbs fast out of the lip, then bends over and trails downwind.
+        const up = rise * (1 - (1 - p) ** 3) + p * 0.5;
+        const along = STEAM_DRIFT * (0.3 + level * 0.7) * p ** 1.3;
+        const wob = Math.sin(j * 2.3 + p * 5) * 0.5 * p;
+        dummy.position.set(
+          tower.x + WIND[0] * along + wob,
+          tower.top + 0.2 + up,
+          WIND[1] * along + wob * 0.5,
+        );
+        // Born the width of the lip, swells downwind, shrinks away at the end of its life.
+        const tail = p > 0.8 ? 1 - ((p - 0.8) / 0.2) ** 2 : 1;
+        const size = (tower.lip * 1.4 + p * 2.6) * tail * (0.55 + level * 0.35 + surge * 0.25);
+        dummy.scale.set(size, size * 0.75, size);
+        dummy.rotation.set(j, p * 1.5, k);
+        dummy.scale.multiplyScalar(fade * (p < 0.04 ? p / 0.04 : 1));
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+    });
+    // Vent: a thin, quicker column, sooty once the machine saturates.
+    for (let j = 0; j < vents; j++, i++) {
+      const p = (t / VENT_LIFE + j * GOLDEN) % 1;
+      const fade = Math.min(1, Math.max(0, level * vents * 1.2 - j));
+      const along = 3 * p * p;
+      dummy.position.set(
+        PLANT.vent.x + WIND[0] * along,
+        PLANT.vent.top + p * (1.6 + surge * 1.4),
+        PLANT.vent.z + WIND[1] * along,
+      );
+      dummy.scale.setScalar((0.5 + p * 1.6) * (0.6 + surge * 0.5) * fade);
+      dummy.rotation.set(j, p * 2, 0);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
+    mesh.count = total;
     mesh.instanceMatrix.needsUpdate = true;
+
+    // Colours only when the plume visibly changes, not every frame.
+    const shade = Math.round(level * 40) * 64 + Math.round(surge * 40);
+    if (shade !== s.shade) {
+      s.shade = shade;
+      const vent = VENT_SMOKE.clone().lerp(SOOT, surge * 0.85);
+      const steam = STEAM.clone().lerp(SOOT, surge * 0.25);
+      for (let n = 0; n < total; n++) {
+        mesh.setColorAt(n, n < total - vents ? steam : vent);
+      }
+      if (mesh.instanceColor) {
+        mesh.instanceColor.needsUpdate = true;
+      }
+    }
+    if (puffMaterial.current) {
+      puffMaterial.current.opacity = 0.32 + level * 0.2 + surge * 0.25;
+    }
+    const light = lights.current;
+    if (light && lightMaterial.current) {
+      light.visible = surgeTarget > 0.05;
+      const on = reducedMotion || Math.sin(t * BLINK_HZ * Math.PI * 2) > 0;
+      lightMaterial.current.color.copy(colour.set("#ff2a1a")).multiplyScalar(on ? 3 : 0.25);
+    }
   });
 
   if (rate == null) {
@@ -177,14 +292,27 @@ function Plant({ cpuPct }: { cpuPct: number | undefined }) {
       <mesh geometry={plantGeometry} castShadow receiveShadow>
         <meshStandardMaterial vertexColors roughness={0.85} />
       </mesh>
-      <instancedMesh ref={puffs} args={[puffGeometry, undefined, MAX_PUFFS]} frustumCulled={false}>
+      <instancedMesh
+        key={total}
+        ref={puffs}
+        args={[puffGeometry, undefined, total]}
+        frustumCulled={false}
+      >
         <meshStandardMaterial
-          color={heatColor(rate)}
+          ref={puffMaterial}
           transparent
-          opacity={0.42 + rate * 0.28}
+          depthWrite={false}
+          opacity={0.4}
           roughness={1}
           flatShading
         />
+      </instancedMesh>
+      <instancedMesh
+        ref={lights}
+        args={[beaconLightGeometry, undefined, PLANT.towers.length + 1]}
+        visible={false}
+      >
+        <meshBasicMaterial ref={lightMaterial} toneMapped={false} />
       </instancedMesh>
     </>
   );

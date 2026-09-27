@@ -103,6 +103,16 @@ describe("placeUtilityPlot", () => {
     }
   });
 
+  test("the power station takes a double share of the waterfront", () => {
+    const world = layoutWorld(["a"], grid("a", 3, 3), intraLinks("a", [["n00", "n22"]]));
+    const [beacon, plant, tower, quay] = world.cities.get("a")!.utilityPlot!.slots;
+    const gap = (p: { center: Vec2 }, q: { center: Vec2 }) =>
+      Math.hypot(p.center[0] - q.center[0], p.center[1] - q.center[1]);
+    // Neighbours of the plant sit 1.5 shares away, the last two only 1.
+    expect(gap(beacon!, plant!)).toBeGreaterThan(gap(tower!, quay!) * 1.2);
+    expect(gap(plant!, tower!)).toBeGreaterThan(gap(tower!, quay!) * 1.2);
+  });
+
   test("a one-building island still gets its beacon", () => {
     const world = layoutWorld(["x"], city("x", ["one"]), []);
     expectPlotIsBuildable(world.cities.get("x")!);

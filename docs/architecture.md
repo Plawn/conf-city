@@ -42,7 +42,7 @@ domain/color.ts            hexToHsl / hslToHex / shiftHsl / darken
 domain/metrics/saturation.ts cpu/memSaturation, netKbps, cityMax, memoryHeight, heatValue — see telemetry-visuals.md
 domain/metrics/format.ts   rankValue / formatRank, formatMb / Kbps / Percent / Cores, heatColor, saturationTone
 domain/metrics/cityUsage.ts cityUsage (host vs services), worstUsage, usageTooltip
-domain/metrics/props.ts    Utility district gauges: smokeRate, tankLevel, containerCount
+domain/metrics/props.ts    Utility district gauges: smokeRate, plumeLevel/smokeSurge, tankLevel, containerCount
 domain/logFilter.ts        filterLogs (level / node / search), LEVELS, backfill RANGES
 domain/panelRows.ts        cityRows / topConsumers: rows of the Cities and Top consumers panels
 domain/incidents.ts        nodeIncident / telemetryUncertain: one truth for alerts, attention list and fires

@@ -23,6 +23,7 @@ export interface QualityOverrides {
   vehicleSpots?: number;
   maxCars?: number;
   maxTrucks?: number;
+  plumePuffs?: number;
 }
 
 export type OverrideKey = keyof QualityOverrides;
@@ -52,6 +53,7 @@ export const OVERRIDE_RANGES: Record<NumericKey, NumericRange> = {
   vehicleSpots: { min: 0, max: 32, round: "integer" },
   maxCars: { min: 0, max: 600, round: "integer" },
   maxTrucks: { min: 0, max: 200, round: "integer" },
+  plumePuffs: { min: 8, max: 96, round: "integer" },
 };
 
 export const OVERRIDE_BOOLEAN_KEYS: readonly BooleanKey[] = ["aoDenoise", "beaconShadow", "volume"];
@@ -71,6 +73,7 @@ export const OVERRIDE_KEYS: readonly OverrideKey[] = [
   "vehicleSpots",
   "maxCars",
   "maxTrucks",
+  "plumePuffs",
 ];
 
 function isNumericKey(key: OverrideKey): key is NumericKey {

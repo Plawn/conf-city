@@ -35,6 +35,8 @@ export interface QualityProfile {
   vehicleSpots: number;
   maxCars: number;
   maxTrucks: number;
+  /** Smoke and steam puffs per power station; large and transparent, so overdraw. */
+  plumePuffs: number;
 }
 
 export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
@@ -52,6 +54,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     vehicleSpots: 4,
     maxCars: 120,
     maxTrucks: 30,
+    plumePuffs: 20,
   },
   balanced: {
     tier: "balanced",
@@ -67,6 +70,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     vehicleSpots: 8,
     maxCars: 240,
     maxTrucks: 60,
+    plumePuffs: 36,
   },
   high: {
     tier: "high",
@@ -82,6 +86,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     vehicleSpots: 16,
     maxCars: 240,
     maxTrucks: 60,
+    plumePuffs: 56,
   },
 };
 
