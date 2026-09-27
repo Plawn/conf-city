@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Biome, PropKind } from "../domain/biome";
+import { CLASS_STYLE, PAVEMENT } from "../geo/roadStyle";
 import { scatterProps } from "../layout/props";
 import type { CityLayout, RoadClass } from "../layout/types";
 import { propGeometry } from "./buildings/propGeometry";
-import { CLASS_STYLE, PAVEMENT } from "./geo/roadStyle";
 
 /**
  * How far from a road's centreline a prop has to stay: its own half-width plus

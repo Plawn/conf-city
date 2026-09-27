@@ -15,8 +15,8 @@ import {
   ShadowBoundsCache,
 } from "@/components/lighting/shadowBounds";
 import { createVehicleLights } from "@/components/lighting/VehicleLights";
-import { createSim } from "@/components/traffic/sim";
 import { PARIS } from "@/domain/solar";
+import { createSim } from "@/sim/traffic/sim";
 import { readSolarLocation, useLightingStore } from "@/store/lightingStore";
 
 test("solar storage validates data and tolerates unavailable storage", () => {

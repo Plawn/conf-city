@@ -1,6 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from "react";
-import { createMobilityEngine, type MobilityParticipant } from "./engine";
+import { createMobilityEngine, type MobilityParticipant } from "../../sim/mobility/engine";
 
 const Context = createContext<ReturnType<typeof createMobilityEngine> | null>(null);
 

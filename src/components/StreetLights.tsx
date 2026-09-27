@@ -3,10 +3,10 @@ import * as THREE from "three";
 import { float, smoothstep, uniform, uv } from "three/tsl";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { TERRAIN } from "../domain/nodeStyle";
+import { arcLength } from "../geo/polyline";
+import type { Run } from "../geo/roadGraph";
+import { CLASS_STYLE, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "../geo/roadStyle";
 import type { Roundabout } from "../layout/types";
-import { arcLength } from "./geo/polyline";
-import type { Run } from "./geo/roadGraph";
-import { CLASS_STYLE, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "./geo/roadStyle";
 import { createLightSource, useLighting } from "./lighting/runtime";
 
 /**

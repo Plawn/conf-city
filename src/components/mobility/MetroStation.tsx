@@ -1,9 +1,14 @@
 import { Html } from "@react-three/drei";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import {
+  PLATFORM_SPREAD,
+  PLATFORM_TOP,
+  STREET_Y,
+  type StationAccess,
+} from "../../sim/mobility/station";
 import { buildRibbon } from "../geo/ribbon";
 import { useHtmlPortal } from "../htmlPortal";
-import { PLATFORM_SPREAD, PLATFORM_TOP, STREET_Y, type StationAccess } from "./station";
 
 /** Every mesh comes from the same `StationAccess` the passengers walk. */
 export function MetroStation({ access }: { access: StationAccess }) {

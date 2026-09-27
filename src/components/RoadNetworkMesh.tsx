@@ -2,20 +2,20 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { TERRAIN } from "../domain/nodeStyle";
-import { heavier } from "../layout/roads";
-import type { Driveway, RoadSegment, Roundabout, Vec2 } from "../layout/types";
-import { junctionPieces } from "./geo/junctions";
-import { loopWall, polygonCap } from "./geo/polygon";
+import { junctionPieces } from "../geo/junctions";
 import {
   arcLength,
   cutPolyline,
   offsetPolyline,
   projectOnPolyline,
   subPolyline,
-} from "./geo/polyline";
+} from "../geo/polyline";
+import { buildRoadGraph, type DeckExit, type GraphNode, ON_LINE } from "../geo/roadGraph";
+import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "../geo/roadStyle";
+import { heavier } from "../layout/roads";
+import type { Driveway, RoadSegment, Roundabout, Vec2 } from "../layout/types";
+import { loopWall, polygonCap } from "./geo/polygon";
 import { buildRibbon } from "./geo/ribbon";
-import { buildRoadGraph, type DeckExit, type GraphNode, ON_LINE } from "./geo/roadGraph";
-import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "./geo/roadStyle";
 import { StreetLights } from "./StreetLights";
 
 /**

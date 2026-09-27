@@ -20,13 +20,13 @@ import type {
   PositionedNode,
   ResolvedLink,
 } from "../domain/types";
+import type { DrivePath } from "../geo/drivable";
+import { makeDriver } from "../geo/drivable";
+import type { DeckExit } from "../geo/roadGraph";
 import { computeBounds } from "../layout/bounds";
 import { type CityLayout, type GroupZone, linkKey, type Vec2 } from "../layout/types";
 import { fnv1a } from "../lib/random";
 import { BuildingBatches } from "./buildings/BuildingBatches";
-import type { DrivePath } from "./geo/drivable";
-import { makeDriver } from "./geo/drivable";
-import type { DeckExit } from "./geo/roadGraph";
 import { useHtmlPortal } from "./htmlPortal";
 import { IslandMesh } from "./IslandMesh";
 import { NodeMesh } from "./NodeMesh";

@@ -1,9 +1,9 @@
 # Roads & traffic
 
-Layout (`src/layout/`) decides *where* roads are; `src/components/geo/` decides *how they are
-drawn and driven*; `src/components/traffic/` moves the vehicles. The regulation layer (finite
-journeys, budgets, jams, automatic constructions, roundabout reservations) is described in
-`traffic-strategy.md`.
+Layout (`src/layout/`) decides *where* roads are; `src/geo/` decides *how they are
+drawn and driven*; `src/sim/traffic/` moves the vehicles and `src/components/TrafficSystem.tsx`
+draws them. The regulation layer (finite journeys, budgets, jams, automatic constructions,
+roundabout reservations) is described in `traffic-strategy.md`.
 
 ## Layout
 
@@ -61,14 +61,14 @@ and `TrafficSystem` all take their geometry from here.
 - `geo/path.ts` keeps a path as segments + circular arcs until the last moment: an arc's offset is a
   concentric arc, whereas offsetting a polyline folds it when the local radius drops below the
   offset (that fold made outer-lane vehicles appear to reverse).
-- Vehicles keep to their own right, `(-dz, dx)` in `traffic/sim.ts` — the *negative* side of
+- Vehicles keep to their own right, `(-dz, dx)` in `sim/traffic/sim.ts` — the *negative* side of
   `offsetPolyline`; roundabouts circulate counter-clockwise seen from above. Lane offsets per class
   come from `laneOffsets()` (boulevard: two lanes each way) and are interpolated over `LANE_BLEND`
   at every class change and ring junction.
 
-## Simulation (`traffic/sim.ts`, pure, `bun test`)
+## Simulation (`sim/traffic/sim.ts`, pure, `bun test`)
 
-One shared simulation for every city and bridge, stepped at a fixed 30 Hz by `mobility/engine.ts`.
+One shared simulation for every city and bridge, stepped at a fixed 30 Hz by `sim/mobility/engine.ts`.
 SoA pools with swap-remove; vehicle identity is a stable id, never a pool index.
 
 - Each vehicle lays 8 probes `PROBE_STEP` apart along its *own* lane into a spatial hash.
@@ -87,7 +87,7 @@ SoA pools with swap-remove; vehicle identity is a stable id, never a pool index.
   lane-sampled budget (`budget.ts`) or the space is exhausted. Rates: links follow the source node's
   throughput, unlinked buildings a fixed trickle, the ring's ambient loops the **host CPU**
   (`cityUsage().cpuPct`). Telemetry absent or stale (30 s) produces no service traffic.
-- Roundabouts (`traffic/junctions.ts`): one reserved crossing at a time per roundabout, the exit
+- Roundabouts (`sim/traffic/junctions.ts`): one reserved crossing at a time per roundabout, the exit
   checked before admission, at most three approaching vehicles per physical entry.
 
 `upgradeLayout` / `reconfigure.ts` widen lanes or add a deck without resetting the fleet: identity,

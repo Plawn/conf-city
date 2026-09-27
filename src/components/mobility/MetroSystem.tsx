@@ -4,25 +4,25 @@ import { METRO_SHARE } from "../../domain/mobility";
 import type { NodeTelemetry } from "../../domain/types";
 import type { CityLayout } from "../../layout/types";
 import { fnv1a } from "../../lib/random";
-import { buildRibbon } from "../geo/ribbon";
-import { liveTelemetry } from "../traffic/demand";
-import { MetroStation } from "./MetroStation";
-import { useMobilityParticipant } from "./MobilitySimulation";
 import {
   advanceMetro,
   createMetroFleet,
   METRO_HEIGHT as HEIGHT,
   reconfigureMetroFleet,
-} from "./metro";
-import { buildMetroTrack } from "./metroTrack";
+} from "../../sim/mobility/metro";
+import { buildMetroTrack } from "../../sim/mobility/metroTrack";
 import {
   advancePassengers,
   createPassengerPool,
   MIN_TARGET,
   type PassengerPool,
   retargetPassengers,
-} from "./passengers";
-import { buildStationAccesses } from "./station";
+} from "../../sim/mobility/passengers";
+import { buildStationAccesses } from "../../sim/mobility/station";
+import { liveTelemetry } from "../../sim/traffic/demand";
+import { buildRibbon } from "../geo/ribbon";
+import { MetroStation } from "./MetroStation";
+import { useMobilityParticipant } from "./MobilitySimulation";
 
 const matrix = new THREE.Object3D();
 

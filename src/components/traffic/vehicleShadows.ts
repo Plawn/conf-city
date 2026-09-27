@@ -9,7 +9,7 @@ import {
   Vector3,
 } from "three";
 import { clamp01 } from "../../lib/math";
-import type { Pool } from "./sim";
+import type { Pool } from "../../sim/traffic/sim";
 
 /** Blob footprint relative to the normalised vehicle (0.55 long along Z). */
 const BLOB_WIDTH = 0.36;

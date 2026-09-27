@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { TrafficStats } from "../components/traffic/lifecycle";
 import type { Construction, ConstructionObservation, Infrastructure } from "../domain/mobility";
+import type { TrafficStats } from "../sim/traffic/lifecycle";
 
 const KEY = "conf-city-mobility-v1";
 interface Saved {

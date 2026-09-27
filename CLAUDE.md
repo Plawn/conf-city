@@ -38,7 +38,9 @@ preview and Chromium — see `docs/render-performance.md`. Docker and `just` rec
 ## Architecture rules
 
 - **domain ≠ render** — no Three.js imports outside `src/components/`. `src/domain/` and
-  `src/layout/` are pure, deterministic (seeded PRNG, never `Math.random`) and unit-tested.
+  `src/layout/`, `src/geo/` (road driving geometry) and `src/sim/` (traffic + mobility
+  simulation) are pure, deterministic (seeded PRNG, never `Math.random`), import neither
+  Three.js, React nor `src/components/`, and are unit-tested (`tests/` mirrors `src/`).
 - Components receive **pre-computed positioned data**; no layout logic in render.
 - `proxy/protocol.ts` is the single source of truth for telemetry types; the frontend imports it
   through `@proxy/`, `src/domain/types.ts` re-exports it.

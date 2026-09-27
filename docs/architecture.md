@@ -97,6 +97,21 @@ layout/bounds.ts           Bounding boxes (fallback)
 
 See `roads-and-traffic.md` for the road model and its invariants.
 
+### Geometry and simulation (pure TS, no Three.js, `bun test`)
+
+```
+geo/                       Road driving geometry: roadStyle (CLASS_STYLE, lanes, ring radii), polyline, path
+                           (segments + arcs kept exact until offset), roadGraph, junctions, roundabouts,
+                           drivable (THE junction of streets, roundabouts and bridges → DrivePath)
+sim/traffic/               sim.ts (SoA simulation), worldRoutes.ts (one route set for the whole world,
+                           upgradeLayout), routeGeometry.ts (lane trajectories), demand.ts (telemetry → spawn
+                           rates, staleness), budget.ts (lane-sampled population budget), lifecycle.ts (finite
+                           journeys, stuck retirement), congestion.ts (local jams), junctions.ts (roundabout
+                           reservations), reconfigure.ts (upgrade without resetting the fleet)
+sim/mobility/              engine.ts (one bounded clock for every transport), metro.ts (fleet + schedule),
+                           metroTrack.ts, station.ts, passengers.ts, trajectory.ts
+```
+
 ### Components (the only place Three.js is imported)
 
 Scene composition, top down:
@@ -118,7 +133,7 @@ IslandMesh.tsx             Extruded + bevelled outline painted by vertex colours
 RoadNetworkMesh.tsx        Whole network in 4 merged draw calls (pavements, asphalt, islands, markings)
 StreetLights.tsx           Instanced lamp posts on lit classes + roundabouts
 RouteOverlay.tsx           Invisible raycast ribbon per route: hover tooltip, error tint
-BridgeMesh.tsx             Arched deck + railings + pylons over the deck span from geo/drivable.ts
+BridgeMesh.tsx             Arched deck + railings + pylons over the deck span from src/geo/drivable.ts
 NodeMesh.tsx               One building: variant model, height = memory, glow = CPU, gauge ring, selection, tooltip
 BuildingFire.tsx           Flames + smoke on incident buildings, two instanced draws
 Vegetation.tsx             One InstancedMesh per prop kind per city
@@ -135,18 +150,11 @@ buildings/                 BuildingBatches (opaque buildings batched by city / m
                            visuals.ts (colour / height targets, settled test), animationQueue.ts (sleeping tasks
                            woken by telemetry, hover, selection, lighting), industrialGeometry.ts (7 generated
                            industrial models), harbourGeometry.ts (quay + ship fallback), propGeometry.ts
-geo/                       roadStyle (CLASS_STYLE), ribbon, polyline, polygon, path (segments + arcs kept exact
-                           until offset), roadGraph, junctions, roundabouts, drivable (THE junction of streets,
-                           roundabouts and bridges → DrivePath)
-traffic/                   sim.ts (pure SoA simulation, bun test), worldRoutes.ts (one route set for the whole
-                           world, upgradeLayout), routeGeometry.ts (lane trajectories), demand.ts (telemetry →
-                           spawn rates, staleness), budget.ts (lane-sampled population budget), lifecycle.ts
-                           (finite journeys, stuck retirement), congestion.ts (local jams), junctions.ts
-                           (roundabout reservations), reconfigure.ts (upgrade without resetting the fleet),
-                           useVehicleGeometry / useShipGeometry, roundabout-fixture (tests)
-mobility/                  engine.ts (one bounded clock for every transport), MobilitySimulation.tsx,
-                           MetroSystem / MetroStation, metro.ts (fleet + schedule), metroTrack.ts, station.ts,
-                           passengers.ts, trajectory.ts, IngressPorts.tsx (ships at the berths, MAX_BOATS 24),
+geo/                       ribbon, polygon (Three.js meshes over src/geo/ shapes)
+traffic/                   useVehicleGeometry / useShipGeometry (GLB → merged geometry), vehicleShadows.ts
+                           (instanced blob decals); the simulation is in src/sim/traffic/
+mobility/                  MobilitySimulation.tsx (drives src/sim/mobility/engine.ts), MetroSystem /
+                           MetroStation, IngressPorts.tsx (ships at the berths, MAX_BOATS 24),
                            ConstructionMarkers.tsx
 lighting/                  SolarLighting (sun + shadow fitting), LightingPipeline (GTAO, bloom, FXAA, lighthouse
                            volume), LocalLighting + ActiveClusteredLighting + VehicleLights (street lamps and

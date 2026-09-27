@@ -5,8 +5,8 @@ import * as THREE from "three";
 import { TERRAIN } from "../../domain/nodeStyle";
 import type { NodeTelemetry } from "../../domain/types";
 import type { Vec2, WorldLayout } from "../../layout/types";
+import { liveTelemetry } from "../../sim/traffic/demand";
 import { useHtmlPortal } from "../htmlPortal";
-import { liveTelemetry } from "../traffic/demand";
 import { useShipGeometry } from "../traffic/useShipGeometry";
 
 const MAX_BOATS = 24;

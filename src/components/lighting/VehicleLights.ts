@@ -9,7 +9,7 @@ import {
   Quaternion,
   Vector3,
 } from "three";
-import type { Pool } from "../traffic/sim";
+import type { Pool } from "../../sim/traffic/sim";
 import { createLightSource, type LightingRuntime, type LocalLightSource } from "./runtime";
 import { BrakeTracker } from "./selection";
 

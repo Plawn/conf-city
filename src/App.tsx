@@ -12,7 +12,6 @@ import { MobilityPanel } from "./components/panels/MobilityPanel";
 import { SearchPanel } from "./components/panels/SearchPanel";
 import { type ConsumerRow, TopConsumersPanel } from "./components/panels/TopConsumersPanel";
 import { StatusBar } from "./components/StatusBar";
-import { worldIdentity } from "./components/traffic/worldRoutes";
 import { GlassPanel, ToastHost } from "./components/ui";
 import { WorldScene } from "./components/WorldScene";
 import sampleData from "./data/sample.json";
@@ -28,6 +27,7 @@ import { layoutWorld } from "./layout/layoutWorld";
 import { fitAllTarget, fitCityTarget, nodeTarget, resetTarget } from "./lib/cameraTargets";
 import { buildDiscoveredNodes } from "./loaders/buildDiscoveredNodes";
 import { GraphValidationError, isWorldShape, loadWorld } from "./loaders/loadWorld";
+import { worldIdentity } from "./sim/traffic/worldRoutes";
 import { useMobilityStore } from "./store/mobilityStore";
 import { useUiStore } from "./store/uiStore";
 

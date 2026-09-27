@@ -16,7 +16,7 @@ export type Vec2 = [number, number];
 /**
  * How much traffic a stretch of road carries, i.e. how many routes share it.
  * The layout only says *what* a road is; the renderer decides how wide and how
- * pale that makes it (`CLASS_STYLE` in `components/geo/roadStyle.ts`).
+ * pale that makes it (`CLASS_STYLE` in `geo/roadStyle.ts`).
  */
 export type RoadClass = "street" | "avenue" | "boulevard";
 

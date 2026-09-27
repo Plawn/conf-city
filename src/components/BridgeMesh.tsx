@@ -2,11 +2,11 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { TERRAIN } from "../domain/nodeStyle";
+import { bridgeElevation, DECK_CLASS, deckHeight } from "../geo/drivable";
+import { CLASS_STYLE } from "../geo/roadStyle";
 import type { RoadClass, Vec2 } from "../layout/types";
-import { bridgeElevation, DECK_CLASS, deckHeight } from "./geo/drivable";
 import { loopWall } from "./geo/polygon";
 import { buildRibbon } from "./geo/ribbon";
-import { CLASS_STYLE } from "./geo/roadStyle";
 
 /**
  * The deck is exactly as wide as the road class it carries — an avenue by

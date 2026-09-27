@@ -13,16 +13,17 @@ import type {
   PositionedNode,
   ResolvedLink,
 } from "../domain/types";
+import { bridgeDeck, deckClass, makeDriver } from "../geo/drivable";
+import type { DeckExit } from "../geo/roadGraph";
 import { buildShoreField } from "../layout/shore";
 import type { WorldLayout } from "../layout/types";
+import { upgradeLayout, worldRoutes } from "../sim/traffic/worldRoutes";
 import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
 import { useQualityProfile, useUiStore } from "../store/uiStore";
 import { BridgeMesh, deckWidth } from "./BridgeMesh";
 import { BuildingAnimations } from "./buildings/BuildingAnimations";
 import { CameraAnimator } from "./CameraAnimator";
 import { CityScene } from "./CityScene";
-import { bridgeDeck, deckClass, makeDriver } from "./geo/drivable";
-import type { DeckExit } from "./geo/roadGraph";
 import { HtmlPortalContext, useHtmlPortal } from "./htmlPortal";
 import { LightingPipeline } from "./lighting/LightingPipeline";
 import { LocalLighting } from "./lighting/LocalLighting";
@@ -47,7 +48,6 @@ import { RouteOverlay } from "./RouteOverlay";
 import { SceneDepth } from "./SceneDepth";
 import { SkyEnvironment } from "./SkyEnvironment";
 import { TrafficSystem } from "./TrafficSystem";
-import { upgradeLayout, worldRoutes } from "./traffic/worldRoutes";
 import { WaterPlane } from "./WaterPlane";
 
 const FOG_NEAR = 40;

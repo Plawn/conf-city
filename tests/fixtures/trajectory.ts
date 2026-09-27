@@ -1,4 +1,4 @@
-import { buildTrajectory } from "@/components/mobility/trajectory";
+import { buildTrajectory } from "@/sim/mobility/trajectory";
 
 /** Closed circular loop at platform height, sampled at 128 segments. */
 export function circle(radius = 8) {
