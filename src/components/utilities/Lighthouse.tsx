@@ -13,6 +13,7 @@ import { useHtmlPortal } from "../htmlPortal";
 import { createBeaconGeometry } from "../lighting/beaconGeometry";
 import { gpuRenderer, isWebGPU, renderParams } from "../lighting/renderer";
 import { createLightSource, useLighting } from "../lighting/runtime";
+import { NO_RAYCAST } from "../three/instancing";
 
 /**
  * The island's beacon: one tower on the first slot of the utility district,
@@ -181,7 +182,7 @@ export function Lighthouse({
             ref={fallbackBeam}
             geometry={beamGeometry}
             position={[0, LAMP_Y, 0]}
-            raycast={() => {}}
+            raycast={NO_RAYCAST}
           >
             <primitive attach="material" object={beamResources.material} />
           </mesh>

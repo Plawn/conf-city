@@ -20,6 +20,7 @@ import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
 import { useLighting } from "./lighting/runtime";
 import { createVehicleLights } from "./lighting/VehicleLights";
 import { useMobilityParticipant } from "./mobility/MobilitySimulation";
+import { dynamicInstancedMesh, poolMatrix } from "./three/instancing";
 import { useVehicleGeometry, VEHICLE_MODELS } from "./traffic/useVehicleGeometry";
 import { createVehicleShadows } from "./traffic/vehicleShadows";
 
@@ -28,9 +29,6 @@ export type { TrafficRoute } from "../sim/traffic/pool";
 /** Both GLBs are normalised to the same length — without this the truck looks like a car. */
 const TRUCK_SCALE = 1.25;
 
-const scratchPos = new THREE.Vector3();
-const scratchQuat = new THREE.Quaternion();
-const scratchScale = new THREE.Vector3();
 const scratchMatrix = new THREE.Matrix4();
 const scratchColor = new THREE.Color();
 
@@ -39,13 +37,10 @@ function makeMesh(
   material: THREE.Material,
   capacity: number,
 ): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(geometry, material, capacity);
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  mesh.frustumCulled = false; // instances move every frame; the mesh bounds never follow
+  const mesh = dynamicInstancedMesh(geometry, material, capacity);
   // Vehicles are not sun casters: a blob decal follows each one instead, so the
   // sun shadow map only re-renders when the static world changes.
   mesh.castShadow = false;
-  mesh.count = 0;
   return mesh;
 }
 
@@ -55,11 +50,7 @@ function writeMatrices(pool: Pool, mesh: THREE.InstancedMesh, scale: number): vo
     return;
   }
   for (let i = 0; i < pool.count; i++) {
-    scratchScale.setScalar(scale * pool.opacity[i]!);
-    scratchPos.set(pool.x[i]!, pool.y[i]!, pool.z[i]!);
-    scratchQuat.set(pool.qx[i]!, pool.qy[i]!, pool.qz[i]!, pool.qw[i]!);
-    scratchMatrix.compose(scratchPos, scratchQuat, scratchScale);
-    mesh.setMatrixAt(i, scratchMatrix);
+    mesh.setMatrixAt(i, poolMatrix(pool, i, scale * pool.opacity[i]!, scratchMatrix));
   }
   mesh.count = pool.count;
   mesh.instanceMatrix.needsUpdate = true;

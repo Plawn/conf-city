@@ -5,6 +5,7 @@ import { max, mix, positionLocal, smoothstep } from "three/tsl";
 import { MeshBasicNodeMaterial, type Node, PMREMGenerator } from "three/webgpu";
 import { gpuRenderer } from "./lighting/renderer";
 import { type LightingRuntime, useLighting } from "./lighting/runtime";
+import { NO_RAYCAST } from "./three/instancing";
 
 /** Shared linear radiance for the visible sky, IBL and the water's analytic reflection. */
 export function skyRadiance(direction: Node<"vec3">, light: LightingRuntime) {
@@ -29,7 +30,7 @@ export function SkyEnvironment() {
     const sky = new Mesh(geometry, material);
     sky.frustumCulled = false;
     sky.renderOrder = -100;
-    sky.raycast = () => {};
+    sky.raycast = NO_RAYCAST;
     const source = new Scene();
     source.add(new Mesh(geometry, material));
     return {

@@ -1,15 +1,6 @@
-import {
-  BoxGeometry,
-  Color,
-  DynamicDrawUsage,
-  Group,
-  InstancedMesh,
-  Matrix4,
-  MeshBasicMaterial,
-  Quaternion,
-  Vector3,
-} from "three";
+import { BoxGeometry, Color, Group, Matrix4, MeshBasicMaterial, Quaternion, Vector3 } from "three";
 import type { Pool } from "../../sim/traffic/pool";
+import { dynamicInstancedMesh } from "../three/instancing";
 import { createLightSource, type LightingRuntime, type LocalLightSource } from "./runtime";
 import { BrakeTracker } from "./selection";
 
@@ -24,13 +15,9 @@ export function createVehicleLights(
   const geometry = new BoxGeometry(0.048, 0.035, 0.015);
   const frontMaterial = new MeshBasicMaterial({ color: "white", toneMapped: false });
   const rearMaterial = new MeshBasicMaterial({ color: "white", toneMapped: false });
-  const front = new InstancedMesh(geometry, frontMaterial, capacity * 2);
-  const rear = new InstancedMesh(geometry, rearMaterial, capacity * 2);
+  const front = dynamicInstancedMesh(geometry, frontMaterial, capacity * 2);
+  const rear = dynamicInstancedMesh(geometry, rearMaterial, capacity * 2);
   for (const mesh of [front, rear]) {
-    mesh.count = 0;
-    mesh.frustumCulled = false;
-    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    mesh.raycast = () => {};
     group.add(mesh);
   }
   const sources = new Map<number, LocalLightSource>();

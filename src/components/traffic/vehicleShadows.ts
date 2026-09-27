@@ -1,15 +1,7 @@
-import {
-  CanvasTexture,
-  DynamicDrawUsage,
-  InstancedMesh,
-  Matrix4,
-  MeshBasicMaterial,
-  PlaneGeometry,
-  Quaternion,
-  Vector3,
-} from "three";
+import { CanvasTexture, Matrix4, MeshBasicMaterial, PlaneGeometry } from "three";
 import { clamp01 } from "../../lib/math";
 import type { Pool } from "../../sim/traffic/pool";
+import { dynamicInstancedMesh, poolMatrix } from "../three/instancing";
 
 /** Blob footprint relative to the normalised vehicle (0.55 long along Z). */
 const BLOB_WIDTH = 0.36;
@@ -51,9 +43,6 @@ function blobAlphaMap(): CanvasTexture {
 
 const pose = new Matrix4();
 const local = new Matrix4();
-const position = new Vector3();
-const rotation = new Quaternion();
-const scale = new Vector3();
 
 /** Instanced blob decals under vehicles, replacing 300 casters in the sun map. */
 export function createVehicleShadows(capacity: number, vehicleScale: number) {
@@ -69,11 +58,7 @@ export function createVehicleShadows(capacity: number, vehicleScale: number) {
     polygonOffsetUnits: -1,
     opacity: BLOB_NIGHT_OPACITY,
   });
-  const mesh = new InstancedMesh(geometry, material, capacity);
-  mesh.count = 0;
-  mesh.frustumCulled = false;
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-  mesh.raycast = () => {};
+  const mesh = dynamicInstancedMesh(geometry, material, capacity);
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.renderOrder = 1;
@@ -94,10 +79,7 @@ export function createVehicleShadows(capacity: number, vehicleScale: number) {
       }
       for (let i = 0; i < pool.count; i++) {
         const s = vehicleScale * pool.opacity[i]!;
-        position.set(pool.x[i]!, pool.y[i]!, pool.z[i]!);
-        rotation.set(pool.qx[i]!, pool.qy[i]!, pool.qz[i]!, pool.qw[i]!);
-        scale.setScalar(s);
-        pose.compose(position, rotation, scale);
+        poolMatrix(pool, i, s, pose);
         local.makeTranslation(0, BLOB_LIFT / Math.max(1e-3, s), 0);
         mesh.setMatrixAt(i, pose.multiply(local));
       }

@@ -186,8 +186,9 @@ buildings/                 BuildingBatches (opaque buildings batched by city / m
 geo/                       ribbon, polygon (Three.js meshes over src/geo/ shapes)
 roads/                     buildRoadGeometry.ts (one city's merged road parts), roadPrimitives.ts (paint, disc,
                            ring, ribbon, band)
-traffic/                   useVehicleGeometry / useShipGeometry over bakeGltf.ts (GLB → one normalised geometry), vehicleShadows.ts
-                           (instanced blob decals); the simulation is in src/sim/traffic/
+traffic/                   useVehicleGeometry / useShipGeometry over bakeGltf.ts (GLB → one normalised
+                           geometry), vehicleShadows.ts (instanced blob decals); the simulation is in src/sim/traffic/
+three/                     instancing.ts: dynamicInstancedMesh (per-frame pools), NO_RAYCAST, poolMatrix
 mobility/                  MobilitySimulation.tsx (drives src/sim/mobility/engine.ts), MetroSystem /
                            MetroStation, IngressPorts.tsx (ships at the berths, MAX_BOATS 24),
                            ConstructionMarkers.tsx

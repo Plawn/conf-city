@@ -2,10 +2,10 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { fnv1a, mulberry32 } from "../lib/random";
+import { NO_RAYCAST } from "./three/instancing";
 
 const FLAMES = 12;
 const PUFFS = 9;
-const NO_RAYCAST = () => {};
 const FLAME_COLORS = ["#ff4714", "#ff861c", "#ffd260"];
 
 /** Two instanced draws per affected building; no lights, shadows or per-frame allocations. */
