@@ -1,5 +1,5 @@
 import type { ResolvedLink } from "../../domain/types";
-import { ROUNDABOUT_RADIUS } from "../constants";
+import { ROUNDABOUT_RADII } from "../../geo/roadStyle";
 import { vecKey } from "../geometry";
 import type { CityNodesLayout } from "../layoutCity";
 import {
@@ -241,14 +241,11 @@ function assemble(state: BuildState): RoadNetwork {
   }
   const roundabouts: Roundabout[] = [...junctions].sort().map((k) => {
     const [ci, cj] = k.split(",").map(Number) as [number, number];
-    return {
-      center: cornerPos(ci, cj),
-      radius: ROUNDABOUT_RADIUS,
-      klass: cornerClass.get(k) ?? "street",
-    };
+    const klass = cornerClass.get(k) ?? "street";
+    return { center: cornerPos(ci, cj), radius: ROUNDABOUT_RADII[klass], klass };
   });
   for (const centre of ringCentres) {
-    roundabouts.push({ center: centre, radius: ROUNDABOUT_RADIUS, klass: "avenue" });
+    roundabouts.push({ center: centre, radius: ROUNDABOUT_RADII.avenue, klass: "avenue" });
   }
 
   const drivewayList: Driveway[] = [...driveways.keys()].sort().map((k) => {

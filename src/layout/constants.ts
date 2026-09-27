@@ -1,6 +1,6 @@
 import { NODE_STYLE } from "../domain/nodeStyle";
 import type { NodeType } from "../domain/types";
-import { CLASS_STYLE, FILLET, PAVEMENT, ringRadii } from "../geo/roadStyle";
+import { CLASS_STYLE, FILLET, PAVEMENT, ROUNDABOUT_RADII, ringRadii } from "../geo/roadStyle";
 
 /**
  * Geometry constants shared by the whole layout pipeline.
@@ -15,11 +15,9 @@ import { CLASS_STYLE, FILLET, PAVEMENT, ringRadii } from "../geo/roadStyle";
 export const PITCH = 6;
 /** Distance from a cell centre to the road corners around it, on each axis. */
 export const ROAD_OFFSET = PITCH / 2;
-/** Radius of the roundabout disc drawn on a junction of degree >= 3. */
-export const ROUNDABOUT_RADIUS = 1.2;
 /**
  * Minimum distance between two roundabout centres. Two cells: at one cell the
- * rings of two boulevard roundabouts (radius ≈ 2.55 plus kerb) touch, and a
+ * rings of two boulevard roundabouts (outer ≈ 2.8 plus kerb) nearly touch, and a
  * block where every corner is a roundabout reads as a mess rather than a city.
  */
 export const ROUNDABOUT_SPACING = PITCH * 2;
@@ -33,7 +31,7 @@ export const RING_PADDING = 4;
 const half = (klass: keyof typeof CLASS_STYLE) => CLASS_STYLE[klass].width / 2;
 /** Outer tarmac radius of a roundabout of `klass`. */
 const outerOf = (klass: keyof typeof CLASS_STYLE) =>
-  ringRadii({ center: [0, 0], radius: ROUNDABOUT_RADIUS, klass }).outer;
+  ringRadii({ center: [0, 0], radius: ROUNDABOUT_RADII[klass], klass }).outer;
 /** How far a street's crossroads eats into its arms: half a street plus the kerb fillet. */
 const STREET_REACH = half("street") + FILLET;
 /**

@@ -20,10 +20,20 @@ import {
   MARGIN_JUNCTION,
   mouthGaps,
   pavementSpans,
+  RING_GIVE_WAY_INSET,
+  RING_GIVE_WAY_WIDTH,
+  roundaboutMarks,
   ZEBRA_BAND,
   zebraOffsets,
 } from "../../geo/markings";
-import { arcLength, cutPolyline, offsetPolyline, pointAt, subPolyline } from "../../geo/polyline";
+import {
+  arcLength,
+  arcPoints,
+  cutPolyline,
+  offsetPolyline,
+  pointAt,
+  subPolyline,
+} from "../../geo/polyline";
 import { buildRoadGraph, type DeckExit, type GraphNode, type Run } from "../../geo/roadGraph";
 import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "../../geo/roadStyle";
 import { heavier } from "../../layout/roads/segments";
@@ -97,6 +107,7 @@ export function buildRoadGeometry(
     });
   const reach = new Map<GraphNode, number[]>();
   const ringAngles = new Map<Roundabout, number[]>();
+  const ringArms = new Map<Roundabout, { bearing: number; halfWidth: number }[]>();
   for (const node of graph.nodes) {
     const pieces = junctionPieces(node, PAVEMENT, FILLET, limitsOf(node), (k, t) => {
       const arm = node.arms[k]!;
@@ -109,6 +120,9 @@ export function buildRoadGeometry(
     reach.set(node, pieces.reach);
     if (node.roundabout && pieces.ring) {
       ringAngles.set(node.roundabout, pieces.ring);
+    }
+    if (node.roundabout) {
+      ringArms.set(node.roundabout, node.arms);
     }
     for (const apron of pieces.aprons) {
       const cap = polygonCap(apron.points, y);
@@ -252,8 +266,19 @@ export function buildRoadGeometry(
     islandParts.push(paint(wall, TERRAIN.islandSide));
     islandParts.push(paint(disc(inner, y + ISLAND_HEIGHT, r.center, 24), TERRAIN.roundaboutIsland));
 
-    // Give way: a thin painted ring on the outer edge of the tarmac.
-    markParts.push(ring(outer - 0.22, outer - 0.06, DASH_Y, r.center));
+    // Give way across each entry lane; lane dashes round a two-lane ring.
+    const marks = roundaboutMarks(r, ringArms.get(r) ?? []);
+    const arc = (radius: number, width: number, [a0, a1]: [number, number]) =>
+      push(
+        markParts,
+        band(arcPoints(r.center, radius, a0, a1, 0.1), -width / 2, width / 2, DASH_Y),
+      );
+    for (const dash of marks.giveWay) {
+      arc(outer - RING_GIVE_WAY_INSET, RING_GIVE_WAY_WIDTH, dash);
+    }
+    for (const dash of marks.lanes) {
+      arc(marks.laneRadius!, LINE_WIDTH, dash);
+    }
   }
 
   const merge = (geos: THREE.BufferGeometry[]): THREE.BufferGeometry | null => {

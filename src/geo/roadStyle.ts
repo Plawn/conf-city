@@ -39,6 +39,17 @@ export const PAVEMENT = 0.35;
 /** Radius of the kerb at a block corner. */
 export const FILLET = 0.6;
 
+/**
+ * Ring centreline radius of a roundabout of `klass`. It grows with the class so a
+ * boulevard's island still reads as a terre-plein (1.0 across, not a 0.55 dot in a
+ * disc of tarmac); spacing in `layout/constants.ts` is derived from it.
+ */
+export const ROUNDABOUT_RADII: Record<RoadClass, number> = {
+  street: 1.2,
+  avenue: 1.4,
+  boulevard: 1.8,
+};
+
 /** Smallest planted island left at the centre of a roundabout, whatever the class. */
 export const MIN_ISLAND_RADIUS = 0.55;
 export const ISLAND_HEIGHT = 0.18;

@@ -16,10 +16,11 @@ import {
   MOUTH_GAP,
   mouthGaps,
   pavementSpans,
+  roundaboutMarks,
   zebraOffsets,
 } from "@/geo/markings";
 import type { Arm, GraphNode } from "@/geo/roadGraph";
-import { CLASS_STYLE } from "@/geo/roadStyle";
+import { CLASS_STYLE, ROUNDABOUT_RADII, ringRadii } from "@/geo/roadStyle";
 import type { Driveway, Vec2 } from "@/layout/types";
 
 const arm = (ring: boolean) => ({ ring }) as Arm;
@@ -142,4 +143,39 @@ test("a driveway starts at the street's edge and is skipped inside it", () => {
   ]);
   expect(drivewayRun({ mouth: [0, 0], door: [0, setback], klass: "street" })).toBeNull();
   expect(TERRAIN.drivewayWidth).toBeGreaterThan(0);
+});
+
+test("a roundabout gives way at its entry lanes only; a boulevard ring is split in two lanes", () => {
+  const arms = [0, Math.PI / 2, Math.PI, -Math.PI / 2].map((bearing) => ({
+    bearing,
+    halfWidth: 0.75,
+  }));
+  const avenue = {
+    center: [0, 0] as Vec2,
+    radius: ROUNDABOUT_RADII.avenue,
+    klass: "avenue" as const,
+  };
+  const marks = roundaboutMarks(avenue, arms);
+  expect(marks.lanes).toEqual([]);
+  expect(marks.giveWay.length).toBeGreaterThanOrEqual(arms.length);
+  // Traffic keeps right: an arm of bearing b enters on the b − π/2 side of its axis.
+  for (const [a0, a1] of marks.giveWay) {
+    expect(a1).toBeGreaterThan(a0);
+    expect(arms.some(({ bearing }) => a0 > bearing - Math.PI / 2 && a1 < bearing)).toBe(true);
+  }
+  const boulevard = {
+    center: [0, 0] as Vec2,
+    radius: ROUNDABOUT_RADII.boulevard,
+    klass: "boulevard" as const,
+  };
+  const wide = roundaboutMarks(boulevard, arms);
+  const { inner, outer } = ringRadii(boulevard);
+  expect(wide.laneRadius).toBeCloseTo((inner + outer) / 2, 9);
+  expect(wide.lanes.length).toBeGreaterThan(0);
+  for (const [a0, a1] of wide.lanes) {
+    for (const { bearing } of arms) {
+      const off = (a: number) => Math.abs(Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing)));
+      expect(Math.min(off(a0), off(a1))).toBeGreaterThan(Math.asin(0.75 / outer));
+    }
+  }
 });

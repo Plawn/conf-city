@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ROUNDABOUT_RADII } from "@/geo/roadStyle";
 import {
   BRIDGEHEAD_SPACING,
   LATTICE_ROUNDABOUT_CLEAR,
@@ -144,6 +145,7 @@ describe("buildRoadNetwork", () => {
     expect(roads.roundabouts.length).toBeGreaterThan(0);
     for (const r of roads.roundabouts) {
       expect(ends.has(vecKey(r.center))).toBe(true);
+      expect(r.radius).toBe(ROUNDABOUT_RADII[r.klass]);
     }
     // Every lattice step is exactly one cell long.
     for (const s of roads.segments) {

@@ -53,13 +53,19 @@ open at driveway mouths.
 - Fillets scale with the narrower arm of each pair and shrink when `reach` hits its limit (half the
   run between two junctions, 0.8 of it before a dead end); cap corners sit on the run's real frame
   at `reach`, so curved ring arms leave no crack.
-- Roundabout arms are cut square at `outer`; per-arm **aprons** fill down to the tarmac circle, which
-  is an annulus sharing their exact angles (no crescent gap).
+- Roundabout radius follows its class (`ROUNDABOUT_RADII`: street 1.2 / avenue 1.4 / boulevard 1.8;
+  ring bridgeheads are avenues); the ring spacing constants derive from it. Straight lattice arms
+  **flare** into the circle by two kerb arcs of the fillet radius tangent to the arm edge and to
+  `outer` (`flareOf`); ring and deck arms, or two flares that would overlap, are cut square at
+  `outer`. Per-arm **aprons** fill down to the tarmac circle, which is an annulus sharing their
+  exact angles (no crescent gap); the pavement follows the kerbs.
 - A 2-arm **class change** is a tapered cap: rounded centreline, width eased over the arc, pavements
   following it; straight ones taper over `TAPER_PER_WIDTH` × the width step.
 - Markings per class: centre dashes / double line + lane dashes / edge lines; zebra + stop line on
   the incoming lane of every crossing, except where a spur meets the ring road: the ring arms get
-  nothing and the spur a dashed give-way line (`armMarking`); give-way ring at roundabouts.
+  nothing and the spur a dashed give-way line (`armMarking`). Roundabouts get give-way dashes on the
+  entry half of each arm only, and a boulevard ring a lane dash line clear of the arms
+  (`roundaboutMarks`).
 - Bridge decks leave through `exits` (virtual arms carrying the deck class); the deck is painted its
   class colour, meets the land at road height and carries edge lines.
 
