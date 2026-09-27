@@ -1,5 +1,5 @@
 import type { ResolvedLink } from "../../domain/types";
-import { PITCH } from "../constants";
+import { PITCH, RING_ROUNDABOUT_CLEAR } from "../constants";
 import { segSegIntersect, vecKey } from "../geometry";
 import { attachRing, ringHit } from "../ringRoad";
 import { linkKey, type Vec2 } from "../types";
@@ -30,9 +30,12 @@ export function ringStreet(state: BuildState): RingStreet {
   return { blockers, mouths: new Map() };
 }
 
-/** One driveway per building onto the ring: the shortest axial way out that crosses nothing. */
+/**
+ * One driveway per building onto the ring: the shortest axial way out that
+ * crosses nothing, preferably clear of every ring roundabout and street joining the ring.
+ */
 function ringMouth(state: BuildState, street: RingStreet, id: string): Vec2 | null {
-  const { city, ring, pinned, driveways } = state;
+  const { city, ring, pinned, driveways, ringRoundabouts, stubs } = state;
   const { blockers, mouths } = street;
   const known = mouths.get(id);
   if (known) {
@@ -40,8 +43,12 @@ function ringMouth(state: BuildState, street: RingStreet, id: string): Vec2 | nu
   }
   const cell = city.cells.get(id)!;
   const centre = cellCentre(cell);
-  let best: { len: number; free: boolean; hit: NonNullable<ReturnType<typeof ringHit>> } | null =
-    null;
+  const joins = [...ringRoundabouts.values(), ...[...stubs.values()].map((s) => s.hit)];
+  let best: {
+    len: number;
+    rank: number;
+    hit: NonNullable<ReturnType<typeof ringHit>>;
+  } | null = null;
   for (const dir of DIRECTIONS) {
     const hit = ringHit(centre, dir, ring);
     if (!hit) {
@@ -57,8 +64,12 @@ function ringMouth(state: BuildState, street: RingStreet, id: string): Vec2 | nu
     if (free) {
       free = !blockers.some(([a, b]) => segSegIntersect(centre, hit.point, a, b) !== null);
     }
-    if (!best || (free && !best.free) || (free === best.free && len < best.len)) {
-      best = { len, free, hit };
+    const clear = joins.every(
+      (j) => Math.hypot(j[0] - hit.point[0], j[1] - hit.point[1]) >= RING_ROUNDABOUT_CLEAR,
+    );
+    const rank = (free ? 0 : 2) + (clear ? 0 : 1);
+    if (!best || rank < best.rank || (rank === best.rank && len < best.len)) {
+      best = { len, rank, hit };
     }
   }
   if (!best) {

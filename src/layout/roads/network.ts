@@ -11,6 +11,7 @@ import {
   type Roundabout,
   type Vec2,
 } from "../types";
+import { connectLattice } from "./access";
 import { routeCorners } from "./astar";
 import { type GateRequest, makeRing } from "./bridgehead";
 import {
@@ -107,6 +108,7 @@ export function buildRoadNetwork(
 
   const viaRing = routeIntraLinks(state, intraLinks);
   routeFeeders(state, gates);
+  connectLattice(state);
   const street = ringStreet(state);
   routeViaRing(state, street, viaRing);
   serveTheRest(state, street);
@@ -227,7 +229,7 @@ function assemble(state: BuildState): RoadNetwork {
   const { ring, routes, edgeUse, cornerDirs, driveways, stubs, ringRoundabouts } = state;
   // Roundabouts: bridgeheads first (already placed), then the busiest crossroads.
   const ringCentres = [...ringRoundabouts.keys()].sort().map((k) => ringRoundabouts.get(k)!);
-  const junctions = pickRoundabouts(cornerDirs, routes, ringCentres);
+  const junctions = pickRoundabouts(cornerDirs, routes, ringCentres, ring);
   const cornerClass = new Map<string, RoadClass>();
   const bumpCorner = (key: string, klass: RoadClass) =>
     cornerClass.set(key, heavier(cornerClass.get(key) ?? "street", klass));
@@ -260,7 +262,12 @@ function assemble(state: BuildState): RoadNetwork {
     const s = stubs.get(key)!;
     segments.push({ points: [cornerPos(s.corner[0], s.corner[1]), s.hit], klass: classOf(s.uses) });
   }
-  segments.push(...ringSegments(ring, ringRoundabouts));
+  // The ring is cut wherever a road joins it: bridgehead roundabouts and access Ts.
+  const joins = new Set(ringRoundabouts.keys());
+  for (const s of stubs.values()) {
+    joins.add(vecKey(s.hit));
+  }
+  segments.push(...ringSegments(ring, joins));
 
   return { segments, roundabouts, driveways: drivewayList, ring, routes };
 }
