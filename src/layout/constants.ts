@@ -6,7 +6,7 @@ import type { NodeType } from "../domain/types";
  *
  * Everything snaps to a lattice of pitch `PITCH`: buildings sit exactly on
  * `(i·PITCH, j·PITCH)`, road corners exactly on `((i+0.5)·PITCH, (j+0.5)·PITCH)`.
- * Both are exact float values, which is what lets `roads.ts`, `drivable.ts` and
+ * Both are exact float values, which is what lets `roads/`, `drivable.ts` and
  * `bridges.ts` match route points to roundabouts and bridgeheads by value.
  */
 

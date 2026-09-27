@@ -18,7 +18,7 @@ import { cellKey } from "./geometry";
  * a node appearing at runtime never displaces the city that was already drawn.
  *
  * Everything ends up snapped to the lattice: one building per cell, position
- * exactly `(i·PITCH, j·PITCH)`, which `roads.ts` needs to reason about corners.
+ * exactly `(i·PITCH, j·PITCH)`, which `roads/` needs to reason about corners.
  *
  * `ports` are the ingress services: they are left out entirely, because the
  * shore and the ring road are offsets of the hull of what is laid out here — a

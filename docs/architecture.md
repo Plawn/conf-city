@@ -84,7 +84,13 @@ layout/types.ts            Vec2, RoadClass, RoadSegment, Roundabout, Driveway, R
                            Bridge, WorldLayout, linkKey()
 layout/layoutCity.ts       One city: phyllotaxis seed → force relax → snap to the PITCH lattice
 layout/ringRoad.ts         buildRing / ringHit / attachRing (MUTATES the ring: the hit vertex is shared by identity)
-layout/roads.ts            buildRoadNetwork: A* on the corner lattice, shared trunks, roundabouts, driveways, spurs
+layout/roads/network.ts    buildRoadNetwork: phases over a BuildState (intra links, feeders, ring street, assembly)
+layout/roads/lattice.ts    Corner lattice: cornerPos / edgeKey / cellCentre, Grid, makeGrid, walkOut, occupied
+layout/roads/astar.ts      routeCorners: turn-aware A* on the lattice, shared edges cheaper
+layout/roads/bridgehead.ts planBridgehead, makeRing, ringArc (Bridgehead, GateRequest)
+layout/roads/buildState.ts BuildState shared by the phases, claimEdges / openDriveway / attachDriveway
+layout/roads/ringStreet.ts The ring as a street: ring mouths, via-ring links, unserved buildings
+layout/roads/segments.ts   Road classes (classOf, heavier), pickRoundabouts, mergeSegments, ringSegments
 layout/utilityPlot.ts      Seafront stretch reserved for the machine gauges
 layout/props.ts            Seeded vegetation scatter on free land
 layout/outline.ts          islandOutline (roundedOffset + outward-only coast noise), zoneOutline

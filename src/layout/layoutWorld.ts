@@ -17,14 +17,9 @@ import { type HarbourSite, planHarbour, translateHarbour } from "./harbour";
 import { type CityNodesLayout, layoutCity } from "./layoutCity";
 import { footprintCorners, islandOutline, zoneOutline } from "./outline";
 import { buildRing } from "./ringRoad";
-import {
-  type Bridgehead,
-  buildRoadNetwork,
-  type GateRequest,
-  type Grid,
-  makeGrid,
-  planBridgehead,
-} from "./roads";
+import { type Bridgehead, type GateRequest, planBridgehead } from "./roads/bridgehead";
+import { type Grid, makeGrid } from "./roads/lattice";
+import { buildRoadNetwork } from "./roads/network";
 import {
   type CityLayout,
   type GroupZone,

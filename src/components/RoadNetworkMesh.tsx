@@ -12,7 +12,7 @@ import {
 } from "../geo/polyline";
 import { buildRoadGraph, type DeckExit, type GraphNode, ON_LINE } from "../geo/roadGraph";
 import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "../geo/roadStyle";
-import { heavier } from "../layout/roads";
+import { heavier } from "../layout/roads/segments";
 import type { Driveway, RoadSegment, Roundabout, Vec2 } from "../layout/types";
 import { loopWall, polygonCap } from "./geo/polygon";
 import { buildRibbon } from "./geo/ribbon";

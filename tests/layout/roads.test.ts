@@ -3,7 +3,7 @@ import { PITCH, ROAD_OFFSET } from "@/layout/constants";
 import { pointInPolygon, vecKey } from "@/layout/geometry";
 import { layoutCity } from "@/layout/layoutCity";
 import { buildRing } from "@/layout/ringRoad";
-import { buildRoadNetwork } from "@/layout/roads";
+import { buildRoadNetwork } from "@/layout/roads/network";
 import type { RoadNetwork, Vec2 } from "@/layout/types";
 import { city, grid, intraLinks } from "../fixtures/layout";
 

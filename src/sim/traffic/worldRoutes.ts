@@ -154,7 +154,7 @@ export const QUAY_RUN = 26;
 /**
  * The quay's spur, continued along the ring road for `QUAY_RUN`.
  *
- * The spur ends on a ring vertex (`roads.ts` attaches it there, by identity),
+ * The spur ends on a ring vertex (`roads/` attaches it there, by identity),
  * so the walk is a plain slice of the ring polygon — no new arithmetic, no
  * point that the roundabouts, the drawn segments and the lane lookup would fail
  * to recognise. The ring is walked in its own winding order, so the two ways of

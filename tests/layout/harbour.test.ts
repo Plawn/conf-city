@@ -50,7 +50,7 @@ test("an ingress service becomes the port: on the shore, outside the ring, on th
   expect(berth.address).toBe(addr);
   const node = city.nodes.find((n) => n.id === nodeId)!;
   expect(node.isPort).toBe(true);
-  // The node IS the berth: `roads.ts` addresses a building by its cell centre.
+  // The node IS the berth: `roads/` addresses a building by its cell centre.
   expect([node.position[0], node.position[2]]).toEqual(berth.position);
   // Still on the city's lattice, so its cell centre and its position are one point.
   const [ox, oz] = [

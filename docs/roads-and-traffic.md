@@ -22,7 +22,7 @@ roundabout reservations) is described in `traffic-strategy.md`.
 - **One bridge per linked city pair**; each link is a `BridgeCrossing` riding its feeder streets and
   the shared deck. A second deck (construction upgrade) is a separate elevation, same crossing.
 - Ingress services are held out of `layoutCity` (in the hull they would push the coast in front of
-  themselves) and put back on a synthetic cell outside the ring, so `roads.ts` gives them a
+  themselves) and put back on a synthetic cell outside the ring, so `roads/` gives them a
   `ring:<id>` avenue by the isolated-building fallback (`layout/harbour.ts`).
 
 ## Exact-equality invariant

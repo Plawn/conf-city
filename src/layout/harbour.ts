@@ -13,7 +13,7 @@ import type { Vec2 } from "./types";
  * afterwards, here, on the shoreline the other buildings produced.
  *
  * A berth is a plain lattice cell, `(i·PITCH, j·PITCH)`, exactly like any other
- * building: `roads.ts` addresses a building by `cellCentre(cell)`, so anything
+ * building: `roads/` addresses a building by `cellCentre(cell)`, so anything
  * off-lattice would leave its driveway ending a few units short of the quay.
  * The cells that qualify are the ones *outside* the ring road and *inside* the
  * coast — the two-unit strip the ring leaves between itself and the sea, which
@@ -40,7 +40,7 @@ export interface Berth {
   address: string;
   nodeId: string;
   cell: [number, number];
-  /** Cell centre: the node's own position, and what `roads.ts` routes to. */
+  /** Cell centre: the node's own position, and what `roads/` routes to. */
   position: Vec2;
   /** Yaw putting the model's −Z face toward the open sea. */
   bearing: number;
