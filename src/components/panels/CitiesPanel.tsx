@@ -1,20 +1,8 @@
-import { BIOMES, type BiomeId, type BiomeSource } from "../../domain/biome";
-import { type CityUsage, usageTooltip } from "../../domain/metrics/cityUsage";
+import { BIOMES, type BiomeSource } from "../../domain/biome";
+import { usageTooltip } from "../../domain/metrics/cityUsage";
 import { formatMbPerSec, saturationTone } from "../../domain/metrics/format";
-import type { City } from "../../domain/types";
+import type { CityRow } from "../../domain/panelRows";
 import { Badge, Tooltip } from "../ui";
-
-export interface CityRow {
-  city: City;
-  count: number;
-  isDiscovered: boolean;
-  /** liveness summary for this city */
-  down: number;
-  degraded: number;
-  usage?: CityUsage;
-  /** The island's biome and where it came from (JSON, provider label, or deduced). */
-  biome?: { id: BiomeId; source: BiomeSource };
-}
 
 const BIOME_SOURCE_LABEL: Record<BiomeSource, string> = {
   json: "set in the world JSON",

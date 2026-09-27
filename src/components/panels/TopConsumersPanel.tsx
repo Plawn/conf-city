@@ -1,18 +1,8 @@
 import { formatRank, heatColor as heat, RANK_LABEL } from "../../domain/metrics/format";
+import type { ConsumerRow } from "../../domain/panelRows";
 import type { ViewMode } from "../../domain/viewMode";
 import { useUiStore } from "../../store/uiStore";
 import { SegmentedControl } from "../ui";
-
-export interface ConsumerRow {
-  addr: string;
-  label: string;
-  cityId: string;
-  value: number;
-  /** 0..1 relative to the top consumer of the same city */
-  ratio: number;
-  /** saturation vs limit when known */
-  saturation?: number;
-}
 
 const MODES: { value: ViewMode; label: string }[] = [
   { value: "memory", label: "Mem" },

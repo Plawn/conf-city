@@ -43,6 +43,7 @@ domain/metrics/saturation.ts cpu/memSaturation, netKbps, cityMax, memoryHeight, 
 domain/metrics/format.ts   rankValue / formatRank, formatMb / Kbps / Percent / Cores, heatColor, saturationTone
 domain/metrics/cityUsage.ts cityUsage (host vs services), worstUsage, usageTooltip
 domain/metrics/props.ts    Utility district gauges: smokeRate, tankLevel, containerCount
+domain/panelRows.ts        cityRows / topConsumers: rows of the Cities and Top consumers panels
 domain/incidents.ts        nodeIncident / telemetryUncertain: one truth for alerts, attention list and fires
                            (ERROR_RATE_THRESHOLD 1 %, TELEMETRY_STALE_MS 30 s)
 domain/mobility.ts         Construction state machine: pressure → job → upgrade (road widening, second deck,
@@ -65,6 +66,10 @@ hooks/useTelemetryStream.ts WebSocket to the proxy → telemetry, nodeMeta, city
                            requestSnapshot, subscribeLogs, queryLogs (backfill), canQueryLogs
 hooks/telemetryMessages.ts handleMessage(msg, ctx): one proxy message → the hook's setters, in a fixed order
 hooks/telemetryTypes.ts    ProviderInfo, LogQueryOptions, TelemetryState, PendingQuery
+hooks/useWorldModel.ts     World + discovery → filtered telemetry, links, allCities, biomes, ingress, worldLayout,
+                           nodeByAddr (memo identities are load-bearing: a new one relays out the world)
+hooks/useCameraActions.ts  focusNode / selectAddr / focusCity / fitAll / resetView + keyboard shortcuts
+hooks/useWorldFile.ts      handleFile (dropped / picked JSON), setWorldAndReset
 hooks/useAlerts.ts         Diffs liveness / errorRate per tick → Alert list (30 s cooldown)
 hooks/useKeyboardShortcuts.ts  `/` search, Esc, R reset, F fit, L logs (ignored while typing)
 hooks/useHashState.ts      #cities=a,b&node=city/id ↔ state
@@ -137,7 +142,7 @@ sim/mobility/              engine.ts (one bounded clock for every transport), me
 Scene composition, top down:
 
 ```
-App.tsx                    Data loading, discovery merge, biome resolution, panels, shortcuts, drag-drop
+App.tsx                    Composition: telemetry stream, world model, visible cities, panels, drag-drop
 WorldScene.tsx             Canvas → RenderLoop → SkyEnvironment → SceneDepth → WaterPlane → cities → bridges →
                            IngressPorts → MobilitySimulation { MetroSystem, TrafficSystem } → LightingPipeline
 useRendererRecovery.ts     Device-lost recovery: renderer generation, lighting runtime, saved camera, initializer
