@@ -554,10 +554,19 @@ if (logSource.supportsHistory) {
   capabilities.push("logs-query");
 }
 
+const metricsMs = Number(process.env.SWARM_METRICS_INTERVAL) || 5_000;
+const livenessMs = Number(process.env.SWARM_LIVENESS_INTERVAL) || 5_000;
+const logsMs = Number(process.env.SWARM_LOGS_INTERVAL) || 3_000;
+
 const provider = new BaseProvider({
   id: process.env.PROVIDER_ID ?? "swarm-provider",
   type: "docker-swarm",
   capabilities,
+  intervals: {
+    metrics: { ms: metricsMs, collect: collectMetrics },
+    liveness: { ms: livenessMs, collect: collectLiveness },
+    logs: { ms: logsMs, collect: collectLogs },
+  },
   onQueryLogs: logSource.supportsHistory
     ? async (q) => {
         const targets = buildLogTargets(q.nodes);
@@ -585,72 +594,7 @@ await refreshTopology().catch((err) => {
 const topoMs = Number(process.env.SWARM_TOPOLOGY_INTERVAL) || 30_000;
 const topoTimer = setInterval(() => refreshTopology(), topoMs);
 
+provider.stopOnSignals("swarm", () => clearInterval(topoTimer));
 provider.start();
-
-// Async collection loops (push directly instead of using interval-based collect,
-// because Docker API calls are async and BaseProvider.intervals expects sync functions).
-
-let running = true;
-
-const metricsMs = Number(process.env.SWARM_METRICS_INTERVAL) || 5_000;
-const livenessMs = Number(process.env.SWARM_LIVENESS_INTERVAL) || 5_000;
-const logsMs = Number(process.env.SWARM_LOGS_INTERVAL) || 3_000;
-
-async function metricsLoop() {
-  while (running) {
-    await Bun.sleep(metricsMs);
-    if (!running || !provider.connected) {
-      continue;
-    }
-    const data = collectMetrics();
-    if (data) {
-      provider.sendMetrics(data);
-    }
-  }
-}
-
-async function livenessLoop() {
-  while (running) {
-    await Bun.sleep(livenessMs);
-    if (!running || !provider.connected) {
-      continue;
-    }
-    const data = collectLiveness();
-    if (data) {
-      provider.sendLiveness(data);
-    }
-  }
-}
-
-async function logsLoop() {
-  while (running) {
-    await Bun.sleep(logsMs);
-    if (!running || !provider.connected) {
-      continue;
-    }
-    try {
-      const data = await collectLogs();
-      if (data.length > 0) {
-        provider.sendLogs(data);
-      }
-    } catch (err) {
-      console.error("[swarm] Logs error:", err);
-    }
-  }
-}
-
-function shutdown() {
-  console.log("[swarm] Shutting down...");
-  running = false;
-  clearInterval(topoTimer);
-  provider.stop();
-}
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
-metricsLoop();
-livenessLoop();
-logsLoop();
 
 console.log("[swarm] Provider started");

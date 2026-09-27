@@ -19,6 +19,20 @@ export interface LogQueryRequest {
 
 // ── Configuration ──
 
+/** A collector's answer: the data to send, or null/undefined to skip that tick. */
+type Collected<T> = T | null | undefined;
+/** Sync or async collector. */
+export type Collect<T> = () => Collected<T> | Promise<Collected<T>>;
+
+/** A periodic job, run only while connected. */
+interface Schedule {
+  name: string;
+  ms: number;
+  run: () => void | Promise<void>;
+  /** A run is in flight — per schedule, so a reconnect cannot stack a second one. */
+  busy: boolean;
+}
+
 export interface ProviderConfig {
   /** Unique provider ID (e.g. "prometheus-prod-1") */
   id: string;
@@ -33,22 +47,13 @@ export interface ProviderConfig {
 
   /**
    * Optional interval-based collectors.
-   * Each collector runs on a fixed interval while connected.
-   * Return the data to send, or null/undefined to skip that tick.
+   * Each collector runs on a fixed interval while connected, sync or async; a slow run
+   * skips the ticks it overlaps. Return the data to send, or null/undefined to skip that tick.
    */
   intervals?: {
-    metrics?: {
-      ms: number;
-      collect: () => Record<string, MetricSnapshot> | null | undefined;
-    };
-    liveness?: {
-      ms: number;
-      collect: () => Record<string, LivenessStatus> | null | undefined;
-    };
-    logs?: {
-      ms: number;
-      collect: () => LogEntry[] | null | undefined;
-    };
+    metrics?: { ms: number; collect: Collect<Record<string, MetricSnapshot>> };
+    liveness?: { ms: number; collect: Collect<Record<string, LivenessStatus>> };
+    logs?: { ms: number; collect: Collect<LogEntry[]> };
   };
 
   /**
@@ -69,10 +74,36 @@ export class BaseProvider {
   private config: ProviderConfig;
   private ws: WebSocket | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
+  private schedules: Schedule[] = [];
   private _connected = false;
 
   constructor(config: ProviderConfig) {
     this.config = config;
+    const { metrics, liveness, logs } = config.intervals ?? {};
+    if (metrics) {
+      this.every("metrics", metrics.ms, async () => {
+        const data = await metrics.collect();
+        if (data) {
+          this.sendMetrics(data);
+        }
+      });
+    }
+    if (liveness) {
+      this.every("liveness", liveness.ms, async () => {
+        const data = await liveness.collect();
+        if (data) {
+          this.sendLiveness(data);
+        }
+      });
+    }
+    if (logs) {
+      this.every("logs", logs.ms, async () => {
+        const data = await logs.collect();
+        if (data && data.length > 0) {
+          this.sendLogs(data);
+        }
+      });
+    }
   }
 
   get connected() {
@@ -99,6 +130,29 @@ export class BaseProvider {
       this.ws = null;
     }
     this._connected = false;
+  }
+
+  /**
+   * Run `run` every `ms` while connected. A run still in flight skips the next ticks
+   * instead of stacking; a throw is logged and the schedule keeps going.
+   */
+  every(name: string, ms: number, run: () => void | Promise<void>) {
+    const schedule: Schedule = { name, ms, run, busy: false };
+    this.schedules.push(schedule);
+    if (this._connected) {
+      this.startTimer(schedule);
+    }
+  }
+
+  /** Stop on SIGTERM/SIGINT; `beforeStop` releases what the caller owns first. */
+  stopOnSignals(tag: string, beforeStop?: () => void) {
+    const shutdown = () => {
+      console.log(`[${tag}] Shutting down...`);
+      beforeStop?.();
+      this.stop();
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   }
 
   // ── Push methods (call anytime while connected) ──
@@ -204,46 +258,27 @@ export class BaseProvider {
   }
 
   private startTimers() {
-    const { intervals } = this.config;
-    if (!intervals) {
-      return;
+    for (const schedule of this.schedules) {
+      this.startTimer(schedule);
     }
+  }
 
-    if (intervals.metrics) {
-      const { ms, collect } = intervals.metrics;
-      this.timers.push(
-        setInterval(() => {
-          const data = collect();
-          if (data) {
-            this.sendMetrics(data);
-          }
-        }, ms),
-      );
-    }
-
-    if (intervals.liveness) {
-      const { ms, collect } = intervals.liveness;
-      this.timers.push(
-        setInterval(() => {
-          const data = collect();
-          if (data) {
-            this.sendLiveness(data);
-          }
-        }, ms),
-      );
-    }
-
-    if (intervals.logs) {
-      const { ms, collect } = intervals.logs;
-      this.timers.push(
-        setInterval(() => {
-          const data = collect();
-          if (data && data.length > 0) {
-            this.sendLogs(data);
-          }
-        }, ms),
-      );
-    }
+  private startTimer(schedule: Schedule) {
+    this.timers.push(
+      setInterval(async () => {
+        if (schedule.busy || !this._connected) {
+          return;
+        }
+        schedule.busy = true;
+        try {
+          await schedule.run();
+        } catch (err) {
+          console.error(`[${this.config.id}] ${schedule.name} error:`, err);
+        } finally {
+          schedule.busy = false;
+        }
+      }, schedule.ms),
+    );
   }
 
   private clearTimers() {

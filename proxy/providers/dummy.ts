@@ -404,12 +404,10 @@ const provider = new BaseProvider({
   },
 });
 
-provider.start();
+// City metrics travel alongside node metrics; the interval collectors only know about
+// nodes, so the host sample gets its own schedule.
+provider.every("city metrics", 2_000, () => {
+  provider.sendMetrics({}, collectCityMetrics());
+});
 
-// City metrics travel alongside node metrics; BaseProvider's interval collectors only
-// know about nodes, so the host sample gets its own loop.
-setInterval(() => {
-  if (provider.connected) {
-    provider.sendMetrics({}, collectCityMetrics());
-  }
-}, 2_000);
+provider.start();
