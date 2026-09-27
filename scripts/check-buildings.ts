@@ -1,44 +1,24 @@
-import { mkdir, rm } from "node:fs/promises";
-import { chromium, expect } from "@playwright/test";
-import { chromiumArgs } from "./chromium-args";
-import {
-  fixtureWorld,
-  installLightingFixture,
-  loadBenchmarkWorld,
-  previewLighting,
-} from "./lighting-fixture";
+import { rm } from "node:fs/promises";
+import { expect } from "@playwright/test";
+import { cityUrl, launchCheck, savePng, withLightingPanel } from "./harness";
+import { fixtureWorld, loadBenchmarkWorld, previewLighting } from "./lighting-fixture";
 
-const backend = process.env.CITY_BACKEND ?? "webgpu";
-const software = process.env.GPU_SOFTWARE === "1";
-const output = process.env.CITY_OUTPUT ?? `out/buildings/${backend}`;
-await mkdir(output, { recursive: true });
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH,
-  args: chromiumArgs(backend, software),
-});
-const page = await browser.newPage({ viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 });
-await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
-page.setDefaultTimeout(120_000);
-const fixture = await installLightingFixture(page);
-const errors: string[] = [];
-page.on("pageerror", (error) => errors.push(error.message));
-page.on("console", (message) => {
-  if (message.type() === "error" && !message.text().includes("favicon")) {
-    errors.push(message.text());
-  }
-});
+const { backend, software, output, browser, page, errors, fixture } = await launchCheck(
+  "buildings",
+  { width: 800, height: 500 },
+);
 await page.emulateMedia({ reducedMotion: "reduce" });
 const capture = async (name: string) => {
-  const data = await page.evaluate(() => window.__CITY_RENDER__!.capture());
-  await Bun.write(`${output}/${name}.png`, Buffer.from(data.split(",")[1]!, "base64"));
+  await savePng(
+    await page.evaluate(() => window.__CITY_RENDER__!.capture()),
+    `${output}/${name}.png`,
+  );
 };
 try {
-  await page.goto(`${process.env.CITY_URL ?? "http://127.0.0.1:4174/"}?perf=1&renderer=${backend}`);
+  await page.goto(`${cityUrl}?perf=1&renderer=${backend}`);
   await page.waitForFunction(() => (window.__CITY_RENDER__?.inspect().buildings.length ?? 0) > 0);
   await loadBenchmarkWorld(page);
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
-  await previewLighting(page, "2026-06-21T14:00");
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
+  await withLightingPanel(page, () => previewLighting(page, "2026-06-21T14:00"));
   // A frozen preview and unchanged telemetry must let all building tasks settle.
   await page.waitForFunction(() => {
     const frames = window.__CITY_PERF__!.samples.slice(-5);

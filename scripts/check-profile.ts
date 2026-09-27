@@ -1,50 +1,28 @@
 /** Functional capture check; SwiftShader timings never qualify target-hardware performance. */
-import { mkdir } from "node:fs/promises";
-import { chromium } from "@playwright/test";
-import { isQualityTier, QUALITY_PROFILES } from "../src/domain/quality";
-import { mergeQualityProfile, parseTweaks } from "../src/domain/qualityOverrides";
-import { chromiumArgs } from "./chromium-args";
-import { installLightingFixture, previewLighting } from "./lighting-fixture";
+import { isQualityTier } from "../src/domain/quality";
+import { effectiveProfile, parseTweaks } from "../src/domain/qualityOverrides";
+import { cityUrl, launchCheck, withLightingPanel } from "./harness";
+import { previewLighting } from "./lighting-fixture";
 
-const backend = process.env.CITY_BACKEND ?? "webgpu";
-const software = process.env.GPU_SOFTWARE === "1";
-const output = process.env.CITY_OUTPUT ?? `out/profile/${backend}`;
 const params = process.env.CITY_PARAMS ?? "";
 const quality = process.env.CITY_QUALITY ?? "eco";
 const day = process.env.CITY_CASE === "noon";
 // Tweaks decide which passes the pipeline builds, so expect the tier merged with them.
 const expected = isQualityTier(quality)
-  ? mergeQualityProfile(
-      QUALITY_PROFILES[quality],
-      parseTweaks(new URLSearchParams(params).get("tweaks")),
-    )
+  ? effectiveProfile(quality, parseTweaks(new URLSearchParams(params).get("tweaks")))
   : null;
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH,
-  args: chromiumArgs(backend, software),
+const { backend, output, browser, page, errors } = await launchCheck("profile", {
+  width: 800,
+  height: 500,
 });
 try {
-  const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
-  page.setDefaultTimeout(120_000);
-  const errors: string[] = [];
-  page.on("pageerror", (error) => {
-    errors.push(error.message);
-    console.error(error.message);
-  });
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      errors.push(message.text());
-    }
-  });
-  await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
-  await installLightingFixture(page);
-  const url = `${process.env.CITY_URL ?? "http://127.0.0.1:4175/"}?profile=1&perf=1&idle=0&quality=${quality}&renderer=${backend}${params}`;
+  const url = `${cityUrl}?profile=1&perf=1&idle=0&quality=${quality}&renderer=${backend}${params}`;
   await page.goto(url);
   console.log("Waiting for the 3D pipeline profiler");
   await page.waitForFunction(() => window.__CITY_PROFILE__ && window.__CITY_RENDER__);
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
-  await previewLighting(page, day ? "2026-06-21T14:00" : "2026-06-21T01:00");
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
+  await withLightingPanel(page, () =>
+    previewLighting(page, day ? "2026-06-21T14:00" : "2026-06-21T01:00"),
+  );
   const warmedFrames = await page.evaluate(() => (window.__CITY_PERF__?.samples.length ?? 0) + 12);
   await page.waitForFunction(
     (count) => (window.__CITY_PERF__?.samples.length ?? 0) >= count,
@@ -92,7 +70,6 @@ try {
   } else if (report.summary.completeGpuFrames !== 0) {
     throw new Error("Fallback must not fabricate GPU timestamps");
   }
-  await mkdir(output, { recursive: true });
   await Bun.write(`${output}/report.json`, JSON.stringify(report, null, 2));
   const jsonDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export JSON", exact: true }).click();

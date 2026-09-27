@@ -2,52 +2,31 @@
  * Start a production preview, then run with CITY_URL, CITY_BACKEND, CHROMIUM_PATH as needed.
  * CAMERA_BASELINE=1 records without asserting, for before/after comparisons.
  */
-import { mkdir } from "node:fs/promises";
-import { chromium } from "@playwright/test";
-import { chromiumArgs } from "./chromium-args";
 import {
-  benchmarkDpr,
+  assertHardwareAdapter,
+  benchmarkEnvironment,
+  benchmarkPage,
+  benchmarkParams,
+  cityUrl,
+  launchCheck,
+  lightingSummary,
+} from "./harness";
+import {
   benchmarkDuration,
   benchmarkFrameBudget,
-  benchmarkRenderMode,
   benchmarkViewport,
   fixtureWorld,
-  installLightingFixture,
   lightingCases,
   loadBenchmarkWorld,
   previewLighting,
 } from "./lighting-fixture";
 import { summarizePerf } from "./perf-summary";
 
-/** The old fixed budgets equal the `high` tier: keep measurements comparable unless a tier is given. */
-const cityParams = `${process.env.CITY_PARAMS ?? ""}${/quality=/.test(process.env.CITY_PARAMS ?? "") ? "" : "&quality=high"}`;
-
-const backend = process.env.CITY_BACKEND ?? "webgpu";
-const software = process.env.GPU_SOFTWARE === "1";
-const output = process.env.CITY_OUTPUT ?? `out/camera/${backend}`;
-await mkdir(output, { recursive: true });
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH,
-  args: chromiumArgs(backend, software),
-});
-const page = await browser.newPage({
-  viewport: benchmarkViewport,
-  deviceScaleFactor: benchmarkDpr,
-});
-page.setDefaultTimeout(120_000);
-const errors: string[] = [];
-page.on("pageerror", (error) => {
-  errors.push(error.message);
-  console.error(error.message);
-});
-page.on("console", (message) => {
-  if (message.type() === "error") {
-    errors.push(message.text());
-    console.error(message.text());
-  }
-});
-await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
-await installLightingFixture(page);
+const cityParams = benchmarkParams();
+const { backend, software, output, browser, page, errors } = await launchCheck(
+  "camera",
+  benchmarkPage,
+);
 await page.addInitScript(() => {
   const probe = {
     sizes: [] as { axis: string; value: number; time: number }[],
@@ -116,17 +95,8 @@ await page.addInitScript(() => {
 });
 const phases: object[] = [];
 const environment = {
-  browser: browser.version(),
-  viewport: benchmarkViewport,
-  dpr: benchmarkDpr,
-  world: {
-    cities: fixtureWorld.cities.length,
-    nodes: fixtureWorld.cities.reduce((sum, city) => sum + city.nodes.length, 0),
-  },
-  renderMode: benchmarkRenderMode,
+  ...benchmarkEnvironment(browser, cityParams),
   durationMs: benchmarkDuration,
-  params: cityParams,
-  adapter: {} as object,
 };
 
 const focusNodes = fixtureWorld.cities.flatMap((city) => city.nodes);
@@ -175,9 +145,7 @@ async function exercise(duration: number, warmup = false) {
 }
 
 try {
-  await page.goto(
-    `${process.env.CITY_URL ?? "http://127.0.0.1:4174/"}?perf=1&renderer=${backend}${cityParams}`,
-  );
+  await page.goto(`${cityUrl}?perf=1&renderer=${backend}${cityParams}`);
   await page.waitForFunction(
     () => window.__CITY_RENDER__ && (window.__CITY_PERF__?.samples.length ?? 0) > 5,
   );
@@ -189,17 +157,9 @@ try {
   if (actualBackend !== backend) {
     throw new Error(`Requested ${backend}, received ${actualBackend}`);
   }
-  environment.adapter = await page.evaluate(() => window.__CITY_PERF__!.adapter ?? {});
-  if (
-    (process.env.CITY_ASSERT_BUDGET === "1" || process.env.CITY_ASSERT_60 === "1") &&
-    (software ||
-      !("isFallbackAdapter" in environment.adapter) ||
-      environment.adapter.isFallbackAdapter !== false)
-  ) {
-    throw new Error("Hardware qualification requires a verified hardware rendering adapter");
-  }
+  environment.adapter = await assertHardwareAdapter(page, software);
 
-  await page.locator("summary").filter({ hasText: "Sun & lighting" }).click();
+  await lightingSummary(page).click();
   // The first car tint / truck activates its native material variant only after spawning.
   await page.waitForFunction(() => {
     const sources = window.__CITY_RENDER__!.inspect().sources;

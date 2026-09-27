@@ -141,7 +141,7 @@ pre-lighting renderer. Default visuals are unchanged. `window.__CITY_PROFILE__`
 exposes `start(durationMs)`, `stop()`, `recording`, `resolving`, `report()` and
 `speedscope()` in profile mode. Captures last 1–30 seconds and retain at most 1,800
 sampled frames. Automated functional checks use `bun scripts/check-profile.ts`
-(default URL `http://127.0.0.1:4175/`), with `CITY_URL`, `CITY_BACKEND`,
+(default URL `http://127.0.0.1:4174/`), with `CITY_URL`, `CITY_BACKEND`,
 `CHROMIUM_PATH`, `CITY_OUTPUT` and `GPU_SOFTWARE=1` supported. Software GPU captures
 validate attribution and export only, not performance on an integrated GPU.
 
@@ -224,7 +224,7 @@ renderer initialization and frame-budget summaries.
 
 `GPU_SOFTWARE=1` selects SwiftShader for functional checks, never hardware
 qualification. Without it the scripts launch Chromium with the flags from
-`scripts/chromium-args.ts` (`--use-angle=vulkan --enable-features=Vulkan
+`scripts/harness.ts` (`--use-angle=vulkan --enable-features=Vulkan
 --disable-vulkan-surface`): on Linux, headless Chromium silently falls back to
 SwiftShader on both backends without them. The account running the scripts must be
 able to open `/dev/dri/renderD128` (member of the `render` group, or a temporary

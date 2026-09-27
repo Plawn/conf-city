@@ -28,6 +28,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src", "proxy", "tests"],
+  "include": ["src", "proxy", "tests", "scripts"],
   "exclude": ["dist", "node_modules"]
 }
