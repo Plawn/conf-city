@@ -116,6 +116,8 @@ export const TERRAIN = {
   waterHorizon: "#1b2f55",
   /** Width of the shallow band around an island, in world units — well under WATER_GAP. */
   shoreReach: 6,
+  /** Concrete landfill that replaces the beach of an overbuilt island (`CityLayout.crowding` > 1). */
+  landfill: "#74747a",
   /** The island's own colours live in `domain/biome.ts`; this is the wall of a roundabout's planted island. */
   islandSide: "#2b2440",
   /**

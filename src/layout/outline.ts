@@ -1,7 +1,15 @@
+import { LOT_MB } from "../domain/capacity";
 import type { PositionedNode } from "../domain/types";
 import { mulberry32 } from "../lib/random";
-import { footprintRadius, ISLAND_PADDING } from "./constants";
-import { centroid, chaikin, convexHull, inflateConvex, roundedOffset } from "./geometry";
+import { footprintRadius, ISLAND_PADDING, PITCH } from "./constants";
+import {
+  centroid,
+  chaikin,
+  convexHull,
+  inflateConvex,
+  roundedOffset,
+  signedArea,
+} from "./geometry";
 import type { Vec2 } from "./types";
 
 /**
@@ -62,20 +70,61 @@ export interface ShoreShape {
 const ROUGHEN_AMPLITUDE = 2.2;
 /** Vertex spacing the shore is resampled to before the noise — the noise cannot be finer than this. */
 const ROUGHEN_STEP = 1.5;
+/** Edge length of the capacity disc. */
+const CAPACITY_STEP = 1.2;
+
+/**
+ * Radius of the land a machine's memory buys: `LOT_MB` per lattice lot, as a
+ * disc, plus the same `ISLAND_PADDING` the buildings' shore gets.
+ */
+export function capacityRadius(capacityMb: number): number {
+  return Math.sqrt(((capacityMb / LOT_MB) * PITCH * PITCH) / Math.PI) + ISLAND_PADDING;
+}
+
+export interface IslandShore {
+  outline: Vec2[];
+  /** Area the buildings need over the area the machine's memory buys; > 1 is overbuilt. */
+  crowding?: number;
+  /** Overbuilt only: the natural island inside `outline`; the rest is landfill over the water. */
+  land?: Vec2[];
+}
 
 /**
  * The island's shore: the hull of every footprint, `ISLAND_PADDING` offshore,
- * roughened outward by `shape` when given.
+ * grown to the machine's capacity disc when `capacityMb` is given (never
+ * shrunk: the ring road stays on land), then roughened by `shape` when given.
  */
-export function islandOutline(nodes: PositionedNode[], shape?: ShoreShape): Vec2[] {
-  const smooth =
-    nodes.length === 0
-      ? disc([0, 0], ISLAND_PADDING)
-      : roundedOffset(footprintHull(nodes), ISLAND_PADDING);
-  if (!shape || shape.ruggedness <= 0) {
-    return smooth;
+export function islandShore(
+  nodes: PositionedNode[],
+  shape?: ShoreShape,
+  capacityMb?: number,
+): IslandShore {
+  const hull = nodes.length === 0 ? [] : footprintHull(nodes);
+  const needed =
+    nodes.length === 0 ? disc([0, 0], ISLAND_PADDING) : roundedOffset(hull, ISLAND_PADDING);
+  const rough = (poly: Vec2[]): Vec2[] =>
+    !shape || shape.ruggedness <= 0
+      ? poly
+      : roughen(poly, shape.seed, shape.ruggedness * ROUGHEN_AMPLITUDE);
+  if (capacityMb == null || capacityMb <= 0) {
+    return { outline: rough(needed) };
   }
-  return roughen(smooth, shape.seed, shape.ruggedness * ROUGHEN_AMPLITUDE);
+  const r = capacityRadius(capacityMb);
+  const crowding = Math.abs(signedArea(needed)) / 2 / (Math.PI * r * r);
+  const sides = Math.max(FALLBACK_SIDES, Math.ceil((2 * Math.PI * r) / CAPACITY_STEP));
+  const center = hull.length > 0 ? boxCentre(hull) : ([0, 0] as Vec2);
+  const capacity = disc(center, r, sides);
+  if (crowding <= 1) {
+    return { outline: rough(convexHull([...needed, ...capacity])), crowding };
+  }
+  // Overbuilt: the memory's land stays natural, and the rest is built out over
+  // the water — a straight-edged landfill hull around it, never roughened.
+  const land = rough(capacity);
+  return { outline: convexHull([...needed, ...land]), land, crowding };
+}
+
+export function islandOutline(nodes: PositionedNode[], shape?: ShoreShape): Vec2[] {
+  return islandShore(nodes, shape).outline;
 }
 
 /**
@@ -151,10 +200,24 @@ function radiusAround(center: Vec2, points: Vec2[]): number {
   return r;
 }
 
-function disc(center: Vec2, radius: number): Vec2[] {
+function boxCentre(points: Vec2[]): Vec2 {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const [x, z] of points) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  return [(minX + maxX) / 2, (minZ + maxZ) / 2];
+}
+
+function disc(center: Vec2, radius: number, sides = FALLBACK_SIDES): Vec2[] {
   const out: Vec2[] = [];
-  for (let k = 0; k < FALLBACK_SIDES; k++) {
-    const a = (k / FALLBACK_SIDES) * Math.PI * 2;
+  for (let k = 0; k < sides; k++) {
+    const a = (k / sides) * Math.PI * 2;
     out.push([center[0] + Math.cos(a) * radius, center[1] + Math.sin(a) * radius]);
   }
   return out;

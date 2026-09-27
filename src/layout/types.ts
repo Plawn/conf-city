@@ -135,10 +135,16 @@ export interface CityLayout {
   cityId: string;
   /** Resolved once in the domain; the layout shaped the shore with it, the renderer paints with it. */
   biome: BiomeId;
+  /** Land the buildings need over the land the machine's memory buys; > 1 is overbuilt. */
+  crowding?: number;
+  /** Packed street to street (`layoutCity` dense) because the loose layout overflowed. */
+  packed?: boolean;
   nodes: PositionedNode[];
   center: Vec2;
   /** Closed polygon (world coords) — the shape of the island. */
   outline: Vec2[];
+  /** Overbuilt islands only: the natural ground inside `outline`; the rest is landfill on piles. */
+  land?: Vec2[];
   /** AABB of the outline — camera fit. */
   bounds: CityBounds;
   roads: RoadNetwork;

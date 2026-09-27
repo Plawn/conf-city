@@ -1,12 +1,12 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import type { BuildingVariant } from "../domain/buildingVariant";
+import { footprintRadiusFor } from "../domain/capacity";
 import { nodeIncident } from "../domain/incidents";
 import { formatCores, formatKbps, formatMb, formatPercent } from "../domain/metrics/format";
 import {
   type CityMax,
   cpuSaturation,
   heatValue,
-  memoryHeight,
   memSaturation,
   netKbps,
 } from "../domain/metrics/saturation";
@@ -56,20 +56,20 @@ export const NodeMesh = memo(
     const cpuSat = cpuSaturation(m) ?? 0;
     const errorRate = m?.errorRate ?? 0;
     const rps = m?.rps ?? 0;
-    const memNorm = memoryHeight(m, max);
+    const footprint = footprintRadiusFor(m);
     const visual = useMemo<VisualState>(
       () => ({
         liveness,
         cpuSat,
         errorRate,
         rps,
-        memNorm,
+        footprint,
         heat,
         mode,
         hovered,
         selected,
       }),
-      [liveness, cpuSat, errorRate, rps, memNorm, heat, mode, hovered, selected],
+      [liveness, cpuSat, errorRate, rps, footprint, heat, mode, hovered, selected],
     );
     // Ground gauge: memory saturation in health mode, active metric otherwise
     const gauge = mode === "health" ? memSat : heat;
@@ -78,7 +78,12 @@ export const NodeMesh = memo(
     // A port is drawn as the quay, not as a building: it keeps every affordance
     // (gauge, selection, tooltip) but sized to the quay rather than to the plot.
     const isPort = node.isPort === true;
-    const ringRadius = (isPort ? PORT_SCALE * 0.62 : config.scale) * 0.9;
+    // The rings hug the memory footprint, in quarter steps so the gauge geometry cache stays small.
+    const ringRadius = isPort
+      ? PORT_SCALE * 0.62 * 0.9
+      : footprint != null
+        ? Math.ceil(footprint * 4) / 4
+        : config.scale * 0.9;
 
     const handleHover = useCallback((value: boolean) => {
       setHovered(value);

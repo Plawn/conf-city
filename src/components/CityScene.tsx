@@ -4,8 +4,9 @@ import { BIOMES, DEFAULT_BIOME } from "../domain/biome";
 import { type BuildingVariant, buildingVariant } from "../domain/buildingVariant";
 import { cityUsage, usageTooltip } from "../domain/metrics/cityUsage";
 import { formatCores, formatMb, saturationTone } from "../domain/metrics/format";
+import { serviceSmoke } from "../domain/metrics/props";
 import { cityMax } from "../domain/metrics/saturation";
-import { nodeAddress, TERRAIN } from "../domain/nodeStyle";
+import { NODE_STYLE, nodeAddress, TERRAIN } from "../domain/nodeStyle";
 import type {
   City,
   CityMeta,
@@ -21,7 +22,9 @@ import { computeBounds } from "../layout/bounds";
 import { type CityLayout, type GroupZone, linkKey, type Vec2 } from "../layout/types";
 import { fnv1a } from "../lib/random";
 import { BuildingBatches } from "./buildings/BuildingBatches";
+import { BuildingSmoke, type Chimney, ROOF_HEIGHT } from "./buildings/BuildingSmoke";
 import { IslandMesh } from "./IslandMesh";
+import { Landfill } from "./Landfill";
 import { NodeMesh } from "./NodeMesh";
 import { RoadNetworkMesh } from "./RoadNetworkMesh";
 import { RouteOverlay } from "./RouteOverlay";
@@ -70,6 +73,15 @@ export function CityScene({
 }) {
   const cityNodes = useMemo(() => nodes.filter((n) => n.cityId === city.id), [nodes, city.id]);
   const biome = BIOMES[layout?.biome ?? DEFAULT_BIOME];
+  // Packed street to street, or still spilling over: either way the machine is overcommitted.
+  const crowded = layout?.packed === true || (layout?.crowding ?? 0) > 1;
+  const land = layout?.land;
+  // A packed island has no beach left: the whole slope is concrete. With a landfill
+  // deck around it, the natural island keeps its sand instead.
+  const islandPalette = useMemo(
+    () => (crowded && !land ? { ...biome, sand: TERRAIN.landfill, sandBand: 1 } : biome),
+    [biome, crowded, land],
+  );
   // One look per building, fixed by its address and the island's biome — never per tick.
   const variants = useMemo(() => {
     const out = new Map<string, BuildingVariant>();
@@ -134,6 +146,20 @@ export function CityScene({
     [cityNodes, telemetry],
   );
   const max = useMemo(() => cityMax(cityTelemetry), [cityTelemetry]);
+  // CPU as smoke off each roof; ports are quays, not chimneys.
+  const chimneys = useMemo(() => {
+    const out: Chimney[] = [];
+    cityNodes.forEach((n, i) => {
+      const rate = serviceSmoke(cityTelemetry[i]?.metrics?.cpu);
+      const variant = variants.get(nodeAddress(n));
+      if (!rate || n.isPort || !variant) {
+        return;
+      }
+      const top = ROOF_HEIGHT[n.type] * NODE_STYLE[n.type].scale * variant.scale;
+      out.push({ x: n.position[0], z: n.position[2], top, rate });
+    });
+    return out;
+  }, [cityNodes, cityTelemetry, variants]);
   const usage = useMemo(
     () => cityUsage(cityTelemetry, meta, hostMetrics),
     [cityTelemetry, meta, hostMetrics],
@@ -147,7 +173,8 @@ export function CityScene({
     <group>
       {layout ? (
         <>
-          <IslandMesh outline={layout.outline} palette={biome} />
+          {land && <Landfill outline={layout.outline} />}
+          <IslandMesh outline={land ?? layout.outline} palette={islandPalette} />
           {/* Scattered before the roads are drawn but placed around them: the
             scatter rejects anything within a road's clearance, so the order here
             is only paint order. */}
@@ -218,6 +245,13 @@ export function CityScene({
                   </Badge>
                 </Tooltip>
               )}
+              {crowded && meta?.memMb != null && (
+                <Tooltip
+                  label={`Services need ${Math.round((layout?.crowding ?? 0) * 100)}% of the land ${formatMb(meta.memMb)} of RAM buys${land ? ", even packed: the rest is landfill" : " — packed street to street"}`}
+                >
+                  <Badge tone="warn">crowded</Badge>
+                </Tooltip>
+              )}
               {/* The machine is measured on the host; without it the badge is only the
                   services we can see, which is a floor, not the machine's load. */}
               {!usage.fromHost && <span className="text-[10px] text-surface-500">services</span>}
@@ -245,6 +279,8 @@ export function CityScene({
           fromTelemetry={telemetry?.get(`${link.fromCityId}/${link.fromNodeId}`)}
         />
       ))}
+
+      <BuildingSmoke chimneys={chimneys} />
 
       <BuildingBatches>
         {cityNodes.map((node) => {

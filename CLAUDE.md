@@ -70,7 +70,7 @@ preview and Chromium — see `docs/render-performance.md`. Docker and `just` rec
 - `MetricSnapshot` — cpu, memoryMb, rps, latencyMs, errorRate, cpuLimit, memLimitMb, netRxKbps, netTxKbps, custom
 - `NodeTelemetry` — liveness + metrics + lastSeen
 - `NodeMeta` — type, label, description, group, links, linksInferred, hidden, ingress
-- `CityMeta` — label, cpuCores, memMb, biome (capacity + look)
+- `CityMeta` — label, cpuCores, memMb, biome (capacity + look; memMb sizes the island)
 - `CityMetrics` — the **machine's own** usage from the host procfs: cpuUsedCores, memUsedMb, load1, disk space + I/O
 - `LogEntry` — timestamp, node, level, message
 - `PositionedNode` — `ResolvedNode` + `position`, optional `isDiscovered` / `isPort`

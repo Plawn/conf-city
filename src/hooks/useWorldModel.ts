@@ -128,6 +128,17 @@ export function useWorldModel(
     [allCities, staticNodes, discoveredNodes, cityMeta],
   );
 
+  // Machine memory sizes each island; `cityMeta` already feeds the biomes, so no extra re-layout.
+  const capacities = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const [id, m] of cityMeta) {
+      if (m.memMb != null && m.memMb > 0) {
+        out.set(id, m.memMb);
+      }
+    }
+    return out;
+  }, [cityMeta]);
+
   // Identity of the loaded world: the key the mobility store (and its ingress
   // overrides) is scoped by. Computed once here, handed down to `WorldScene`.
   const worldKey = useMemo(() => worldIdentity(world), [world]);
@@ -158,8 +169,9 @@ export function useWorldModel(
         discoveredNodes,
         biomes,
         ingressAddresses,
+        capacities,
       ),
-    [allCities, staticNodes, links, discoveredNodes, biomes, ingressAddresses],
+    [allCities, staticNodes, links, discoveredNodes, biomes, ingressAddresses, capacities],
   );
   const nodes = worldLayout.nodes;
   const nodeByAddr = useMemo(() => new Map(nodes.map((n) => [nodeAddress(n), n])), [nodes]);

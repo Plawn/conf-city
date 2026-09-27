@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { type CityUsage, worstUsage } from "@/domain/metrics/cityUsage";
 import {
+  allotPuffs,
   containerCount,
   PLUME_FALL_S,
   PLUME_RISE_S,
   plumeLevel,
+  serviceSmoke,
   smokeRate,
   smokeSurge,
   tankLevel,
@@ -106,5 +108,36 @@ describe("the utility district's gauges", () => {
     expect(containerCount(94, 12)).toEqual({ count: 11, overflow: false });
     expect(containerCount(96, 12)).toEqual({ count: 12, overflow: true });
     expect(containerCount(100, 12)).toEqual({ count: 12, overflow: true });
+  });
+});
+
+describe("service chimneys", () => {
+  test("smoke follows absolute cores, log-eased", () => {
+    expect(serviceSmoke(undefined)).toBeUndefined();
+    expect(serviceSmoke(0)).toBe(0);
+    expect(serviceSmoke(10)!).toBeGreaterThan(0.25);
+    expect(serviceSmoke(10)!).toBeLessThan(0.35);
+    expect(serviceSmoke(200)).toBe(1);
+    expect(serviceSmoke(800)).toBe(1);
+  });
+
+  test("puffs follow each building's own smoke, so an idle city stays clear", () => {
+    expect(allotPuffs([0, 0.03, 0.1], 160, 14)).toEqual([0, 0, 1]);
+    expect(allotPuffs([0.5, 1], 160, 14)).toEqual([7, 14]);
+  });
+
+  test("over budget, the demand is scaled down and the hottest keep the most", () => {
+    const out = allotPuffs([0, 0.1, 0.9, 1], 12, 14);
+    expect(out[0]).toBe(0);
+    expect(out.reduce((a, b) => a + b, 0)).toBe(12);
+    expect(out[3]!).toBeGreaterThanOrEqual(out[2]!);
+    expect(out[2]!).toBeGreaterThan(out[1]!);
+    expect(out[1]!).toBeGreaterThanOrEqual(1);
+  });
+
+  test("a short budget goes to the hottest buildings first", () => {
+    expect(allotPuffs([0.2, 0.8, 0.5], 2)).toEqual([0, 1, 1]);
+    expect(allotPuffs([0.2, 0.8], 0)).toEqual([0, 0]);
+    expect(allotPuffs([0, 0], 10)).toEqual([0, 0]);
   });
 });

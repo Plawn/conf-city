@@ -49,7 +49,9 @@ export function scatterProps(
   if (kinds.length === 0 || density <= 0) {
     return [];
   }
-  const bounds = polygonBounds(layout.outline);
+  // Nothing grows on the landfill of an overbuilt island.
+  const ground = layout.land ?? layout.outline;
+  const bounds = polygonBounds(ground);
   if (!bounds) {
     return [];
   }
@@ -98,10 +100,10 @@ export function scatterProps(
         x + cell * (0.5 + (rand() - 0.5) * 2 * JITTER),
         z + cell * (0.5 + (rand() - 0.5) * 2 * JITTER),
       ];
-      if (!pointInPolygon(at, layout.outline)) {
+      if (!pointInPolygon(at, ground)) {
         continue;
       }
-      if (distToPolyline(at, [...layout.outline, layout.outline[0]!]) < SHORE_MARGIN) {
+      if (distToPolyline(at, [...ground, ground[0]!]) < SHORE_MARGIN) {
         continue;
       }
       let free = true;

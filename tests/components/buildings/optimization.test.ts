@@ -18,7 +18,6 @@ import {
   buildingModel,
 } from "@/components/buildings/instances";
 import {
-  heightTarget,
   MaterialAnimation,
   settled,
   type VisualState,
@@ -91,8 +90,6 @@ test("errors keep animating, recovery settles, heatmaps and down status retain t
   expect(
     visualTarget({ ...visual, mode: "cpu", heat: undefined }, variant, 0, 1, 0).intensity,
   ).toBe(0.05);
-  expect(heightTarget("app", { ...visual, memNorm: 1 })).toBe(1.7);
-  expect(heightTarget("db", { ...visual, memNorm: 1 })).toBe(1.15);
 });
 
 test("batches preserve nested transforms, textures, instance identity and bounds after growth/removal", () => {

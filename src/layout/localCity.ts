@@ -10,7 +10,7 @@ import { DISCOVERY_PADDING, GROUP_PADDING, HARBOUR_REACH, ISLAND_PADDING } from 
 import { cellKey, centroid } from "./geometry";
 import { type HarbourSite, planHarbour } from "./harbour";
 import { type CityNodesLayout, layoutCity } from "./layoutCity";
-import { footprintCorners, islandOutline, zoneOutline } from "./outline";
+import { footprintCorners, islandShore, zoneOutline } from "./outline";
 import { buildRing } from "./ringRoad";
 import { type Grid, makeGrid } from "./roads/lattice";
 import { translate } from "./translate";
@@ -29,6 +29,12 @@ export interface LocalCity {
   grid: Grid;
   groups: GroupZone[];
   discoveredZone?: GroupZone;
+  /** Land the buildings need over the land the machine's memory buys (`islandShore`). */
+  crowding?: number;
+  /** Laid out dense because the loose layout overflowed the memory's land. */
+  packed?: boolean;
+  /** Natural ground of an overbuilt island; `outline` minus this is landfill. */
+  land?: Vec2[];
   /** Enclosing radius around the local origin — what the island placement collides on. */
   radius: number;
   /** Ingress services held out of the layout until `planHarbours` gives them a berth. */
@@ -46,6 +52,7 @@ export function buildLocalCity(
   discoveredNodes: DiscoveredResolvedNode[],
   biome: BiomeId,
   ingress: ReadonlySet<string>,
+  capacityMb?: number,
 ): LocalCity {
   const intraLinks = links.filter((l) => !l.interCity && l.fromCityId === cityId);
   const statics = staticNodes.filter((n) => n.cityId === cityId);
@@ -59,12 +66,17 @@ export function buildLocalCity(
     .sort((a, b) => a.id.localeCompare(b.id))
     .slice(0, Math.max(0, own.length - 1));
   const portIds = new Set(ports.map((n) => n.id));
-  const layout = layoutCity(cityId, statics, discoveredOwn, intraLinks, portIds);
   // The coast is the biome's business: its own salt, so the shore does not move with the buildings' seed.
-  const outline = islandOutline(layout.nodes, {
-    seed: fnv1a(`${cityId}|shore`),
-    ruggedness: BIOMES[biome].ruggedness,
-  });
+  const shape = { seed: fnv1a(`${cityId}|shore`), ruggedness: BIOMES[biome].ruggedness };
+  let layout = layoutCity(cityId, statics, discoveredOwn, intraLinks, portIds);
+  let shore = islandShore(layout.nodes, shape, capacityMb);
+  // More services than the memory buys land for: pack them street to street.
+  const packed = (shore.crowding ?? 0) > 1;
+  if (packed) {
+    layout = layoutCity(cityId, statics, discoveredOwn, intraLinks, portIds, true);
+    shore = islandShore(layout.nodes, shape, capacityMb);
+  }
+  const { outline, crowding, land } = shore;
   const { ring, inner } = buildRing(layout.nodes);
   const grid = makeGrid(layout.cells, inner);
   let radius = ISLAND_PADDING;
@@ -94,6 +106,9 @@ export function buildLocalCity(
           },
         }
       : {}),
+    ...(crowding != null ? { crowding } : {}),
+    ...(packed ? { packed } : {}),
+    ...(land ? { land } : {}),
     radius,
     ports,
     discoveredPorts: new Set(discoveredOwn.filter((n) => portIds.has(n.id)).map((n) => n.id)),

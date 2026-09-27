@@ -8,11 +8,38 @@ components only map values to colours and scales.
 `viewMode` in `useUiStore`: `health` (default) | `cpu` | `memory` | `network`. Toggled in the
 StatusBar and TopConsumersPanel.
 
-- **Health**: type colour + liveness; **height = memory** (log, normalised per city via `cityMax`),
+- **Health**: type colour + liveness; **footprint = memory used**, **roof smoke = CPU cores used**
+  (height is the model's own, so a quiet city is never flat),
   **glow = CPU saturation** (`cpu / (cpuLimit·100)`), **ground ring = memory vs limit**.
 - **Heatmap modes**: grey buildings; glow and ring show `heatValue()`.
 - Limits come from `MetricSnapshot.cpuLimit` / `memLimitMb`, network from `netRxKbps` / `netTxKbps`,
   city capacity from `CityMeta`.
+
+## The land is RAM
+
+`src/domain/capacity.ts` gives island and buildings one unit: `LOT_MB` (1 GB) of machine memory
+buys one lattice lot (`PITCH²`) of island, and a building fills its plot once its service uses that
+much.
+
+- **Footprint**: `footprintRadiusFor` = `FOOTPRINT_MAX · √(memoryMb / LOT_MB)`, clamped to
+  `FOOTPRINT_MIN..FOOTPRINT_MAX` (0.5..2.1). Area ∝ RAM, absolute (comparable across cities), damped
+  on the x/z scale of the building's size group. It never re-runs the layout: the layout's
+  `footprintRadius` is unchanged, and 2.1 still clears the streets and ring.
+- **Smoke**: `serviceSmoke` = `log1p(20·cores) / log1p(20·SERVICE_SMOKE_REF_CORES)` (0.1 core ≈ 0.3,
+  2 cores → full). `BuildingSmoke` is one instanced draw per city: `allotPuffs` gives each roof
+  `PUFFS_PER_CHIMNEY · smoke` puffs (absolute — an idle city stays clear; below `MIN_SMOKE`, ≈ 2 % of a
+  core, none), scaled down to the quality profile's `chimneyPuffs` when over budget. Column height,
+  width and soot follow the smoke.
+- **Island**: `islandShore` unions the buildings' shore with a disc of `capacityRadius(memMb)`
+  (`CityMeta.memMb`, from Swarm node resources). The island never shrinks below the buildings' shore.
+  `crowding` = the buildings' shore area / capacity disc area. With no `memMb` the island keeps the
+  old shape and no crowding value.
+- **Overcrowded**: above 1, `buildLocalCity` re-runs `layoutCity(…, dense)` — tighter spiral, no
+  padding between plots, stronger pull to the centre, links at their usual rest length — and flags
+  the city `packed`. If even packed it overflows, the capacity disc stays natural ground
+  (`CityLayout.land`, what `IslandMesh` and the vegetation use) and the rest of the straight-edged
+  outline is a concrete deck on piles over the water (`Landfill`). A packed island without landfill
+  has a concrete beach instead. Either way the city badge shows `crowded`.
 
 ## The city badge is the machine
 

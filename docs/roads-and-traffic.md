@@ -12,7 +12,9 @@ roundabout reservations) is described in `traffic-strategy.md`.
   (`street` 1.0 / `avenue` 1.5 / `boulevard` 2.0 wide, pavement 0.35). Runs are merged into
   `RoadSegment` polylines cut at every junction, roundabout and class change.
 - Every island has a **ring road** (an avenue at `RING_PADDING` from the footprint hull; the shore is
-  the parallel offset `ISLAND_PADDING` further out). **Every building without a link is attached to
+  the parallel offset `ISLAND_PADDING` further out, grown to the machine's capacity disc when
+  `CityMeta.memMb` is known; an overcrowded island is laid out dense and may spill onto a landfill
+  deck — see `docs/telemetry-visuals.md`). **Every building without a link is attached to
   the ring** by a spur (`ring:<id>` route). Every route leaves its building by a driveway onto a
   street along the plot, so vehicles only ever drive on drawn asphalt.
 - Roundabouts sit at crossroads and bridgeheads, ranked by routes through the corner, kept

@@ -64,4 +64,29 @@ describe("layoutWorld", () => {
       JSON.stringify([...w2.cities.values()].map((c) => c.roads.segments)),
     );
   });
+
+  test("a machine's memory sizes its island and flags the crowded one", () => {
+    const nodes = grid("a", 3, 3);
+    const links = intraLinks("a", [["n00", "n22"]]);
+    const small = layoutWorld(
+      ["a"],
+      nodes,
+      links,
+      [],
+      new Map(),
+      new Set(),
+      new Map([["a", 2048]]),
+    );
+    const big = layoutWorld(["a"], nodes, links, [], new Map(), new Set(), new Map([["a", 65536]]));
+    const bare = layoutWorld(["a"], nodes, links);
+    expect(big.cities.get("a")!.bounds.width).toBeGreaterThan(small.cities.get("a")!.bounds.width);
+    expect(small.cities.get("a")!.crowding).toBeGreaterThan(1);
+    expect(big.cities.get("a")!.crowding).toBeLessThan(1);
+    expect(bare.cities.get("a")!.crowding).toBeUndefined();
+    // Overflowing: packed street to street, and what still does not fit is landfill.
+    expect(small.cities.get("a")!.packed).toBe(true);
+    expect(small.cities.get("a")!.land).toBeDefined();
+    expect(big.cities.get("a")!.packed).toBeUndefined();
+    expect(big.cities.get("a")!.land).toBeUndefined();
+  });
 });

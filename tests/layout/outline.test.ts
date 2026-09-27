@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { PositionedNode } from "@/domain/types";
 import { PITCH } from "@/layout/constants";
 import { distToPolygon, pointInPolygon, segSegIntersect, signedArea } from "@/layout/geometry";
-import { islandOutline, roughen } from "@/layout/outline";
+import { capacityRadius, islandOutline, islandShore, roughen } from "@/layout/outline";
 import type { Vec2 } from "@/layout/types";
 
 function placed(w: number, h: number): PositionedNode[] {
@@ -96,5 +96,61 @@ describe("roughen", () => {
       [0, 1],
     ];
     expect(roughen(tri, 1, 0)).toBe(tri);
+  });
+});
+
+describe("islandShore with a capacity", () => {
+  const area = (poly: Vec2[]) => Math.abs(signedArea(poly)) / 2;
+
+  test("grows to the land the machine's memory buys, never below the buildings' shore", () => {
+    const nodes = placed(2, 2);
+    const needed = islandOutline(nodes);
+    const { outline, crowding } = islandShore(nodes, undefined, 32768);
+    expect(crowding).toBeLessThan(1);
+    expect(area(outline)).toBeGreaterThan(area(needed));
+    expect(area(outline)).toBeGreaterThan(Math.PI * capacityRadius(32768) ** 2 * 0.97);
+    for (const p of needed) {
+      expect(pointInPolygon(p, outline) || distToPolygon(p, outline) < 1e-6).toBe(true);
+    }
+  });
+
+  test("more memory, more land", () => {
+    const nodes = placed(2, 2);
+    const small = islandShore(nodes, undefined, 8192);
+    const big = islandShore(nodes, undefined, 65536);
+    expect(area(big.outline)).toBeGreaterThan(area(small.outline));
+    expect(big.crowding!).toBeLessThan(small.crowding!);
+  });
+
+  test("a big city on a small machine is crowded and keeps the buildings' shore", () => {
+    const nodes = placed(5, 4);
+    const { outline, crowding } = islandShore(nodes, undefined, 2048);
+    expect(crowding).toBeGreaterThan(1);
+    expect(area(outline)).toBeCloseTo(area(islandOutline(nodes)), 0);
+  });
+
+  test("an overbuilt island keeps the memory's land natural and builds the rest out over the water", () => {
+    const nodes = placed(5, 4);
+    const shape = { seed: 4, ruggedness: 0.7 };
+    const { outline, land } = islandShore(nodes, shape, 2048);
+    expect(land).toBeDefined();
+    expect(area(land!)).toBeLessThan(area(outline));
+    for (const p of land!) {
+      expect(pointInPolygon(p, outline) || distToPolygon(p, outline) < 1e-6).toBe(true);
+    }
+    expect(islandShore(nodes, shape, 262144).land).toBeUndefined();
+  });
+
+  test("no capacity leaves the shore and crowding alone", () => {
+    const nodes = placed(3, 2);
+    const shore = islandShore(nodes, { seed: 3, ruggedness: 0.6 });
+    expect(shore.crowding).toBeUndefined();
+    expect(shore.outline).toEqual(islandOutline(nodes, { seed: 3, ruggedness: 0.6 }));
+  });
+
+  test("is deterministic", () => {
+    const nodes = placed(3, 3);
+    const shape = { seed: 9, ruggedness: 0.8 };
+    expect(islandShore(nodes, shape, 16384)).toEqual(islandShore(nodes, shape, 16384));
   });
 });

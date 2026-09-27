@@ -37,6 +37,8 @@ export interface QualityProfile {
   maxTrucks: number;
   /** Smoke and steam puffs per power station; large and transparent, so overdraw. */
   plumePuffs: number;
+  /** Chimney puffs per city, shared by its buildings in proportion to their CPU. */
+  chimneyPuffs: number;
 }
 
 export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
@@ -55,6 +57,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 120,
     maxTrucks: 30,
     plumePuffs: 20,
+    chimneyPuffs: 48,
   },
   balanced: {
     tier: "balanced",
@@ -71,6 +74,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 240,
     maxTrucks: 60,
     plumePuffs: 36,
+    chimneyPuffs: 96,
   },
   high: {
     tier: "high",
@@ -87,6 +91,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 240,
     maxTrucks: 60,
     plumePuffs: 56,
+    chimneyPuffs: 160,
   },
 };
 

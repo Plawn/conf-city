@@ -25,7 +25,7 @@ export function netKbps(m: MetricSnapshot | undefined): number | undefined {
   return (m?.netRxKbps ?? 0) + (m?.netTxKbps ?? 0);
 }
 
-/** Per-city maxima used to normalise the heatmap and building heights. */
+/** Per-city maxima used to normalise the heatmap. */
 export interface CityMax {
   memoryMb: number;
   cpu: number;
@@ -51,14 +51,6 @@ export function cityMax(telemetries: Iterable<NodeTelemetry | undefined>): CityM
     }
   }
   return out;
-}
-
-/** log-normalised memory 0..1 relative to the biggest consumer of the city. */
-export function memoryHeight(m: MetricSnapshot | undefined, max: CityMax): number | undefined {
-  if (m?.memoryMb == null || max.memoryMb <= 0) {
-    return undefined;
-  }
-  return Math.log1p(m.memoryMb) / Math.log1p(max.memoryMb);
 }
 
 /**

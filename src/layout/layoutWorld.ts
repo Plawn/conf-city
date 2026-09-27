@@ -30,6 +30,9 @@ import { placeUtilityPlot, translateUtilityPlot } from "./utilityPlot";
  * footprint hull, then dropped back onto the shore as the island's port
  * (`harbour.ts`) — which needs the other islands' positions, hence a step
  * between the island placement and the bridgeheads.
+ *
+ * `capacities` holds each machine's memory (MB): the island grows to the land it
+ * buys (`capacityRadius`), so a small machine carrying a big city reads as crowded.
  */
 export function layoutWorld(
   cityIds: string[],
@@ -38,6 +41,7 @@ export function layoutWorld(
   discoveredNodes: DiscoveredResolvedNode[] = [],
   biomes: ReadonlyMap<string, BiomeId> = new Map(),
   ingress: ReadonlySet<string> = new Set(),
+  capacities: ReadonlyMap<string, number> = new Map(),
 ): WorldLayout {
   const ids = [...new Set(cityIds)];
   const locals = ids.map((cityId) =>
@@ -48,6 +52,7 @@ export function layoutWorld(
       discoveredNodes,
       biomes.get(cityId) ?? DEFAULT_BIOME,
       ingress,
+      capacities.get(cityId),
     ),
   );
   const offsets = placeIslands(locals, links);
@@ -88,9 +93,12 @@ export function layoutWorld(
     const layout: CityLayout = {
       cityId: local.cityId,
       biome: local.biome,
+      ...(local.crowding != null ? { crowding: local.crowding } : {}),
+      ...(local.packed ? { packed: true } : {}),
       nodes: cityNodes,
       center: centroid(outline),
       outline,
+      ...(local.land ? { land: local.land.map((p) => translate(p, dx, dz)) } : {}),
       bounds: polygonBounds(outline) ?? { cx: dx, cz: dz, width: 4, height: 4 },
       roads: translateRoads(roads, dx, dz),
       groups: local.groups.map((g) => translateZone(g, dx, dz)),

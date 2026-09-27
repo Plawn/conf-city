@@ -8,7 +8,9 @@ import { BuildingFire } from "../BuildingFire";
 import { useBuildingAnimation } from "./BuildingAnimations";
 import { harbourGeometry } from "./harbourGeometry";
 import {
-  heightTarget,
+  boundsRadius,
+  dampFootprint,
+  footprintTarget,
   MAP_TINT,
   MaterialAnimation,
   mapTinted,
@@ -161,8 +163,10 @@ export function NodeModel({
       ] as [number, number, number],
       width: (bounds.max.x - bounds.min.x) * s,
       depth: (bounds.max.z - bounds.min.z) * s,
+      radius: boundsRadius(bounds.min, bounds.max, s),
     };
   }, [scene, config.scale, variant.fit, variant.scale]);
+  const { radius: modelRadius, ...fire } = fireBounds;
 
   // Clone the GLTF once; all per-frame visuals are driven imperatively below.
   // The material is rebuilt rather than reused (every visual below is written
@@ -215,20 +219,19 @@ export function NodeModel({
 
   useMaterialVisuals(materials, textured ? MAP_TINT : 0, variant, visualRef);
 
-  const targetY = heightTarget(type, visual);
+  const targetXZ = footprintTarget(visual, modelRadius);
   useBuildingAnimation(
     (_, delta) => {
       const group = scaleGroup.current;
-      if (!group || Math.abs(group.scale.y - targetY) <= 1e-3) {
+      if (!group) {
         return false;
       }
-      group.scale.y = THREE.MathUtils.damp(group.scale.y, targetY, 4, delta);
-      return true;
+      return dampFootprint(group.scale, targetXZ, delta);
     },
-    [targetY],
+    [targetXZ],
   );
 
-  // Height (memory) lives on the parent group; the variant's turn and size sit
+  // Footprint (memory) lives on the parent group; the variant's turn and size sit
   // on the model itself, under it, so the two never fight.
   return (
     <group ref={scaleGroup}>
@@ -239,7 +242,7 @@ export function NodeModel({
       />
       {fireIntensity > 0 && (
         <group rotation-y={variant.yaw}>
-          <BuildingFire seed={addr} {...fireBounds} intensity={fireIntensity} />
+          <BuildingFire seed={addr} {...fire} intensity={fireIntensity} />
         </group>
       )}
     </group>

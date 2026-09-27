@@ -3,7 +3,7 @@ import type { BuildingVariant } from "../../domain/buildingVariant";
 import { ERROR_RATE_THRESHOLD } from "../../domain/incidents";
 import { heatColor } from "../../domain/metrics/format";
 import { LIVENESS_COLORS } from "../../domain/nodeStyle";
-import type { NodeTelemetry, NodeType } from "../../domain/types";
+import type { NodeTelemetry } from "../../domain/types";
 import type { ViewMode } from "../../domain/viewMode";
 
 export interface MaterialVisual {
@@ -18,8 +18,8 @@ export interface VisualState {
   cpuSat: number;
   errorRate: number;
   rps: number;
-  /** log-normalised memory 0..1 within the city (undefined → fall back to rps) */
-  memNorm?: number;
+  /** Ground radius from the service's memory (`footprintRadiusFor`; undefined → the model's own) */
+  footprint?: number;
   /** heat 0..1 for the active heatmap mode (undefined in health mode / no data) */
   heat?: number;
   mode: ViewMode;
@@ -200,10 +200,21 @@ export class MaterialAnimation {
   }
 }
 
-export function heightTarget(type: NodeType, visual: VisualState) {
-  const y =
-    visual.memNorm != null
-      ? 0.7 + visual.memNorm
-      : 1 + Math.min(Math.max(visual.rps / 200, 0), 0.6);
-  return type === "app" ? y : THREE.MathUtils.clamp(y, 0.85, 1.15);
+/** Horizontal radius of a model's bounds around its origin, whatever its turn. */
+export function boundsRadius(min: THREE.Vector3, max: THREE.Vector3, scale: number): number {
+  return Math.hypot(Math.max(-min.x, max.x), Math.max(-min.z, max.z)) * scale;
+}
+
+/** x/z scale bringing a model of ground radius `modelRadius` to the service's memory footprint. */
+export function footprintTarget(visual: VisualState, modelRadius: number): number {
+  return visual.footprint != null && modelRadius > 0 ? visual.footprint / modelRadius : 1;
+}
+
+/** Damps a size group toward a uniform x/z footprint; false once settled. Height stays the model's. */
+export function dampFootprint(scale: THREE.Vector3, targetXZ: number, delta: number): boolean {
+  if (Math.abs(scale.x - targetXZ) <= 1e-3) {
+    return false;
+  }
+  scale.x = scale.z = THREE.MathUtils.damp(scale.x, targetXZ, 4, delta);
+  return true;
 }

@@ -1,6 +1,6 @@
 import { useGLTF } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { Color, type Group, MathUtils, Matrix4 } from "three";
+import { Color, type Group, Matrix4 } from "three";
 import type { BuildingVariant } from "../../domain/buildingVariant";
 import { NODE_STYLE } from "../../domain/nodeStyle";
 import type { NodeType } from "../../domain/types";
@@ -8,7 +8,15 @@ import { BuildingFire } from "../BuildingFire";
 import { useBuildingAnimation } from "./BuildingAnimations";
 import { useBuildingBatches } from "./BuildingBatches";
 import { type BuildingBinding, buildingModel } from "./instances";
-import { heightTarget, MAP_TINT, MaterialAnimation, mapTinted, type VisualState } from "./visuals";
+import {
+  boundsRadius,
+  dampFootprint,
+  footprintTarget,
+  MAP_TINT,
+  MaterialAnimation,
+  mapTinted,
+  type VisualState,
+} from "./visuals";
 
 export function InstancedBuilding({
   addr,
@@ -32,7 +40,7 @@ export function InstancedBuilding({
   const { scene } = useGLTF(variant.model);
   const model = useMemo(() => buildingModel(scene), [scene]);
   const batches = useBuildingBatches();
-  const heightGroup = useRef<Group>(null);
+  const sizeGroup = useRef<Group>(null);
   const modelGroup = useRef<Group>(null);
   const interactions = useRef({ onHover, onClick });
   interactions.current = { onHover, onClick };
@@ -67,15 +75,13 @@ export function InstancedBuilding({
       registration.current = null;
     };
   }, [batches, binding, model, position]);
-  const targetY = heightTarget(type, visual);
+  const scale = NODE_STYLE[type].scale * variant.fit * variant.scale;
+  const { min, max } = model.bounds;
+  const targetXZ = footprintTarget(visual, boundsRadius(min, max, scale));
   // Prop changes (including position) wake this task. Only an active transition runs it again.
   useBuildingAnimation(
     (time, delta, night) => {
-      const group = heightGroup.current!;
-      const heightChanged = Math.abs(group.scale.y - targetY) > 1e-3;
-      if (heightChanged) {
-        group.scale.y = MathUtils.damp(group.scale.y, targetY, 4, delta);
-      }
+      const sizeChanged = dampFootprint(sizeGroup.current!.scale, targetXZ, delta);
       modelGroup.current!.updateWorldMatrix(true, false);
       const transformChanged = !binding.matrix.equals(modelGroup.current!.matrixWorld);
       if (transformChanged) {
@@ -85,16 +91,14 @@ export function InstancedBuilding({
       if (transformChanged || result.changed) {
         registration.current?.write(transformChanged, result.changed);
       }
-      return heightChanged || result.active;
+      return sizeChanged || result.active;
     },
-    [animation, materials, visual, targetY, binding, position],
+    [animation, materials, visual, targetXZ, binding, position],
     true,
   );
 
-  const scale = NODE_STYLE[type].scale * variant.fit * variant.scale;
-  const { min, max } = model.bounds;
   return (
-    <group ref={heightGroup}>
+    <group ref={sizeGroup}>
       <group ref={modelGroup} scale={scale} rotation-y={variant.yaw} />
       {fireIntensity > 0 && (
         <group rotation-y={variant.yaw}>

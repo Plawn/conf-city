@@ -58,13 +58,23 @@ function bodyRadius(type: NodeType): number {
   return Math.max(footprintRadius(type), PITCH * 0.5);
 }
 
+/**
+ * `dense` packs an overcrowded island: a tighter seed spiral, no breathing room
+ * between plots and a stronger pull to the centre, so buildings end up on
+ * neighbouring cells — one street apart. Links keep their rest length, or linked
+ * buildings would settle on diagonal cells and lose their street.
+ */
 export function layoutCity(
   cityId: string,
   staticNodes: ResolvedNode[],
   discoveredNodes: ResolvedNode[],
   intraLinks: ResolvedLink[],
   ports: ReadonlySet<string> = new Set(),
+  dense = false,
 ): CityNodesLayout {
+  const spiral = PITCH * (dense ? 0.6 : 0.85);
+  const repelPadding = dense ? 0 : PITCH * 0.4;
+  const collisionMargin = dense ? 0 : 0.4;
   const statics = sortNodes(staticNodes).filter((n) => !ports.has(n.id));
   const discovered = sortNodes(discoveredNodes).filter((n) => !ports.has(n.id));
   const all = [...statics, ...discovered];
@@ -79,7 +89,7 @@ export function layoutCity(
 
   const rand = mulberry32(fnv1a(cityId));
   const bodies: Body[] = all.map((n, i) => {
-    const radius = PITCH * 0.85 * Math.sqrt(i + 0.5);
+    const radius = spiral * Math.sqrt(i + 0.5);
     const angle = (i + 0.5) * GOLDEN_ANGLE;
     return {
       x: Math.cos(angle) * radius + (rand() - 0.5) * PITCH * 0.3,
@@ -99,8 +109,9 @@ export function layoutCity(
     relax(staticBodies, staticSprings, {
       iterations: FORCE_ITERATIONS,
       groupK: 0.08,
-      repelPadding: PITCH * 0.4,
-      collisionMargin: 0.4,
+      repelPadding,
+      collisionMargin,
+      ...(dense ? { centerK: 0.03 } : {}),
     });
   }
 
@@ -119,10 +130,10 @@ export function layoutCity(
     }
     for (let i = 0; i < discovered.length; i++) {
       const b = bodies[staticCount + i]!;
-      const radius = PITCH * 0.85 * Math.sqrt(i + 0.5);
+      const radius = spiral * Math.sqrt(i + 0.5);
       const angle = (i + 0.5) * GOLDEN_ANGLE;
       b.x = centerX + Math.cos(angle) * radius + (rand() - 0.5) * PITCH * 0.3;
-      b.z = southZ + PITCH * 2 + Math.abs(Math.sin(angle)) * radius;
+      b.z = southZ + PITCH * (dense ? 1 : 2) + Math.abs(Math.sin(angle)) * radius;
       b.group = DISCOVERED_GROUP;
     }
     for (let i = 0; i < staticCount; i++) {
@@ -131,11 +142,11 @@ export function layoutCity(
     relax(bodies, springs, {
       iterations: FORCE_ITERATIONS,
       groupK: 0.06,
-      repelPadding: PITCH * 0.4,
-      collisionMargin: 0.4,
-      centerK: 0,
+      repelPadding,
+      collisionMargin,
+      centerK: dense ? 0.03 : 0,
       bias: [0, 1],
-      biasK: 0.02,
+      biasK: dense ? 0.005 : 0.02,
     });
     for (let i = 0; i < staticCount; i++) {
       bodies[i]!.fixed = false;
