@@ -1,6 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { Frustum, Group, Matrix4, PointLight, Sphere, SpotLight, Vector3 } from "three";
+import { clamp01 } from "../../lib/math";
 import { useQualityProfile } from "../../store/uiStore";
 import { gpuRenderer, isWebGPU, renderParams } from "./renderer";
 import {
@@ -220,7 +221,7 @@ export function LocalLighting() {
     const assign = (slot: Slot, kind: LocalLightSource["kind"]) => {
       const current = slot.id ? runtime.sources.get(slot.id) : undefined;
       const keep = !!current && current.visible && r.desired.has(current.id);
-      slot.fade = Math.max(0, Math.min(1, slot.fade + Math.min(delta, 0.1) * (keep ? 4 : -6)));
+      slot.fade = clamp01(slot.fade + Math.min(delta, 0.1) * (keep ? 4 : -6));
       if (!current) {
         slot.fade = 0;
       }

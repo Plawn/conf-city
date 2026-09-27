@@ -3,6 +3,8 @@
  * colour jitter are decided in the domain and handed to the renderer as hex.
  */
 
+import { clamp01 } from "../lib/math";
+
 export type Rgb = [number, number, number];
 export type Hsl = [number, number, number];
 
@@ -84,8 +86,4 @@ export function darken(hex: string, k: number): string {
   const [r, g, b] = hexToRgb(hex);
   const f = 1 - clamp01(k);
   return rgbToHex([r * f, g * f, b * f]);
-}
-
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
 }

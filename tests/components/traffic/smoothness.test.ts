@@ -6,6 +6,7 @@ import { upgradeLayout, worldRoutes } from "@/components/traffic/worldRoutes";
 import sample from "@/data/sample.json";
 import type { World } from "@/domain/types";
 import { layoutWorld } from "@/layout/layoutWorld";
+import { clamp } from "@/lib/math";
 import { loadWorld } from "@/loaders/loadWorld";
 
 /**
@@ -35,7 +36,7 @@ const layouts = [
   ["upgraded", upgradeLayout(base, infra), infra],
 ] as const;
 
-const degrees = (dot: number) => (Math.acos(Math.max(-1, Math.min(1, dot))) * 180) / Math.PI;
+const degrees = (dot: number) => (Math.acos(clamp(dot, -1, 1)) * 180) / Math.PI;
 
 for (const [label, layout, active] of layouts) {
   test(`every driven lane of the ${label} world turns smoothly and never reverses`, () => {

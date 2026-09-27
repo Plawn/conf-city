@@ -1,7 +1,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { fnv1a, mulberry32 } from "../layout/random";
+import { fnv1a, mulberry32 } from "../lib/random";
 
 const FLAMES = 12;
 const PUFFS = 9;

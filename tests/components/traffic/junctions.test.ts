@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { advance, createSim } from "@/components/traffic/sim";
-import { mulberry32 } from "@/layout/random";
+import { mulberry32 } from "@/lib/random";
 import { roundaboutRoutes } from "../../fixtures/roundabout";
 
 for (const hz of [30, 60]) {

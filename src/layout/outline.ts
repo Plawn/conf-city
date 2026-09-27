@@ -1,7 +1,7 @@
 import type { PositionedNode } from "../domain/types";
+import { mulberry32 } from "../lib/random";
 import { footprintRadius, ISLAND_PADDING } from "./constants";
 import { centroid, chaikin, convexHull, inflateConvex, roundedOffset } from "./geometry";
-import { mulberry32 } from "./random";
 import type { Vec2 } from "./types";
 
 /**

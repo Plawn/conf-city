@@ -1,3 +1,4 @@
+import { EPS } from "../lib/math";
 import type { CityBounds } from "./bounds";
 import type { Vec2 } from "./types";
 
@@ -9,8 +10,6 @@ import type { Vec2 } from "./types";
  * `convexHull`, wound counter-clockwise in the `(x, z)` plane, which is what
  * `inflateConvex` relies on to know which side is "outside".
  */
-
-const EPS = 1e-9;
 
 function cross(o: Vec2, a: Vec2, b: Vec2): number {
   return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);

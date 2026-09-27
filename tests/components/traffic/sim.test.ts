@@ -10,15 +10,7 @@ import {
 } from "@/components/traffic/sim";
 import { TERRAIN } from "@/domain/nodeStyle";
 import type { RoadNetwork, Vec2 } from "@/layout/types";
-
-/** Deterministic random so a failure reproduces. */
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
+import { mulberry32 } from "@/lib/random";
 
 const Y = TERRAIN.roadY;
 
@@ -97,7 +89,7 @@ describe.each([30, 60])("traffic sim at %i Hz", (hz) => {
         rateScale: 1,
       },
     ];
-    const sim = createSim(routes, 160, 40, lcg(7));
+    const sim = createSim(routes, 160, 40, mulberry32(7));
     setRates(sim, 3);
     let closest = Infinity;
     let peak = 0;
@@ -126,7 +118,7 @@ describe.each([30, 60])("traffic sim at %i Hz", (hz) => {
       ],
       160,
       40,
-      lcg(3),
+      mulberry32(3),
     );
     setRates(sim, 50);
     let closest = Infinity;
@@ -158,7 +150,7 @@ describe.each([30, 60])("traffic sim at %i Hz", (hz) => {
         rateScale: 1,
       },
     ];
-    const sim = createSim(routes, 160, 40, lcg(11));
+    const sim = createSim(routes, 160, 40, mulberry32(11));
     setRates(sim, 1.5);
     run(sim, 30);
     expect(count(sim)).toBeGreaterThan(0);
@@ -199,7 +191,7 @@ describe.each([30, 60])("traffic sim at %i Hz", (hz) => {
     for (const route of routes) {
       expect(route.ring!.some(Boolean)).toBe(true);
     }
-    const sim = createSim(routes, 160, 40, lcg(5));
+    const sim = createSim(routes, 160, 40, mulberry32(5));
     setRates(sim, 1.2);
     let closest = Infinity;
     let circulated = 0;

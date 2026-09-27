@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { fnv1a, mulberry32 } from "../../layout/random";
 import type { ShoreField } from "../../layout/shore";
+import { fnv1a, mulberry32 } from "../../lib/random";
 
 /**
  * The two lookup textures the water shader reads: the baked distance-to-shore

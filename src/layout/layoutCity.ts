@@ -1,7 +1,8 @@
 import type { NodeType, PositionedNode, ResolvedLink, ResolvedNode } from "../domain/types";
+import { GOLDEN_ANGLE } from "../lib/math";
+import { fnv1a, mulberry32 } from "../lib/random";
 import { FORCE_ITERATIONS, footprintRadius, LINK_REST, PITCH } from "./constants";
 import { type Body, relax, type Spring } from "./force";
-import { fnv1a, mulberry32 } from "./random";
 
 /**
  * Lays out the nodes of ONE city around the local origin. World placement
@@ -27,7 +28,6 @@ import { fnv1a, mulberry32 } from "./random";
 const TYPE_ORDER: Record<NodeType, number> = { app: 0, db: 1, cache: 2, queue: 3 };
 
 /** Golden angle — the phyllotaxis seed spreads nodes evenly with no clumping. */
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 const DISCOVERED_GROUP = "__discovered";
 

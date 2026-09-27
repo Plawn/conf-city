@@ -1,7 +1,7 @@
 import type { Infrastructure } from "../../domain/mobility";
 import type { ResolvedLink, World } from "../../domain/types";
-import { fnv1a } from "../../layout/random";
 import { linkKey, type Vec2, type WorldLayout } from "../../layout/types";
+import { fnv1a } from "../../lib/random";
 import { deckClass, makeDriver } from "../geo/drivable";
 import type { TrafficRoute } from "./sim";
 

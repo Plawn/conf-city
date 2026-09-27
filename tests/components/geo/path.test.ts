@@ -13,8 +13,7 @@ import {
   slewLimit,
 } from "@/components/geo/path";
 import type { Vec2 } from "@/layout/types";
-
-const TAU = Math.PI * 2;
+import { TAU } from "@/lib/math";
 
 test("a lane offset rides the radius of its own side of the arc", () => {
   const left = arcPiece([0, 0], 2, 0, Math.PI / 2);

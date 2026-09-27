@@ -1,5 +1,6 @@
 import { DateTime, IANAZone } from "luxon";
 import { getPosition, getTimes } from "suncalc";
+import { smoothstep } from "../lib/math";
 
 export interface SolarLocation {
   latitude: number;
@@ -30,11 +31,6 @@ export function validLocation(value: unknown): value is SolarLocation {
   );
 }
 
-export function smoothRange(low: number, high: number, value: number): number {
-  const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
-  return t * t * (3 - 2 * t);
-}
-
 /** SunCalc 2 uses degrees clockwise from north. World: east +X, north -Z. */
 export function solarDirection(azimuth: number, altitude: number): [number, number, number] {
   const a = (azimuth * Math.PI) / 180;
@@ -43,12 +39,12 @@ export function solarDirection(azimuth: number, altitude: number): [number, numb
 }
 
 export function lightingAtAltitude(altitude: number) {
-  const day = smoothRange(-8, 12, altitude);
+  const day = smoothstep(-8, 12, altitude);
   return {
     day,
-    night: 1 - smoothRange(-6, 0, altitude),
-    sunIntensity: altitude <= 0 ? 0 : 3.2 * smoothRange(0, 30, altitude),
-    warmth: 1 - smoothRange(2, 25, altitude),
+    night: 1 - smoothstep(-6, 0, altitude),
+    sunIntensity: altitude <= 0 ? 0 : 3.2 * smoothstep(0, 30, altitude),
+    warmth: 1 - smoothstep(2, 25, altitude),
     ambientIntensity: 0.16 + day * 0.18,
     environmentIntensity: 0.45 + day * 0.45,
   };

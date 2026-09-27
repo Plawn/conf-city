@@ -1,4 +1,4 @@
-import { fnv1a, mulberry32 } from "../layout/random";
+import { fnv1a, mulberry32 } from "../lib/random";
 import type { Biome } from "./biome";
 import { darken, shiftHsl } from "./color";
 import { NODE_STYLE } from "./nodeStyle";

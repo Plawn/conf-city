@@ -1,6 +1,6 @@
+import { fnv1a, mulberry32 } from "../lib/random";
 import { clipSegmentToPolygon, signedArea } from "./geometry";
 import { distanceToPolygon } from "./harbour";
-import { fnv1a, mulberry32 } from "./random";
 import type { RoadNetwork, UtilityPlot, UtilitySlot, Vec2 } from "./types";
 
 /**

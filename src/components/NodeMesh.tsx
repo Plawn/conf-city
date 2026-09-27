@@ -17,6 +17,7 @@ import {
 } from "../domain/metrics";
 import { LIVENESS_COLORS, LIVENESS_TONE, NODE_STYLE, PORT_ASSETS } from "../domain/nodeStyle";
 import type { NodeTelemetry, NodeType, PositionedNode } from "../domain/types";
+import { clamp01 } from "../lib/math";
 import { useUiStore } from "../store/uiStore";
 import { BuildingFire } from "./BuildingFire";
 import { useBuildingAnimation } from "./buildings/BuildingAnimations";
@@ -306,7 +307,7 @@ function ringGeometry(radius: number, steps: number | null): THREE.RingGeometry 
  */
 function GaugeRing({ radius, value }: { radius: number; value: number }) {
   const matRef = useRef<THREE.MeshBasicMaterial>(null);
-  const clamped = Math.min(Math.max(value, 0), 1);
+  const clamped = clamp01(value);
   const steps = Math.max(1, Math.round(clamped * GAUGE_STEPS));
   const target = color(heatColor(clamped));
   const targetRef = useRef(target);

@@ -1,4 +1,5 @@
 import type { Vec2 } from "../../layout/types";
+import { TAU } from "../../lib/math";
 import { arcPoints } from "./polyline";
 import type { GraphNode } from "./roadGraph";
 import { ringRadii } from "./roadStyle";
@@ -37,7 +38,6 @@ export interface JunctionPieces {
 /** Below this angle short of a straight line, two arms are treated as one continuing road. */
 const FLAT = 0.5;
 const ARC_STEP = 0.12;
-const TAU = Math.PI * 2;
 /** Angular clearance either side of an arm on a roundabout's pavement ring. */
 const RING_GAP = 0.03;
 

@@ -1,4 +1,5 @@
 import type { Roundabout, Vec2 } from "../../layout/types";
+import { TAU } from "../../lib/math";
 import { arcPiece, MAX_TURN, MIN_DRIVEN_RADIUS, type PathPiece, samplePath } from "./path";
 import { CLASS_STYLE, maxLaneOffset, ringRadii } from "./roadStyle";
 
@@ -51,7 +52,6 @@ import { CLASS_STYLE, maxLaneOffset, ringRadii } from "./roadStyle";
  * arc simply exits along the deck — the deck end itself is never moved.
  */
 
-const TAU = Math.PI * 2;
 /** Floor on the blend circle, whatever the class allows. */
 const BASE_ENTRY_RADIUS = 0.6;
 /** Below this the blend is not worth its points: keep the plain radial join. */

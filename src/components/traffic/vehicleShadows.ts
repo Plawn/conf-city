@@ -8,6 +8,7 @@ import {
   Quaternion,
   Vector3,
 } from "three";
+import { clamp01 } from "../../lib/math";
 import type { Pool } from "./sim";
 
 /** Blob footprint relative to the normalised vehicle (0.55 long along Z). */
@@ -81,7 +82,7 @@ export function createVehicleShadows(capacity: number, vehicleScale: number) {
     mesh,
     /** Faint contact at night, a real shadow by day. */
     setSunPower(sunPower: number) {
-      const opacity = BLOB_NIGHT_OPACITY + BLOB_SUN_OPACITY * Math.max(0, Math.min(1, sunPower));
+      const opacity = BLOB_NIGHT_OPACITY + BLOB_SUN_OPACITY * clamp01(sunPower);
       if (material.opacity !== opacity) {
         material.opacity = opacity;
       }

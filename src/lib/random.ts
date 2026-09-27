@@ -1,6 +1,6 @@
 /**
  * Seeded pseudo-randomness for the layout. `Math.random` is banned in
- * `src/layout/` — the same world must always produce the same city.
+ * `src/layout/` and `src/domain/` — the same world must always produce the same city.
  */
 
 /** FNV-1a 32-bit hash: turns a stable string (city id, node id) into a seed. */

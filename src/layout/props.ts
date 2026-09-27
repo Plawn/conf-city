@@ -1,7 +1,7 @@
 import type { PropKind } from "../domain/biome";
 import { NODE_STYLE } from "../domain/nodeStyle";
+import { fnv1a, mulberry32 } from "../lib/random";
 import { pointInPolygon, polygonBounds } from "./geometry";
-import { fnv1a, mulberry32 } from "./random";
 import type { CityLayout, RoadClass, Vec2 } from "./types";
 import { PLOT_RADIUS } from "./utilityPlot";
 

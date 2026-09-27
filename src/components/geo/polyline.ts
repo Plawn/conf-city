@@ -1,4 +1,5 @@
 import type { Vec2 } from "../../layout/types";
+import { EPS } from "../../lib/math";
 
 /**
  * Polyline arithmetic shared by the road renderer and the traffic: arc length,
@@ -9,8 +10,6 @@ import type { Vec2 } from "../../layout/types";
  * `(dz, -dx)` for a direction `(dx, dz)`. It is not a promise about which way
  * a driver looks, only the side the whole rendering agrees on.
  */
-
-const EPS = 1e-9;
 
 export function arcLength(points: Vec2[]): number {
   let total = 0;

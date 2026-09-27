@@ -1,5 +1,7 @@
 import { BIOMES, type BiomeId, DEFAULT_BIOME } from "../domain/biome";
 import type { PositionedNode, ResolvedLink, ResolvedNode } from "../domain/types";
+import { GOLDEN_ANGLE } from "../lib/math";
+import { fnv1a } from "../lib/random";
 import { buildBridges, pairKey } from "./bridges";
 import {
   DISCOVERY_PADDING,
@@ -14,7 +16,6 @@ import { centroid, polygonBounds } from "./geometry";
 import { cellKey, type HarbourSite, planHarbour, translateHarbour } from "./harbour";
 import { type CityNodesLayout, layoutCity } from "./layoutCity";
 import { footprintCorners, islandOutline, zoneOutline } from "./outline";
-import { fnv1a } from "./random";
 import { buildRing } from "./ringRoad";
 import {
   type Bridgehead,
@@ -39,7 +40,6 @@ export interface DiscoveredResolvedNode extends ResolvedNode {
 }
 
 /** Golden angle — same phyllotaxis seed as inside a city, one scale up. */
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 /**
  * Places every city as an island on the water and returns the whole layout in

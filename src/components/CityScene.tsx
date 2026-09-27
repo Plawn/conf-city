@@ -15,6 +15,7 @@ import type {
 } from "../domain/types";
 import { computeBounds } from "../layout/bounds";
 import { type CityLayout, type GroupZone, linkKey, type Vec2 } from "../layout/types";
+import { fnv1a } from "../lib/random";
 import { BuildingBatches } from "./buildings/BuildingBatches";
 import type { DrivePath } from "./geo/drivable";
 import { makeDriver } from "./geo/drivable";
@@ -344,10 +345,6 @@ function ZoneSlab({ zone, color, opacity }: { zone: GroupZone; color: string; op
 const GROUP_PALETTE = ["#7c9cff", "#ffb86b", "#6be3c2", "#ff8fb1", "#c9a7ff", "#ffe36b", "#8be0ff"];
 
 /** Stable colour per group name. */
-export function groupColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) {
-    h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  }
-  return GROUP_PALETTE[h % GROUP_PALETTE.length]!;
+function groupColor(name: string): string {
+  return GROUP_PALETTE[fnv1a(name) % GROUP_PALETTE.length]!;
 }

@@ -1,4 +1,5 @@
 import type { Vec2 } from "../../layout/types";
+import { EPS } from "../../lib/math";
 
 /**
  * A drivable path as *primitives* — straight segments and circular arcs — kept
@@ -16,8 +17,6 @@ import type { Vec2 } from "../../layout/types";
  * "Right" here is the driver's right, `(-dz, dx)`, the side `traffic/sim.ts`
  * keeps to — *not* the `(dz, -dx)` of `offsetPolyline`.
  */
-
-const EPS = 1e-9;
 
 /**
  * No driven lane may curve tighter than this. A car is 0.55 long and 0.25 from

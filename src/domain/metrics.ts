@@ -1,3 +1,4 @@
+import { clamp01 } from "../lib/math";
 import type { ViewMode } from "../store/uiStore";
 import type { CityMeta, CityMetrics, MetricSnapshot, NodeTelemetry } from "./types";
 
@@ -155,7 +156,7 @@ export function formatKbps(kbps: number): string {
 
 /** Green → orange → red ramp; t clamped to 0..1. Returns a CSS hex colour. */
 export function heatColor(t: number): string {
-  const x = Math.max(0, Math.min(1, t));
+  const x = clamp01(t);
   // stops: 0 → #3ddc84 (green), 0.5 → #ffb020 (orange), 1 → #ff3b3b (red)
   const stops: [number, [number, number, number]][] = [
     [0, [0x3d, 0xdc, 0x84]],
@@ -386,8 +387,4 @@ export function containerCount(
   }
   const pct = clamp01(diskPct / 100);
   return { count: Math.round(pct * capacity), overflow: pct >= 0.95 };
-}
-
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
 }

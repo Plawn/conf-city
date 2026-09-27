@@ -1,4 +1,4 @@
-import { fnv1a, mulberry32 } from "../layout/random";
+import { fnv1a, mulberry32 } from "../lib/random";
 import type { City, CityMeta, NodeType, ResolvedNode } from "./types";
 
 /**

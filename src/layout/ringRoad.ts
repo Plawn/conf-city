@@ -1,4 +1,5 @@
 import type { PositionedNode } from "../domain/types";
+import { EPS } from "../lib/math";
 import { RING_CLEARANCE, RING_PADDING } from "./constants";
 import { roundedOffset, segSegIntersect } from "./geometry";
 import { footprintHull } from "./outline";
@@ -21,7 +22,6 @@ import type { Vec2 } from "./types";
 
 /** Below this distance the hit reuses the nearby vertex (moved onto the hit) rather than adding a micro-step. */
 const ATTACH_SNAP = 0.3;
-const EPS = 1e-9;
 
 export interface RingHit {
   point: Vec2;

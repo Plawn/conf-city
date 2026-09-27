@@ -1,4 +1,4 @@
-import { mulberry32 } from "../../layout/random";
+import { mulberry32 } from "../../lib/random";
 import {
   CYCLE_SECONDS,
   STATIONS,
