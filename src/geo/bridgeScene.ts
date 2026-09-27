@@ -40,10 +40,11 @@ export function deckExits(
   }
   for (const b of layout.bridges) {
     const [a, c] = b.waterSpan;
-    const halfWidth = deckWidth(deckClass(infra.bridges[b.key])) / 2;
+    const klass = deckClass(infra.bridges[b.key]);
+    const halfWidth = deckWidth(klass) / 2;
     const add = (city: string, exit: DeckExit) => out.set(city, [...(out.get(city) ?? []), exit]);
-    add(b.cityA, { at: a, toward: c, halfWidth });
-    add(b.cityB, { at: c, toward: a, halfWidth });
+    add(b.cityA, { at: a, toward: c, halfWidth, klass });
+    add(b.cityB, { at: c, toward: a, halfWidth, klass });
   }
   return out;
 }

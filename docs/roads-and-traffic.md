@@ -40,9 +40,23 @@ through float math.
 The network becomes a graph (`geo/roadGraph.ts`: dead ends trimmed past the last driveway, 2-arm
 same-class nodes fused into bends); junctions get kerb fillets and an asphalt cap
 (`geo/junctions.ts`), runs are cut at each arm's `reach`, pavements are raised with a kerb wall and
-open at driveway mouths. Markings per class: centre dashes / double line + lane dashes / edge lines,
-zebra + stop line on the incoming lane of every crossing, give-way ring. Bridge decks leave through
-`exits`. Y ladder in `TERRAIN`: zone 0.03 < road 0.08 < markings < pavement 0.13 < overlay.
+open at driveway mouths.
+
+- Fillets scale with the narrower arm of each pair and shrink when `reach` hits its limit (half the
+  run between two junctions, 0.8 of it before a dead end); cap corners sit on the run's real frame
+  at `reach`, so curved ring arms leave no crack.
+- Roundabout arms are cut square at `outer`; per-arm **aprons** fill down to the tarmac circle, which
+  is an annulus sharing their exact angles (no crescent gap).
+- A 2-arm **class change** is a tapered cap: rounded centreline, width eased over the arc, pavements
+  following it; straight ones taper over `TAPER_PER_WIDTH` × the width step.
+- Markings per class: centre dashes / double line + lane dashes / edge lines; zebra + stop line on
+  the incoming lane of every crossing, except where a spur meets the ring road: the ring arms get
+  nothing and the spur a dashed give-way line (`armMarking`); give-way ring at roundabouts.
+- Bridge decks leave through `exits` (virtual arms carrying the deck class); the deck is painted its
+  class colour, meets the land at road height and carries edge lines.
+
+`scripts/road-map.ts` renders every city's road geometry top-down from a snapshot, plus a contact
+sheet of each junction (`CROP`, `CROP_PX`). Y ladder in `TERRAIN`: zone 0.03 < road 0.08 < markings < pavement 0.13 < overlay.
 `StreetLights` follows the `lit` classes. The parts are built by `components/roads/buildRoadGeometry.ts`
 (primitives in `roads/roadPrimitives.ts`); where the gaps, dashes, zebras and driveways go is pure
 layout in `geo/markings.ts`.

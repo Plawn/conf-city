@@ -34,6 +34,8 @@ export interface Arm {
   bearing: number;
   halfWidth: number;
   klass: RoadClass;
+  /** The arm is a piece of the ring road. */
+  ring: boolean;
 }
 
 export interface GraphNode {
@@ -55,6 +57,7 @@ export interface DeckExit {
   at: Vec2;
   toward: Vec2;
   halfWidth: number;
+  klass: RoadClass;
 }
 
 /** How far a dead end runs past its last driveway mouth. */
@@ -247,6 +250,7 @@ export function buildRoadGraph(
       bearing: bearingOf(first, run.points[1]!),
       halfWidth: run.halfWidth,
       klass: run.klass,
+      ring: run.ring,
     });
     end.arms.push({
       run: i,
@@ -254,6 +258,7 @@ export function buildRoadGraph(
       bearing: bearingOf(last, run.points[n - 2]!),
       halfWidth: run.halfWidth,
       klass: run.klass,
+      ring: run.ring,
     });
     ends.push({ start, end });
   });
@@ -267,7 +272,8 @@ export function buildRoadGraph(
       atStart: true,
       bearing: bearingOf(exit.at, exit.toward),
       halfWidth: exit.halfWidth,
-      klass: "avenue",
+      klass: exit.klass,
+      ring: false,
     });
   }
   for (const node of nodes.values()) {

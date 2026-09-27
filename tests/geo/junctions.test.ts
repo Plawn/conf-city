@@ -120,7 +120,7 @@ describe("road graph", () => {
       ],
       [rb],
       [],
-      [{ at: [0, 0], toward: [10, 0], halfWidth: 0.75 }],
+      [{ at: [0, 0], toward: [10, 0], halfWidth: 0.75, klass: "avenue" }],
     );
     const node = graph.nodes.find((n) => n.kind === "roundabout")!;
     expect(node.arms).toHaveLength(3);
@@ -129,6 +129,111 @@ describe("road graph", () => {
     expect(pieces.pavements).toHaveLength(3);
     for (const r of pieces.reach) {
       expect(r).toBeCloseTo(2.05, 6);
+    }
+    // No crescent: every apron runs from the square cut down to the tarmac circle.
+    expect(pieces.aprons).toHaveLength(6);
+    const ring = pieces.ring!;
+    for (let i = 1; i < ring.length; i++) {
+      expect(ring[i]!).toBeGreaterThan(ring[i - 1]!);
+    }
+    expect(ring.at(-1)! - ring[0]!).toBeLessThan(Math.PI * 2);
+    for (const { points } of pieces.aprons) {
+      const radii = points.map((p) => Math.hypot(p[0], p[1]));
+      expect(Math.min(...radii)).toBeCloseTo(2.05, 6);
+      expect(Math.max(...radii)).toBeGreaterThan(2.05);
+    }
+    // The kerb of each pavement piece starts on an arm's asphalt edge at the cut.
+    for (const p of pieces.pavements) {
+      const start = p.inner[0]!;
+      const along = Math.max(Math.abs(start[0]), Math.abs(start[1]));
+      expect(along).toBeCloseTo(2.05, 6);
+    }
+  });
+
+  test("a short run bounds the reach and the fillet shrinks to fit", () => {
+    const graph = buildRoadGraph(
+      [
+        seg([
+          [-6, 0],
+          [0, 0],
+        ]),
+        seg([
+          [0, 0],
+          [6, 0],
+        ]),
+        seg([
+          [0, -6],
+          [0, 0],
+        ]),
+        seg([
+          [0, 0],
+          [0, 6],
+        ]),
+      ],
+      [],
+      [],
+    );
+    const cross = graph.nodes.find((n) => n.pos[0] === 0 && n.pos[1] === 0)!;
+    const free = junctionPieces(cross, PAVEMENT, FILLET);
+    const limits = cross.arms.map(() => 0.8);
+    const tight = junctionPieces(cross, PAVEMENT, FILLET, limits);
+    for (const r of tight.reach) {
+      expect(r).toBeLessThanOrEqual(0.8);
+      expect(r).toBeLessThan(free.reach[0]!);
+    }
+    expect(finite(tight.asphalt!)).toBe(true);
+  });
+
+  test("a class change round a corner is one smooth, simple cap meeting both cuts", () => {
+    const graph = buildRoadGraph(
+      [
+        seg([
+          [0, 0],
+          [8, 0],
+        ]),
+        seg(
+          [
+            [0, 0],
+            [0, 8],
+          ],
+          "avenue",
+        ),
+      ],
+      [],
+      [],
+    );
+    const node = graph.nodes.find((n) => n.pos[0] === 0 && n.pos[1] === 0)!;
+    expect(node.arms).toHaveLength(2);
+    const pieces = junctionPieces(node, PAVEMENT, FILLET);
+    const cap = pieces.asphalt!;
+    expect(finite(cap)).toBe(true);
+    expect(pieces.pavements).toHaveLength(2);
+    // Each arm's cut is a vertex pair of the cap, as wide as that arm.
+    for (const [k, arm] of node.arms.entries()) {
+      const t = pieces.reach[k]!;
+      const c: Vec2 = [Math.cos(arm.bearing) * t, Math.sin(arm.bearing) * t];
+      const onCut = cap.filter(
+        (p) =>
+          Math.abs((p[0] - c[0]) * Math.cos(arm.bearing) + (p[1] - c[1]) * Math.sin(arm.bearing)) <
+          1e-6,
+      );
+      const widths = onCut.map((p) => Math.hypot(p[0] - c[0], p[1] - c[1]));
+      expect(Math.max(...widths)).toBeCloseTo(arm.halfWidth, 6);
+    }
+    // No two non-adjacent edges of the cap cross.
+    const cross = (a: Vec2, b: Vec2, c: Vec2) =>
+      (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const n = cap.length;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) {
+          continue;
+        }
+        const [a, b, c, d] = [cap[i]!, cap[(i + 1) % n]!, cap[j]!, cap[(j + 1) % n]!];
+        const hit =
+          cross(a, b, c) * cross(a, b, d) < -1e-12 && cross(c, d, a) * cross(c, d, b) < -1e-12;
+        expect(hit).toBe(false);
+      }
     }
   });
 });

@@ -6,7 +6,7 @@ import {
   visibleShore,
   worldExtent,
 } from "@/geo/bridgeScene";
-import { deckWidth } from "@/geo/drivable";
+import { DECK_CLASS, deckWidth } from "@/geo/drivable";
 import { layoutWorld } from "@/layout/layoutWorld";
 import { EMPTY_INFRA } from "@/store/mobilityStore";
 import { grid, interLink, intraLinks } from "../fixtures/layout";
@@ -25,8 +25,12 @@ const both = new Set(["a", "b"]);
 test("each bridge opens one exit per shore, as wide as its deck", () => {
   const exits = deckExits(world, EMPTY_INFRA);
   const [headA, headB] = world.bridges[0]!.waterSpan;
-  expect(exits.get("a")).toEqual([{ at: headA, toward: headB, halfWidth: deckWidth() / 2 }]);
-  expect(exits.get("b")).toEqual([{ at: headB, toward: headA, halfWidth: deckWidth() / 2 }]);
+  expect(exits.get("a")).toEqual([
+    { at: headA, toward: headB, halfWidth: deckWidth() / 2, klass: DECK_CLASS },
+  ]);
+  expect(exits.get("b")).toEqual([
+    { at: headB, toward: headA, halfWidth: deckWidth() / 2, klass: DECK_CLASS },
+  ]);
   expect(deckExits(undefined, EMPTY_INFRA).size).toBe(0);
 });
 

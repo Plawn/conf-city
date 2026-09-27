@@ -3,6 +3,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { TERRAIN } from "../../domain/nodeStyle";
 import { junctionPieces } from "../../geo/junctions";
 import {
+  type ArmMarking,
+  armMarking,
   crossingIntervals,
   DASH_LENGTH,
   DASH_PERIOD,
@@ -11,7 +13,7 @@ import {
   drivewayRun,
   EDGE_INSET,
   endMargin,
-  isCrossing,
+  giveWayDashes,
   LANE_DASH_LENGTH,
   LANE_DASH_PERIOD,
   LINE_WIDTH,
@@ -21,13 +23,13 @@ import {
   ZEBRA_BAND,
   zebraOffsets,
 } from "../../geo/markings";
-import { arcLength, cutPolyline, offsetPolyline, subPolyline } from "../../geo/polyline";
+import { arcLength, cutPolyline, offsetPolyline, pointAt, subPolyline } from "../../geo/polyline";
 import { buildRoadGraph, type DeckExit, type GraphNode, type Run } from "../../geo/roadGraph";
 import { CLASS_STYLE, FILLET, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "../../geo/roadStyle";
 import { heavier } from "../../layout/roads/segments";
 import type { Driveway, RoadSegment, Roundabout, Vec2 } from "../../layout/types";
 import { loopWall, polygonCap } from "../geo/polygon";
-import { band, disc, paint, ribbon, ring } from "./roadPrimitives";
+import { annulus, band, disc, paint, ribbon, ring } from "./roadPrimitives";
 
 /** The kerb wall drops from the pavement to just under the asphalt, so its lip reads from a grazing angle. */
 const KERB_BOTTOM = TERRAIN.roadY - 0.02;
@@ -82,10 +84,36 @@ export function buildRoadGeometry(
   );
 
   // Nodes: the cut on every arm, the asphalt cap and the pavement corners.
+  // How far each arm may be cut back: most of its run, half when a node waits at the other end.
+  const runLength = graph.runs.map((r) => arcLength(r.points));
+  const limitsOf = (node: GraphNode) =>
+    node.arms.map((a) => {
+      if (a.run < 0) {
+        return Infinity;
+      }
+      const { start, end } = graph.ends[a.run]!;
+      const other = a.atStart ? end : start;
+      return runLength[a.run]! * (other.arms.length >= 2 ? 0.5 : 0.8);
+    });
   const reach = new Map<GraphNode, number[]>();
+  const ringAngles = new Map<Roundabout, number[]>();
   for (const node of graph.nodes) {
-    const pieces = junctionPieces(node, PAVEMENT, FILLET);
+    const pieces = junctionPieces(node, PAVEMENT, FILLET, limitsOf(node), (k, t) => {
+      const arm = node.arms[k]!;
+      if (arm.run < 0) {
+        return null;
+      }
+      const points = graph.runs[arm.run]!.points;
+      return pointAt(arm.atStart ? points : [...points].reverse(), t);
+    });
     reach.set(node, pieces.reach);
+    if (node.roundabout && pieces.ring) {
+      ringAngles.set(node.roundabout, pieces.ring);
+    }
+    for (const apron of pieces.aprons) {
+      const cap = polygonCap(apron.points, y);
+      push(asphaltParts, cap && paint(cap, CLASS_STYLE[node.arms[apron.arm]!.klass].color));
+    }
     if (pieces.asphalt) {
       const klass = node.arms.map((a) => a.klass).reduce(heavier);
       push(
@@ -103,10 +131,14 @@ export function buildRoadGeometry(
   // Runs: what is left between two nodes.
   graph.runs.forEach((run, i) => {
     const { start, end } = graph.ends[i]!;
+    const armIndex = (node: GraphNode, atStart: boolean) =>
+      node.arms.findIndex((a) => a.run === i && a.atStart === atStart);
     const cutAt = (node: GraphNode, atStart: boolean) => {
-      const k = node.arms.findIndex((a) => a.run === i && a.atStart === atStart);
+      const k = armIndex(node, atStart);
       return k < 0 ? 0 : reach.get(node)![k]!;
     };
+    const markStart = armMarking(start, start.arms[armIndex(start, true)]);
+    const markEnd = armMarking(end, end.arms[armIndex(end, false)]);
     const cut = cutPolyline(run.points, cutAt(start, true), cutAt(end, false));
     if (cut.length < 2) {
       return;
@@ -126,8 +158,8 @@ export function buildRoadGeometry(
     }
 
     // Markings on the centre: clear of the ends, patterns centred on the run.
-    const marginStart = endMargin(start);
-    const marginEnd = endMargin(end);
+    const marginStart = endMargin(markStart);
+    const marginEnd = endMargin(markEnd);
     const dashes = (offset: number, dash: number, period: number) => {
       for (const t0 of dashStarts(length, marginStart, marginEnd, dash, period)) {
         push(
@@ -166,8 +198,16 @@ export function buildRoadGeometry(
     // `(-dz, dx)` — the *negative* side of `offsetPolyline`. So the lane
     // heading into the end node sits at a negative offset, and the one heading
     // back into the start node at a positive one.
-    const crossing = (from: number, sign: number, incoming: number) => {
+    const crossing = (from: number, sign: number, incoming: number, marking: ArmMarking) => {
       const { zebra, stop } = crossingIntervals(from, sign);
+      const lane = subPolyline(cut, stop[0], stop[1]);
+      if (marking === "giveWay") {
+        // A spur meeting the ring road: dashed give-way line, no zebra across the ring.
+        for (const [d0, d1] of giveWayDashes(incoming * (h - EDGE_INSET), incoming * LINE_WIDTH)) {
+          push(markParts, band(lane, d0, d1, DASH_Y));
+        }
+        return;
+      }
       for (const d of zebraOffsets(h)) {
         push(
           markParts,
@@ -179,21 +219,13 @@ export function buildRoadGeometry(
           ),
         );
       }
-      push(
-        markParts,
-        band(
-          subPolyline(cut, stop[0], stop[1]),
-          incoming * (h - EDGE_INSET),
-          incoming * LINE_WIDTH,
-          DASH_Y,
-        ),
-      );
+      push(markParts, band(lane, incoming * (h - EDGE_INSET), incoming * LINE_WIDTH, DASH_Y));
     };
-    if (isCrossing(start) && length > MARGIN_JUNCTION) {
-      crossing(0, 1, 1);
+    if (markStart !== "none" && length > MARGIN_JUNCTION) {
+      crossing(0, 1, 1, markStart);
     }
-    if (isCrossing(end) && length > MARGIN_JUNCTION) {
-      crossing(length, -1, -1);
+    if (markEnd !== "none" && length > MARGIN_JUNCTION) {
+      crossing(length, -1, -1, markEnd);
     }
   });
 
@@ -208,7 +240,11 @@ export function buildRoadGeometry(
 
   for (const r of roundabouts) {
     const { inner, outer } = ringRadii(r);
-    asphaltParts.push(paint(ring(inner, outer, y, r.center), CLASS_STYLE[r.klass].color));
+    const angles = ringAngles.get(r);
+    const tarmac = angles
+      ? annulus(inner, outer, y, r.center, angles)
+      : ring(inner, outer, y, r.center);
+    asphaltParts.push(paint(tarmac, CLASS_STYLE[r.klass].color));
 
     // Planted centre: a low kerbed disc, not a hole cut in the tarmac.
     const wall = new THREE.CylinderGeometry(inner, inner, ISLAND_HEIGHT, 24, 1, true);

@@ -1,7 +1,7 @@
 import { TERRAIN } from "../domain/nodeStyle";
 import type { Driveway, Vec2 } from "../layout/types";
 import { projectOnPolyline } from "./polyline";
-import { type GraphNode, ON_LINE } from "./roadGraph";
+import { type Arm, type GraphNode, ON_LINE } from "./roadGraph";
 import { CLASS_STYLE } from "./roadStyle";
 
 /**
@@ -26,6 +26,7 @@ const ZEBRA_STEP = 0.2;
 export const ZEBRA_BAND = 0.12;
 const STOP_AT = 0.9;
 const STOP_WIDTH = 0.12;
+const GIVE_WAY_PERIOD = 0.2;
 /** Half the pavement gap at a driveway mouth: the driveway plus a kerb drop each side. */
 export const MOUTH_GAP = TERRAIN.drivewayWidth / 2 + 0.1;
 /** Pavement spans shorter than this are not drawn. */
@@ -36,8 +37,37 @@ export type Interval = [number, number];
 /** A crossing that gets a zebra and a stop line on every arm. */
 export const isCrossing = (node: GraphNode) => node.kind === "junction" && node.arms.length >= 3;
 
+/**
+ * What an arm gets painted where it meets `node`: a zebra and a stop line at a
+ * plain crossing; where a spur joins the ring road, the ring runs through
+ * unmarked and only the spur gets a give-way line.
+ */
+export type ArmMarking = "none" | "crossing" | "giveWay";
+
+export function armMarking(node: GraphNode, arm: Arm | undefined): ArmMarking {
+  if (!arm || !isCrossing(node)) {
+    return "none";
+  }
+  if (node.arms.filter((a) => a.ring).length < 2) {
+    return "crossing";
+  }
+  return arm.ring ? "none" : "giveWay";
+}
+
 /** Centre-marking margin at an end of a run. */
-export const endMargin = (node: GraphNode) => (isCrossing(node) ? MARGIN_JUNCTION : MARGIN_PLAIN);
+export const endMargin = (marking: ArmMarking) =>
+  marking === "none" ? MARGIN_PLAIN : MARGIN_JUNCTION;
+
+/** Lateral dashes of a give-way line across the lane between offsets `d0` and `d1`. */
+export function giveWayDashes(d0: number, d1: number): Interval[] {
+  const [lo, hi] = d0 < d1 ? [d0, d1] : [d1, d0];
+  const count = Math.max(1, Math.round((hi - lo) / GIVE_WAY_PERIOD));
+  const step = (hi - lo) / count;
+  return Array.from(
+    { length: count },
+    (_, k): Interval => [lo + k * step + step * 0.2, lo + (k + 1) * step - step * 0.2],
+  );
+}
 
 /** Driveway-mouth gaps on each side of `cut`: `[0]` the negative side, `[1]` the positive one. */
 export function mouthGaps(cut: Vec2[], driveways: Driveway[]): Interval[][] {
