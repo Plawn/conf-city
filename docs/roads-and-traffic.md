@@ -41,7 +41,9 @@ same-class nodes fused into bends); junctions get kerb fillets and an asphalt ca
 open at driveway mouths. Markings per class: centre dashes / double line + lane dashes / edge lines,
 zebra + stop line on the incoming lane of every crossing, give-way ring. Bridge decks leave through
 `exits`. Y ladder in `TERRAIN`: zone 0.03 < road 0.08 < markings < pavement 0.13 < overlay.
-`StreetLights` follows the `lit` classes.
+`StreetLights` follows the `lit` classes. The parts are built by `components/roads/buildRoadGeometry.ts`
+(primitives in `roads/roadPrimitives.ts`); where the gaps, dashes, zebras and driveways go is pure
+layout in `geo/markings.ts`.
 
 Vehicles do not cast into the sun shadow map. `traffic/vehicleShadows.ts` draws one instanced
 blob decal per pool (flat plane, radial alpha, 0.36 × 0.72 of the normalised vehicle, scaled

@@ -118,7 +118,8 @@ See `roads-and-traffic.md` for the road model and its invariants.
 ```
 geo/                       Road driving geometry: roadStyle (CLASS_STYLE, lanes, ring radii), polyline, path
                            (segments + arcs kept exact until offset), roadGraph, junctions, roundabouts,
-                           drivable (THE junction of streets, roundabouts and bridges → DrivePath)
+                           drivable (THE junction of streets, roundabouts and bridges → DrivePath), markings
+                           (pavement gaps, dash / zebra / stop intervals, driveway setback)
 sim/traffic/               sim.ts (createSim, spawn, decide/move, advance), params.ts (tuning constants), pool.ts
                            (TrafficRoute, Sim, SoA Pool, place), frame.ts (probes, spatial hash, speedLimitAhead
                            priority rules), worldRoutes.ts (one route set for the whole world,
@@ -148,7 +149,8 @@ SceneDepth.tsx             Fog band + far plane follow the camera distance, not 
 WaterPlane.tsx             One flat quad, node material: shore field → shallow tint + foam, ripple slope map,
                            sky reflection; water/textures.ts bakes the shore + ripple DataTextures
 IslandMesh.tsx             Extruded + bevelled outline painted by vertex colours from the biome palette
-RoadNetworkMesh.tsx        Whole network in 4 merged draw calls (pavements, asphalt, islands, markings)
+RoadNetworkMesh.tsx        Whole network in 4 merged draw calls (pavements, asphalt, islands, markings);
+                           built by roads/buildRoadGeometry.ts
 StreetLights.tsx           Instanced lamp posts on lit classes + roundabouts
 RouteOverlay.tsx           Invisible raycast ribbon per route: hover tooltip, error tint
 BridgeMesh.tsx             Arched deck + railings + pylons over the deck span from src/geo/drivable.ts
@@ -171,6 +173,8 @@ buildings/                 BuildingBatches (opaque buildings batched by city / m
                            woken by telemetry, hover, selection, lighting), industrialGeometry.ts (7 generated
                            industrial models), harbourGeometry.ts (quay + ship fallback), propGeometry.ts
 geo/                       ribbon, polygon (Three.js meshes over src/geo/ shapes)
+roads/                     buildRoadGeometry.ts (one city's merged road parts), roadPrimitives.ts (paint, disc,
+                           ring, ribbon, band)
 traffic/                   useVehicleGeometry / useShipGeometry (GLB → merged geometry), vehicleShadows.ts
                            (instanced blob decals); the simulation is in src/sim/traffic/
 mobility/                  MobilitySimulation.tsx (drives src/sim/mobility/engine.ts), MetroSystem /
