@@ -1,9 +1,13 @@
 import { logKey } from "@proxy/logKey";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filterLogs, LEVELS, RANGES, type Range } from "../domain/logFilter";
 import type { LogEntry } from "../domain/types";
 import type { LogQueryOptions } from "../hooks/telemetryTypes";
 import { formatClock } from "../lib/time";
 import { useUiStore } from "../store/uiStore";
+import { HighlightText } from "./logs/HighlightText";
+import { useLogBackfill } from "./logs/useLogBackfill";
+import { useResizable } from "./logs/useResizable";
 import {
   Badge,
   type BadgeTone,
@@ -15,7 +19,6 @@ import {
   SegmentedControl,
 } from "./ui";
 
-const LEVELS: LogEntry["level"][] = ["error", "warn", "info", "debug"];
 const LEVEL_TONE: Record<LogEntry["level"], BadgeTone> = {
   error: "danger",
   warn: "warn",
@@ -29,22 +32,6 @@ const LEVEL_TEXT: Record<LogEntry["level"], string> = {
   debug: "text-surface-500",
 };
 
-/** How far back the panel asks for history when it opens. */
-const RANGES = [
-  { value: "15m", label: "15m", ms: 15 * 60_000 },
-  { value: "1h", label: "1h", ms: 60 * 60_000 },
-  { value: "24h", label: "24h", ms: 24 * 60 * 60_000 },
-] as const;
-type Range = (typeof RANGES)[number]["value"];
-
-/** Cap on a single backfill, matched to the proxy's own ceiling. */
-const BACKFILL_LIMIT = 1_000;
-
-const MIN_W = 320;
-const MIN_H = 200;
-const DEFAULT_W = 560;
-const DEFAULT_H = 400;
-
 interface LogPanelProps {
   logs: LogEntry[];
   subscribeLogs: (nodes?: string[], levels?: LogEntry["level"][]) => void;
@@ -53,25 +40,6 @@ interface LogPanelProps {
   /** Some provider can serve a real past window, so the range selector is worth showing. */
   canQueryLogs: boolean;
   queryLogs: (opts: LogQueryOptions) => Promise<LogEntry[]>;
-}
-
-function HighlightText({ text, search }: { text: string; search: string }) {
-  if (!search) {
-    return <>{text}</>;
-  }
-  const idx = text.toLowerCase().indexOf(search.toLowerCase());
-  if (idx === -1) {
-    return <>{text}</>;
-  }
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="rounded-sm bg-warn/30 px-px text-warn">
-        {text.slice(idx, idx + search.length)}
-      </mark>
-      {text.slice(idx + search.length)}
-    </>
-  );
 }
 
 export function LogPanel({
@@ -92,17 +60,11 @@ export function LogPanel({
   const [clearedAt, setClearedAt] = useState(0);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
-  const [panelSize, setPanelSize] = useState({ width: DEFAULT_W, height: DEFAULT_H });
   const [range, setRange] = useState<Range>("15m");
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const lastClosedAt = useRef(0);
-  const dragRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(
-    null,
-  );
 
   // Subscribe while open; use the server-side node filter when the filter is a full address.
   const serverNodes = nodeFilter.includes("/") ? nodeFilter : "";
@@ -114,42 +76,14 @@ export function LogPanel({
     return () => unsubscribeLogs();
   }, [open, connected, serverNodes, subscribeLogs, unsubscribeLogs]);
 
-  /**
-   * Backfill on open, and whenever the node filter or the range changes.
-   *
-   * Deliberately not keyed on `levelFilter`: levels are already applied client-side, and a
-   * round-trip on every badge click would buy nothing. Resolved entries are merged into
-   * `logs` by the stream hook, so there is nothing to do with them here.
-   */
-  useEffect(() => {
-    if (!open || !connected) {
-      return;
-    }
-    let cancelled = false;
-    const rangeMs = RANGES.find((r) => r.value === range)?.ms ?? RANGES[0].ms;
-
-    setLoadingHistory(true);
-    setHistoryError(null);
-    queryLogs({
-      nodes: serverNodes ? [serverNodes] : undefined,
-      since: Date.now() - rangeMs,
-      limit: BACKFILL_LIMIT,
-    })
-      .catch((err: Error) => {
-        if (!cancelled) {
-          setHistoryError(err.message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingHistory(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, connected, serverNodes, range, queryLogs]);
+  const { loadingHistory, historyError } = useLogBackfill({
+    open,
+    connected,
+    serverNodes,
+    range,
+    queryLogs,
+  });
+  const { panelSize, handleResizeDown } = useResizable();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the effect intentionally reacts to newly appended log entries.
   useEffect(() => {
@@ -166,38 +100,6 @@ export function LogPanel({
     setPaused(el.scrollHeight - el.scrollTop - el.clientHeight >= 30);
   }, []);
 
-  const handleResizeDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startW: panelSize.width,
-        startH: panelSize.height,
-      };
-      const onMove = (ev: MouseEvent) => {
-        if (!dragRef.current) {
-          return;
-        }
-        const dw = dragRef.current.startX - ev.clientX;
-        const dh = dragRef.current.startY - ev.clientY;
-        setPanelSize({
-          width: Math.max(MIN_W, Math.min(window.innerWidth * 0.9, dragRef.current.startW + dw)),
-          height: Math.max(MIN_H, Math.min(window.innerHeight * 0.8, dragRef.current.startH + dh)),
-        });
-      };
-      const onUp = () => {
-        dragRef.current = null;
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [panelSize],
-  );
-
   const toggleLevel = (level: LogEntry["level"]) =>
     setLevelFilter((prev) => {
       const next = new Set(prev);
@@ -213,22 +115,10 @@ export function LogPanel({
     () => logs.filter((e) => e.timestamp >= clearedAt),
     [logs, clearedAt],
   );
-  const filtered = useMemo(() => {
-    const nf = nodeFilter.toLowerCase();
-    const s = searchText.toLowerCase();
-    return visibleLogs.filter((entry) => {
-      if (!levelFilter.has(entry.level)) {
-        return false;
-      }
-      if (nf && !entry.node.toLowerCase().includes(nf)) {
-        return false;
-      }
-      if (s && !entry.message.toLowerCase().includes(s) && !entry.node.toLowerCase().includes(s)) {
-        return false;
-      }
-      return true;
-    });
-  }, [visibleLogs, levelFilter, nodeFilter, searchText]);
+  const filtered = useMemo(
+    () => filterLogs(visibleLogs, levelFilter, nodeFilter, searchText),
+    [visibleLogs, levelFilter, nodeFilter, searchText],
+  );
 
   const copyEntry = (entry: LogEntry, idx: number) => {
     const line = `${formatClock(entry.timestamp)} [${entry.level.toUpperCase()}] ${entry.node} ${entry.message}`;

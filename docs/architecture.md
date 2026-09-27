@@ -43,6 +43,7 @@ domain/metrics/saturation.ts cpu/memSaturation, netKbps, cityMax, memoryHeight, 
 domain/metrics/format.ts   rankValue / formatRank, formatMb / Kbps / Percent / Cores, heatColor, saturationTone
 domain/metrics/cityUsage.ts cityUsage (host vs services), worstUsage, usageTooltip
 domain/metrics/props.ts    Utility district gauges: smokeRate, tankLevel, containerCount
+domain/logFilter.ts        filterLogs (level / node / search), LEVELS, backfill RANGES
 domain/panelRows.ts        cityRows / topConsumers: rows of the Cities and Top consumers panels
 domain/incidents.ts        nodeIncident / telemetryUncertain: one truth for alerts, attention list and fires
                            (ERROR_RATE_THRESHOLD 1 %, TELEMETRY_STALE_MS 30 s)
@@ -167,6 +168,7 @@ BuildingFire.tsx           Flames + smoke on incident buildings, two instanced d
 Vegetation.tsx             One InstancedMesh per prop kind per city
 UsageBar.tsx, MetricCard.tsx, Sparkline.tsx, NodeDrawer.tsx, LogPanel.tsx, StatusBar.tsx,
 DragOverlay.tsx, CameraAnimator.tsx, ConnectionStatus.tsx, PerfTuning.tsx (PerfHud, `?perf=1`)
+logs/                      useLogBackfill (history on open / filter / range), useResizable, HighlightText
 htmlPortal.ts              Every drei <Html> renders in one z-10 overlay under the panels
 ```
 
