@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { createBuilder, type Shade } from "./colouredBuilder";
 
 export type IndustrialStyle =
   | "warehouse"
@@ -45,37 +45,12 @@ const SHADE = {
   stack: [0.9, 0.89, 0.86],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
-type Shade = readonly [number, number, number];
-
 /** One merged, vertex-coloured mesh per model. Dimensions fit the existing plots at every yaw. */
 export function industrialGeometry(style: IndustrialStyle): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const add = (geometry: THREE.BufferGeometry, shade: Shade) => {
-    const g = geometry.index ? geometry.toNonIndexed() : geometry;
-    if (g !== geometry) {
-      geometry.dispose();
-    }
-    const count = g.getAttribute("position").count;
-    const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      colors[i * 3] = shade[0];
-      colors[i * 3 + 1] = shade[1];
-      colors[i * 3 + 2] = shade[2];
-    }
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    parts.push(g);
-  };
-  const box = (x: number, y: number, z: number, w: number, h: number, d: number, shade: Shade) => {
-    const g = new THREE.BoxGeometry(w, h, d);
-    g.translate(x, y, z);
-    add(g, shade);
-  };
-  /** A vertical cylinder — pipes, silos, the stair drum. Kept to 8 sides: this is a low-poly kit. */
-  const pipe = (x: number, y: number, z: number, r: number, h: number, shade: Shade) => {
-    const g = new THREE.CylinderGeometry(r, r, h, 8);
-    g.translate(x, y, z);
-    add(g, shade);
-  };
+  // Pipes, silos, the stair drum: 8 sides, this is a low-poly kit.
+  const { add, box, pipe, build } = createBuilder({
+    finish: (merged) => merged.computeBoundingBox(),
+  });
   const roof = (z: number, depth: number, shed = false) => {
     const profile = new THREE.Shape();
     profile.moveTo(-0.64, 0.47);
@@ -218,10 +193,5 @@ export function industrialGeometry(style: IndustrialStyle): THREE.BufferGeometry
     box(0.54, 0.085, 0.33, 0.14, 0.07, 0.14, SHADE.crateDark);
   }
 
-  const merged = mergeGeometries(parts)!;
-  for (const part of parts) {
-    part.dispose();
-  }
-  merged.computeBoundingBox();
-  return merged;
+  return build();
 }

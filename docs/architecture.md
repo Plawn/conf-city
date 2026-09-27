@@ -181,7 +181,8 @@ buildings/                 BuildingBatches (opaque buildings batched by city / m
                            instances.ts (BuildingBatch / BuildingInstances, inspectBuildings),
                            visuals.ts (colour / height targets, settled test), animationQueue.ts (sleeping tasks
                            woken by telemetry, hover, selection, lighting), industrialGeometry.ts (7 generated
-                           industrial models), harbourGeometry.ts (quay + ship fallback), propGeometry.ts
+                           industrial models), harbourGeometry.ts (quay + ship fallback), propGeometry.ts,
+                           colouredBuilder.ts (Shade, colourGeometry, createBuilder: the kits' box / pipe / merge)
 geo/                       ribbon, polygon (Three.js meshes over src/geo/ shapes)
 roads/                     buildRoadGeometry.ts (one city's merged road parts), roadPrimitives.ts (paint, disc,
                            ring, ribbon, band)

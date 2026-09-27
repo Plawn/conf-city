@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { createBuilder, type Shade } from "./colouredBuilder";
 
 /**
  * Procedural fallback for the two port assets, written like
@@ -40,47 +40,8 @@ const SHADE = {
   funnel: [0.4, 0.35, 0.3],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
-type Shade = readonly [number, number, number];
-
-/** The primitive kit shared by both models: everything ends up in one buffer. */
-function builder() {
-  const parts: THREE.BufferGeometry[] = [];
-  const add = (geometry: THREE.BufferGeometry, shade: Shade) => {
-    const g = geometry.index ? geometry.toNonIndexed() : geometry;
-    if (g !== geometry) {
-      geometry.dispose();
-    }
-    const count = g.getAttribute("position").count;
-    const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      colors[i * 3] = shade[0];
-      colors[i * 3 + 1] = shade[1];
-      colors[i * 3 + 2] = shade[2];
-    }
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    parts.push(g);
-  };
-  const box = (x: number, y: number, z: number, w: number, h: number, d: number, shade: Shade) => {
-    const g = new THREE.BoxGeometry(w, h, d);
-    g.translate(x, y, z);
-    add(g, shade);
-  };
-  /** A vertical cylinder: bollards, the funnel, the crane's pivot. 8 sides — low-poly kit. */
-  const pipe = (x: number, y: number, z: number, r: number, h: number, shade: Shade) => {
-    const g = new THREE.CylinderGeometry(r, r, h, 8);
-    g.translate(x, y, z);
-    add(g, shade);
-  };
-  const finish = () => {
-    const merged = mergeGeometries(parts)!;
-    for (const part of parts) {
-      part.dispose();
-    }
-    merged.computeBoundingBox();
-    return merged;
-  };
-  return { add, box, pipe, finish };
-}
+/** The primitive kit shared by both models: everything ends up in one buffer. 8-sided pipes — low-poly kit. */
+const builder = () => createBuilder({ finish: (merged) => merged.computeBoundingBox() });
 
 /**
  * The quay: a deck along the shore, two gantry cranes reaching over the water,
@@ -91,7 +52,7 @@ function builder() {
  * rotation it already applies to a model.
  */
 export function harbourGeometry(): THREE.BufferGeometry {
-  const { box, pipe, finish } = builder();
+  const { box, pipe, build } = builder();
 
   // Deck: wide along X (it follows the shore), the seaward half over the water.
   box(0, 0.11, 0.06, 1.5, 0.22, 1.05, SHADE.deck);
@@ -136,7 +97,7 @@ export function harbourGeometry(): THREE.BufferGeometry {
   }
   box(-0.6, 0.29, 0.12, 0.26, 0.13, 0.17, SHADE.containerA);
 
-  return finish();
+  return build();
 }
 
 /**
@@ -145,7 +106,7 @@ export function harbourGeometry(): THREE.BufferGeometry {
  * a deckhouse aft and three rows of containers.
  */
 export function shipGeometry(): THREE.BufferGeometry {
-  const { add, box, pipe, finish } = builder();
+  const { add, box, pipe, build } = builder();
 
   // Hull: a box aft, a wedge forward, so the bow reads at any camera distance.
   box(0, 0.1, -0.25, 0.62, 0.3, 1.2, SHADE.hull);
@@ -185,5 +146,5 @@ export function shipGeometry(): THREE.BufferGeometry {
     }
   }
 
-  return finish();
+  return build();
 }

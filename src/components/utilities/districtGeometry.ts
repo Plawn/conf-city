@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { createBuilder, type Shade } from "../buildings/colouredBuilder";
 
 /**
  * The utility district's fixed parts, built once for the whole app.
@@ -30,8 +30,6 @@ const SHADE = {
   timber: [0.6, 0.5, 0.36],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
-type Shade = readonly [number, number, number];
-
 /** Sizes the components need back: where the smoke leaves, how tall the tank is. */
 export const PLANT = { chimneyX: 1.05, chimneyTop: 3.1, chimneyRadius: 0.24 } as const;
 export const TOWER = { tankY: 1.75, tankHeight: 1.5, tankRadius: 0.68 } as const;
@@ -45,54 +43,13 @@ export const QUAY = {
 } as const;
 export const QUAY_CAPACITY = QUAY.cols * QUAY.rows * QUAY.layers;
 
-class Builder {
-  private parts: THREE.BufferGeometry[] = [];
-
-  add(geometry: THREE.BufferGeometry, shade: Shade): void {
-    const g = geometry.index ? geometry.toNonIndexed() : geometry;
-    if (g !== geometry) {
-      geometry.dispose();
-    }
-    const count = g.getAttribute("position").count;
-    const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      colors[i * 3] = shade[0];
-      colors[i * 3 + 1] = shade[1];
-      colors[i * 3 + 2] = shade[2];
-    }
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    this.parts.push(g);
-  }
-
-  box(x: number, y: number, z: number, w: number, h: number, d: number, shade: Shade): void {
-    const g = new THREE.BoxGeometry(w, h, d);
-    g.translate(x, y, z);
-    this.add(g, shade);
-  }
-
-  pipe(x: number, y: number, z: number, r: number, h: number, shade: Shade, sides = 10): void {
-    const g = new THREE.CylinderGeometry(r, r, h, sides);
-    g.translate(x, y, z);
-    this.add(g, shade);
-  }
-
-  build(): THREE.BufferGeometry {
-    const merged = mergeGeometries(this.parts, false);
-    for (const p of this.parts) {
-      p.dispose();
-    }
-    this.parts = [];
-    if (!merged) {
-      throw new Error("utility geometry: parts do not share an attribute set");
-    }
-    merged.computeVertexNormals();
-    return merged;
-  }
-}
+/** Utility shells: 10-sided pipes, normals recomputed across the merged parts. */
+const utilityBuilder = () =>
+  createBuilder({ sides: 10, finish: (merged) => merged.computeVertexNormals() });
 
 /** CPU: a turbine hall with a cooling stack the smoke leaves from. */
 function buildPlant(): THREE.BufferGeometry {
-  const b = new Builder();
+  const b = utilityBuilder();
   b.box(0, 0.06, 0, 3.2, 0.12, 2.0, SHADE.apron);
   // The hall, its saw-tooth roof band, and the transformer yard beside the door.
   b.box(-0.5, 0.62, 0, 1.9, 1.0, 1.4, SHADE.wall);
@@ -119,7 +76,7 @@ function buildPlant(): THREE.BufferGeometry {
  * the city's usual three-quarter view the water has to be visible from the side.
  */
 function buildWaterTower(): THREE.BufferGeometry {
-  const b = new Builder();
+  const b = utilityBuilder();
   b.box(0, 0.06, 0, 2.0, 0.12, 1.8, SHADE.apron);
   const legY = TOWER.tankY - TOWER.tankHeight / 2;
   for (const [lx, lz] of [
@@ -155,7 +112,7 @@ function buildWaterTower(): THREE.BufferGeometry {
 
 /** DISK: a deck out over the water and the gantry that stacks it. */
 function buildQuay(): THREE.BufferGeometry {
-  const b = new Builder();
+  const b = utilityBuilder();
   b.box(0, QUAY.deckY / 2, 0, 3.2, QUAY.deckY, 2.0, SHADE.concrete);
   // Bollards along the seaward edge — the side a ship would come alongside.
   for (const x of [-1.2, 0, 1.2]) {
@@ -180,7 +137,7 @@ function buildQuay(): THREE.BufferGeometry {
  * obvious building site than a chimney at rest passing for an idle CPU.
  */
 function buildScaffold(): THREE.BufferGeometry {
-  const b = new Builder();
+  const b = utilityBuilder();
   b.box(0, 0.06, 0, 2.4, 0.12, 1.6, SHADE.apron);
   const h = 1.7;
   for (const [lx, lz] of [
