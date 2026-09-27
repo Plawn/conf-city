@@ -353,8 +353,9 @@ export class ClusteredLightsNode extends LightsNode {
     const zSliceRangesData = new Float32Array(NZ * 4);
     const zSliceRangesTexture = new DataTexture(zSliceRangesData, NZ, 1, RGBAFormat, FloatType);
     // Per-cluster light-index storage (ivec4 chunks).
-    const lightIndexesArray = new Int32Array(clusterCount * chunksPerCluster * 4);
-    const lightIndexes: TslNode = attributeArray(lightIndexesArray, "ivec4").setName(
+    // A count, not a typed array: storage() keeps the first argument as bufferCount, and every
+    // shader compile then stringifies a 1.5 M-entry array (`bufferCount > 0`).
+    const lightIndexes: TslNode = attributeArray(clusterCount * chunksPerCluster, "ivec4").setName(
       "lightIndexes",
     );
     const getClusterChunk = (chunkIdx: TslNode) =>
