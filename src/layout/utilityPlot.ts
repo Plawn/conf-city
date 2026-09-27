@@ -1,6 +1,5 @@
 import { fnv1a, mulberry32 } from "../lib/random";
-import { clipSegmentToPolygon, signedArea } from "./geometry";
-import { distanceToPolygon } from "./harbour";
+import { clipSegmentToPolygon, distToPolygon, distToPolyline, signedArea } from "./geometry";
 import type { RoadNetwork, UtilityPlot, UtilitySlot, Vec2 } from "./types";
 
 /**
@@ -323,20 +322,5 @@ function buildable(p: Vec2, req: UtilityPlotRequest): boolean {
       return false;
     }
   }
-  return distanceToPolygon(p, req.ring) >= RING_CLEAR - 1e-6;
-}
-
-function distToPolyline(p: Vec2, points: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!;
-    const b = points[i]!;
-    const vx = b[0] - a[0];
-    const vz = b[1] - a[1];
-    const len2 = vx * vx + vz * vz;
-    const t =
-      len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2)) : 0;
-    best = Math.min(best, Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t)));
-  }
-  return best;
+  return distToPolygon(p, req.ring) >= RING_CLEAR - 1e-6;
 }

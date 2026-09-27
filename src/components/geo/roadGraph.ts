@@ -1,3 +1,4 @@
+import { vecKey } from "../../layout/geometry";
 import type { RoadClass, RoadSegment, Roundabout, Vec2 } from "../../layout/types";
 import { pointAt, projectOnPolyline, roundCorners } from "./polyline";
 import { CLASS_STYLE } from "./roadStyle";
@@ -62,8 +63,6 @@ const END_OVERHANG = 0.9;
 const BEND_RADIUS = 1.5;
 const ON_LINE = 0.01;
 
-const key = (p: Vec2) => `${p[0]},${p[1]}`;
-
 function bearingOf(from: Vec2, to: Vec2): number {
   return Math.atan2(to[1] - from[1], to[0] - from[0]);
 }
@@ -84,13 +83,13 @@ function trimDeadEnds(
   const degree = new Map<string, number>();
   for (const s of segments) {
     for (const p of [s.points[0]!, s.points[s.points.length - 1]!]) {
-      const k = key(p);
+      const k = vecKey(p);
       degree.set(k, (degree.get(k) ?? 0) + 1);
     }
   }
   const trim = (points: Vec2[]): Vec2[] => {
     const last = points[points.length - 1]!;
-    if ((degree.get(key(last)) ?? 0) !== 1 || roundaboutKeys.has(key(last))) {
+    if ((degree.get(vecKey(last)) ?? 0) !== 1 || roundaboutKeys.has(vecKey(last))) {
       return points;
     }
     const prev = points[points.length - 2]!;
@@ -123,7 +122,7 @@ function fuse(pieces: Piece[], roundaboutKeys: Set<string>): Piece[] {
       [p.points[0]!, true],
       [p.points[p.points.length - 1]!, false],
     ] as const) {
-      const k = key(point);
+      const k = vecKey(point);
       const list = at.get(k) ?? [];
       list.push({ piece: i, atStart });
       at.set(k, list);
@@ -140,7 +139,7 @@ function fuse(pieces: Piece[], roundaboutKeys: Set<string>): Piece[] {
   const extend = (acc: Piece, startKey: string) => {
     for (;;) {
       const tail = acc.points[acc.points.length - 1]!;
-      const k = key(tail);
+      const k = vecKey(tail);
       if (k === startKey) {
         return; // closed the loop
       }
@@ -183,9 +182,9 @@ function fuse(pieces: Piece[], roundaboutKeys: Set<string>): Piece[] {
       klass: seed.klass,
       ring: seed.ring,
     };
-    extend(acc, key(acc.points[0]!));
+    extend(acc, vecKey(acc.points[0]!));
     reverse(acc);
-    extend(acc, key(acc.points[0]!));
+    extend(acc, vecKey(acc.points[0]!));
     out.push(acc);
   }
   return out;
@@ -199,7 +198,7 @@ export function buildRoadGraph(
 ): RoadGraph {
   const roundaboutAt = new Map<string, Roundabout>();
   for (const r of roundabouts) {
-    roundaboutAt.set(key(r.center), r);
+    roundaboutAt.set(vecKey(r.center), r);
   }
   const roundaboutKeys = new Set(roundaboutAt.keys());
 
@@ -220,7 +219,7 @@ export function buildRoadGraph(
 
   const nodes = new Map<string, GraphNode>();
   const nodeFor = (p: Vec2): GraphNode => {
-    const k = key(p);
+    const k = vecKey(p);
     let node = nodes.get(k);
     if (!node) {
       const roundabout = roundaboutAt.get(k);
@@ -258,7 +257,7 @@ export function buildRoadGraph(
     ends.push({ start, end });
   });
   for (const exit of exits) {
-    const node = nodes.get(key(exit.at));
+    const node = nodes.get(vecKey(exit.at));
     if (!node) {
       continue;
     }

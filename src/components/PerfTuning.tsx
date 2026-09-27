@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import type { GovernorChange, QualityChoice, QualityProfile, QualityTier } from "../domain/quality";
 import type { QualityOverrides } from "../domain/qualityOverrides";
 import { formatTweaks } from "../domain/qualityOverrides";
+import { mean, sum } from "../lib/stats";
 import { selectProfile, selectTier, useUiStore } from "../store/uiStore";
 import type { inspectBuildings } from "./buildings/instances";
 import { ActiveClusteredLighting } from "./lighting/ActiveClusteredLighting";
@@ -86,8 +87,8 @@ function shadowRenders(recent: LightingPerfSample[]): string {
   if (span <= 0) {
     return "0+0";
   }
-  const sun = recent.reduce((sum, s) => sum + s.sunShadowRenders, 0) / span;
-  const beacon = recent.reduce((sum, s) => sum + s.beaconShadowRenders, 0) / span;
+  const sun = sum(recent.map((s) => s.sunShadowRenders)) / span;
+  const beacon = sum(recent.map((s) => s.beaconShadowRenders)) / span;
   return `${sun.toFixed(1)}+${beacon.toFixed(1)}`;
 }
 
@@ -187,7 +188,7 @@ export function PerfHud() {
       }
       lastDisplay = now;
       const recent = samples.filter((s) => now - s.time < 2000 && s.intervalMs > 0);
-      const frameMs = recent.reduce((sum, s) => sum + s.intervalMs, 0) / Math.max(1, recent.length);
+      const frameMs = mean(recent.map((s) => s.intervalMs));
       const quality = metrics.quality;
       const tweaks = formatTweaks(quality.overrides);
       box.textContent = `${metrics.backend} · ${quality.choice === "auto" ? `auto/${quality.tier}` : quality.tier}${quality.idle ? " (idle)" : ""} · ${(1000 / Math.max(1, frameMs)).toFixed(0)} fps · ${samples.at(-1)!.cpuMs.toFixed(1)} ms CPU · ${latestGpu == null ? "GPU n/a" : `${latestGpu.gpuMs.toFixed(1)} ms GPU (async)`} · ${render.drawCalls} draws · ${(memory.total / 1048576).toFixed(1)} MiB · shadows ${shadowRenders(recent)}/s${tweaks === "" ? "" : ` · tweaks ${tweaks}`}`;

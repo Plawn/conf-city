@@ -1,5 +1,5 @@
 import { PITCH } from "./constants";
-import { pointInPolygon, polygonBounds, segSegIntersect } from "./geometry";
+import { cellKey, distToPolygon, pointInPolygon, polygonBounds, segSegIntersect } from "./geometry";
 import type { Vec2 } from "./types";
 
 /**
@@ -76,27 +76,6 @@ export interface HarbourRequest {
   offset: Vec2;
   /** Every island's shore, in **world** coordinates — what a sea lane must miss. */
   islands: Vec2[][];
-}
-
-/** `"i,j"` key of a lattice cell — same convention as `layoutCity`. */
-export function cellKey(cell: [number, number]): string {
-  return `${cell[0]},${cell[1]}`;
-}
-
-/** Shortest distance from `p` to the boundary of `poly` (not to its interior). */
-export function distanceToPolygon(p: Vec2, poly: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i]!;
-    const b = poly[(i + 1) % poly.length]!;
-    const dx = b[0] - a[0];
-    const dz = b[1] - a[1];
-    const len2 = dx * dx + dz * dz;
-    const t =
-      len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / len2)) : 0;
-    best = Math.min(best, Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t)));
-  }
-  return best;
 }
 
 /**
@@ -280,7 +259,7 @@ function coastalCells(req: HarbourRequest): Candidate[] {
         cell,
         centre,
         normal: length > 0.01 ? [dx / length, dz / length] : [0, 1],
-        shore: distanceToPolygon(centre, req.outline),
+        shore: distToPolygon(centre, req.outline),
         inRing: req.ring.length >= 3 && pointInPolygon(centre, req.ring),
       });
     }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PITCH, ROAD_OFFSET } from "@/layout/constants";
-import { pointInPolygon } from "@/layout/geometry";
+import { pointInPolygon, vecKey } from "@/layout/geometry";
 import { layoutCity } from "@/layout/layoutCity";
 import { buildRing } from "@/layout/ringRoad";
 import { buildRoadNetwork } from "@/layout/roads";
@@ -13,24 +13,23 @@ function build(cityId: string, nodes: ReturnType<typeof city>, pairs: [string, s
   return { layout, roads: buildRoadNetwork(layout, links) };
 }
 
-const key = (p: Vec2) => `${p[0]},${p[1]}`;
 const isCorner = (p: Vec2) =>
   Number.isInteger((p[0] - ROAD_OFFSET) / PITCH) && Number.isInteger((p[1] - ROAD_OFFSET) / PITCH);
 
 function ringKeys(roads: RoadNetwork): Set<string> {
-  return new Set(roads.ring.map(key));
+  return new Set(roads.ring.map(vecKey));
 }
 
 /** Every segment end is a ring vertex, a lattice corner, or a bridgehead. */
 function checkEnds(roads: RoadNetwork) {
   const ring = ringKeys(roads);
   const heads = new Set(
-    roads.roundabouts.filter((r) => ring.has(key(r.center))).map((r) => key(r.center)),
+    roads.roundabouts.filter((r) => ring.has(vecKey(r.center))).map((r) => vecKey(r.center)),
   );
   for (const s of roads.segments) {
     expect(s.points.length).toBeGreaterThanOrEqual(2);
     for (const p of [s.points[0]!, s.points[s.points.length - 1]!]) {
-      expect(ring.has(key(p)) || isCorner(p) || heads.has(key(p))).toBe(true);
+      expect(ring.has(vecKey(p)) || isCorner(p) || heads.has(vecKey(p))).toBe(true);
     }
     if (!s.ring) {
       for (let k = 0; k + 1 < s.points.length; k++) {
@@ -67,7 +66,7 @@ describe("buildRoadNetwork", () => {
     const route = roads.routes.get("ring:only");
     expect(route).toBeDefined();
     const end = route!.points[route!.points.length - 1]!;
-    expect(ringKeys(roads).has(key(end))).toBe(true);
+    expect(ringKeys(roads).has(vecKey(end))).toBe(true);
     expect(roads.driveways).toHaveLength(1);
     expect(roads.driveways[0]!.mouth).toEqual(end);
   });
@@ -79,7 +78,7 @@ describe("buildRoadNetwork", () => {
     // Too thin for a lattice street: the link rides the ring between two driveways.
     const ring = ringKeys(roads);
     for (const p of route!.points.slice(1, -1)) {
-      expect(ring.has(key(p))).toBe(true);
+      expect(ring.has(vecKey(p))).toBe(true);
     }
     expect([...roads.routes.keys()].filter((k) => k.startsWith("ring:"))).toHaveLength(0);
     expect(roads.segments.filter((s) => s.ring).length).toBeGreaterThanOrEqual(2);
@@ -99,7 +98,7 @@ describe("buildRoadNetwork", () => {
       const route = roads.routes.get(`ring:${n.id}`);
       expect(route).toBeDefined();
       expect(route!.points).toHaveLength(2);
-      expect(ring.has(key(route!.points[1]!))).toBe(true);
+      expect(ring.has(vecKey(route!.points[1]!))).toBe(true);
     }
     checkEnds(roads);
   });
@@ -123,7 +122,7 @@ describe("buildRoadNetwork", () => {
         continue;
       }
       for (const p of s.points) {
-        if (ring.has(key(p))) {
+        if (ring.has(vecKey(p))) {
           continue; // the stub end on the ring
         }
         expect(pointInPolygon(p, inner)).toBe(true);
@@ -131,12 +130,12 @@ describe("buildRoadNetwork", () => {
     }
     const ends = new Set<string>();
     for (const s of roads.segments) {
-      ends.add(key(s.points[0]!));
-      ends.add(key(s.points[s.points.length - 1]!));
+      ends.add(vecKey(s.points[0]!));
+      ends.add(vecKey(s.points[s.points.length - 1]!));
     }
     expect(roads.roundabouts.length).toBeGreaterThan(0);
     for (const r of roads.roundabouts) {
-      expect(ends.has(key(r.center))).toBe(true);
+      expect(ends.has(vecKey(r.center))).toBe(true);
     }
     // Every lattice step is exactly one cell long.
     for (const s of roads.segments) {
@@ -165,23 +164,23 @@ describe("buildRoadNetwork", () => {
     const steps = new Set<string>();
     for (const s of roads.segments) {
       for (let k = 0; k + 1 < s.points.length; k++) {
-        steps.add(`${key(s.points[k]!)}|${key(s.points[k + 1]!)}`);
-        steps.add(`${key(s.points[k + 1]!)}|${key(s.points[k]!)}`);
+        steps.add(`${vecKey(s.points[k]!)}|${vecKey(s.points[k + 1]!)}`);
+        steps.add(`${vecKey(s.points[k + 1]!)}|${vecKey(s.points[k]!)}`);
       }
     }
-    const mouths = new Set(roads.driveways.map((d) => key(d.mouth)));
+    const mouths = new Set(roads.driveways.map((d) => vecKey(d.mouth)));
     for (const route of roads.routes.values()) {
       const pts = route.points;
       // Ends: building centre → driveway mouth.
-      expect(mouths.has(key(pts[1]!))).toBe(true);
+      expect(mouths.has(vecKey(pts[1]!))).toBe(true);
       for (let k = 1; k + 1 < pts.length - 1; k++) {
         const a = pts[k]!;
         const b = pts[k + 1]!;
         // A mouth sits mid-edge: the step around it is half a lattice edge.
-        if (mouths.has(key(a)) || mouths.has(key(b))) {
+        if (mouths.has(vecKey(a)) || mouths.has(vecKey(b))) {
           continue;
         }
-        expect(steps.has(`${key(a)}|${key(b)}`)).toBe(true);
+        expect(steps.has(`${vecKey(a)}|${vecKey(b)}`)).toBe(true);
       }
     }
   });

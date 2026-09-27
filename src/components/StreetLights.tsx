@@ -4,6 +4,7 @@ import { float, smoothstep, uniform, uv } from "three/tsl";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { TERRAIN } from "../domain/nodeStyle";
 import type { Roundabout } from "../layout/types";
+import { arcLength } from "./geo/polyline";
 import type { Run } from "./geo/roadGraph";
 import { CLASS_STYLE, ISLAND_HEIGHT, PAVEMENT, ringRadii } from "./geo/roadStyle";
 import { createLightSource, useLighting } from "./lighting/runtime";
@@ -61,12 +62,7 @@ export function StreetLights({ runs, roundabouts }: { runs: Run[]; roundabouts: 
       }
       const offset = s.halfWidth + PAVEMENT / 2;
       // Walk the polyline by arc length, one lamp every SPACING, sides alternating.
-      let total = 0;
-      for (let k = 0; k + 1 < s.points.length; k++) {
-        const a = s.points[k]!;
-        const b = s.points[k + 1]!;
-        total += Math.hypot(b[0] - a[0], b[1] - a[1]);
-      }
+      const total = arcLength(s.points);
       const count = Math.floor(total / SPACING);
       if (count < 1) {
         continue;

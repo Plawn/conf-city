@@ -1,4 +1,5 @@
 import { TERRAIN } from "../../domain/nodeStyle";
+import { distToSegment } from "../../layout/geometry";
 import type { RoadClass, RoadNetwork, Roundabout, Vec2 } from "../../layout/types";
 import { capLaneOffsets, MAX_TURN } from "./path";
 import { closedSeam, roundCornersTagged } from "./polyline";
@@ -183,15 +184,6 @@ interface Edge {
   lanes: Lanes;
 }
 
-function distToEdge(p: Vec2, e: Edge): number {
-  const dx = e.b[0] - e.a[0];
-  const dz = e.b[1] - e.a[1];
-  const len2 = dx * dx + dz * dz;
-  const t =
-    len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - e.a[0]) * dx + (p[1] - e.a[1]) * dz) / len2)) : 0;
-  return Math.hypot(p[0] - (e.a[0] + dx * t), p[1] - (e.a[1] + dz * t));
-}
-
 export function makeDriver(networks: RoadNetwork[]): Driver {
   const roundabouts = networks.flatMap((n) => n.roundabouts);
   const edges: Edge[] = [];
@@ -219,7 +211,7 @@ export function makeDriver(networks: RoadNetwork[]): Driver {
     }
     const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     for (const e of edges) {
-      if (distToEdge(mid, e) < ON_EDGE) {
+      if (distToSegment(mid, e.a, e.b) < ON_EDGE) {
         return e.lanes;
       }
     }

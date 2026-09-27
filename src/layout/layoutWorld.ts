@@ -12,8 +12,8 @@ import {
   WATER_GAP,
 } from "./constants";
 import { type Body, relax, type Spring } from "./force";
-import { centroid, polygonBounds } from "./geometry";
-import { cellKey, type HarbourSite, planHarbour, translateHarbour } from "./harbour";
+import { cellKey, centroid, polygonBounds } from "./geometry";
+import { type HarbourSite, planHarbour, translateHarbour } from "./harbour";
 import { type CityNodesLayout, layoutCity } from "./layoutCity";
 import { footprintCorners, islandOutline, zoneOutline } from "./outline";
 import { buildRing } from "./ringRoad";

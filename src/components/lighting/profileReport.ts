@@ -1,3 +1,4 @@
+import { percentile } from "../../lib/stats";
 /** GPU pass durations are exclusive; CPU submission scopes may be nested. */
 export interface PipelinePassSample {
   uid: string;
@@ -41,8 +42,10 @@ export function passGroup(name: string, compute = false): string {
 }
 
 function p95(values: number[]) {
-  values.sort((a, b) => a - b);
-  return values[Math.max(0, Math.ceil(values.length * 0.95) - 1)] ?? 0;
+  return percentile(
+    values.sort((a, b) => a - b),
+    0.95,
+  );
 }
 
 export function summarizePipeline(frames: readonly PipelineFrameSample[]) {

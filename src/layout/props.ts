@@ -1,7 +1,7 @@
 import type { PropKind } from "../domain/biome";
 import { NODE_STYLE } from "../domain/nodeStyle";
 import { fnv1a, mulberry32 } from "../lib/random";
-import { pointInPolygon, polygonBounds } from "./geometry";
+import { distToPolyline, pointInPolygon, polygonBounds } from "./geometry";
 import type { CityLayout, RoadClass, Vec2 } from "./types";
 import { PLOT_RADIUS } from "./utilityPlot";
 
@@ -25,28 +25,6 @@ const PLOT_MARGIN = 0.5;
 const JITTER = 0.42;
 /** Ceiling per city: a scatter is cheap to compute and expensive to draw. */
 const MAX_PROPS = 420;
-
-function distToSegment(p: Vec2, a: Vec2, b: Vec2): number {
-  const vx = b[0] - a[0];
-  const vz = b[1] - a[1];
-  const len2 = vx * vx + vz * vz;
-  let t = len2 > 0 ? ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2 : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const dx = p[0] - (a[0] + t * vx);
-  const dz = p[1] - (a[1] + t * vz);
-  return Math.hypot(dx, dz);
-}
-
-function distToPolyline(p: Vec2, points: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const d = distToSegment(p, points[i - 1]!, points[i]!);
-    if (d < best) {
-      best = d;
-    }
-  }
-  return best;
-}
 
 /**
  * Scatter a biome's vegetation over whatever land the city is not using.

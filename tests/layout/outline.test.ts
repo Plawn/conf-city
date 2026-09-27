@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { PositionedNode } from "@/domain/types";
 import { PITCH } from "@/layout/constants";
-import { pointInPolygon, segSegIntersect, signedArea } from "@/layout/geometry";
+import { distToPolygon, pointInPolygon, segSegIntersect, signedArea } from "@/layout/geometry";
 import { islandOutline, roughen } from "@/layout/outline";
+import type { Vec2 } from "@/layout/types";
 
 function placed(w: number, h: number): PositionedNode[] {
   const out: PositionedNode[] = [];
@@ -34,21 +35,6 @@ function selfIntersects(poly: Vec2[]): boolean {
     }
   }
   return false;
-}
-type Vec2 = [number, number];
-
-function distanceToPolygon(p: Vec2, poly: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i]!;
-    const b = poly[(i + 1) % poly.length]!;
-    const dx = b[0] - a[0],
-      dz = b[1] - a[1];
-    const len2 = dx * dx + dz * dz || 1;
-    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / len2));
-    best = Math.min(best, Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t)));
-  }
-  return best;
 }
 
 describe("islandOutline", () => {
@@ -92,7 +78,7 @@ describe("islandOutline", () => {
     const smooth = islandOutline(nodes);
     const rough = islandOutline(nodes, { seed: 5, ruggedness: 1 });
     for (const p of rough) {
-      expect(distanceToPolygon(p, smooth)).toBeLessThan(2.2 + 0.05);
+      expect(distToPolygon(p, smooth)).toBeLessThan(2.2 + 0.05);
     }
   });
 

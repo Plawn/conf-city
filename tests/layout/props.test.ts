@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BIOMES } from "@/domain/biome";
 import { NODE_STYLE } from "@/domain/nodeStyle";
-import { pointInPolygon } from "@/layout/geometry";
+import { distToSegment, pointInPolygon } from "@/layout/geometry";
 import { layoutWorld } from "@/layout/layoutWorld";
 import { scatterProps } from "@/layout/props";
 import type { CityLayout, RoadClass, Vec2 } from "@/layout/types";
@@ -22,17 +22,6 @@ function layout(): CityLayout {
   );
   return world.cities.get("a")!;
 }
-
-const dist = (p: Vec2, a: Vec2, b: Vec2) => {
-  const vx = b[0] - a[0];
-  const vz = b[1] - a[1];
-  const len2 = vx * vx + vz * vz;
-  const t = Math.max(
-    0,
-    Math.min(1, len2 > 0 ? ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2 : 0),
-  );
-  return Math.hypot(p[0] - (a[0] + t * vx), p[1] - (a[1] + t * vz));
-};
 
 describe("scatterProps", () => {
   const meadow = BIOMES.meadow;
@@ -68,7 +57,7 @@ describe("scatterProps", () => {
       }
       for (const seg of city.roads.segments) {
         for (let i = 1; i < seg.points.length; i++) {
-          expect(dist(p.at, seg.points[i - 1]!, seg.points[i]!)).toBeGreaterThanOrEqual(
+          expect(distToSegment(p.at, seg.points[i - 1]!, seg.points[i]!)).toBeGreaterThanOrEqual(
             CLEARANCE[seg.klass],
           );
         }

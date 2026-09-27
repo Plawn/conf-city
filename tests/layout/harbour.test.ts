@@ -2,14 +2,12 @@ import { expect, test } from "bun:test";
 import sample from "@/data/sample.json";
 import type { World } from "@/domain/types";
 import { PITCH } from "@/layout/constants";
-import { pointInPolygon } from "@/layout/geometry";
-import { distanceToPolygon } from "@/layout/harbour";
+import { distToPolygon, pointInPolygon, vecKey } from "@/layout/geometry";
 import { layoutWorld } from "@/layout/layoutWorld";
 import type { Vec2 } from "@/layout/types";
 import { loadWorld } from "@/loaders/loadWorld";
 
 const cityIds = sample.cities.map((c) => c.id);
-const key = (p: Vec2) => `${p[0]},${p[1]}`;
 
 /** The sample world, with the given addresses turned into ingress services. */
 function world(ingress: string[] = []) {
@@ -31,8 +29,8 @@ test("no ingress leaves the layout byte-for-byte as it was", () => {
     const other = b.cities.get(id)!;
     expect(other.harbour).toBeUndefined();
     expect(city.harbour).toBeUndefined();
-    expect(other.outline.map(key)).toEqual(city.outline.map(key));
-    expect(other.roads.ring.map(key)).toEqual(city.roads.ring.map(key));
+    expect(other.outline.map(vecKey)).toEqual(city.outline.map(vecKey));
+    expect(other.roads.ring.map(vecKey)).toEqual(city.roads.ring.map(vecKey));
     expect(other.nodes.map((n) => `${n.id}@${n.position.join(",")}`)).toEqual(
       city.nodes.map((n) => `${n.id}@${n.position.join(",")}`),
     );
@@ -78,7 +76,7 @@ test("the port did not push the coast in front of itself", () => {
   const berth = city.harbour!.berths[0]!;
   // It is genuinely on the waterfront — the whole point. Had it stayed in the
   // hull, the shore would have been pushed ISLAND_PADDING further out in front.
-  expect(distanceToPolygon(berth.position, city.outline)).toBeLessThan(2);
+  expect(distToPolygon(berth.position, city.outline)).toBeLessThan(2);
   // And no other building is closer to the sea on that side.
   const seaward = city.nodes.filter(
     (n) =>
@@ -88,8 +86,8 @@ test("the port did not push the coast in front of itself", () => {
         0,
   );
   for (const n of seaward) {
-    expect(distanceToPolygon([n.position[0], n.position[2]], city.outline)).toBeGreaterThan(
-      distanceToPolygon(berth.position, city.outline),
+    expect(distToPolygon([n.position[0], n.position[2]], city.outline)).toBeGreaterThan(
+      distToPolygon(berth.position, city.outline),
     );
   }
 });
@@ -100,17 +98,17 @@ test("the port is served by asphalt", () => {
   const city = world([addr]).cities.get(cityId)!;
   const berth = city.harbour!.berths[0]!;
   const serving = [...city.roads.routes.values()].filter((r) =>
-    r.points.some((p) => key(p) === key(berth.position)),
+    r.points.some((p) => vecKey(p) === vecKey(berth.position)),
   );
   expect(serving.length).toBeGreaterThan(0);
   // Outside the ring, the quay has no lattice corner: it leaves by an avenue
   // straight onto the ring, and that mouth is a ring vertex, exactly.
-  const onRing = new Set(city.roads.ring.map(key));
-  const mouths = serving.flatMap((r) => r.points.filter((p) => onRing.has(key(p)))).map(key);
+  const onRing = new Set(city.roads.ring.map(vecKey));
+  const mouths = serving.flatMap((r) => r.points.filter((p) => onRing.has(vecKey(p)))).map(vecKey);
   expect(mouths.length).toBeGreaterThan(0);
   const driveway = city.roads.driveways.find(
     (d) =>
-      mouths.includes(key(d.mouth)) &&
+      mouths.includes(vecKey(d.mouth)) &&
       Math.hypot(d.door[0] - berth.position[0], d.door[1] - berth.position[1]) < PITCH / 2,
   );
   expect(driveway).toBeDefined();
@@ -143,7 +141,7 @@ test("several ingress services share one quay, one berth each", () => {
   const city = world(addrs).cities.get(cityId)!;
   const harbour = city.harbour!;
   expect(harbour.berths.map((b) => b.address).sort()).toEqual([...addrs].sort());
-  const cells = harbour.berths.map((b) => key(b.position));
+  const cells = harbour.berths.map((b) => vecKey(b.position));
   expect(new Set(cells).size).toBe(cells.length);
   const [a, b] = harbour.berths as [(typeof harbour.berths)[0], (typeof harbour.berths)[0]];
   expect(

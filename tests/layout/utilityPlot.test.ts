@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pointInPolygon } from "@/layout/geometry";
-import { distanceToPolygon } from "@/layout/harbour";
+import { distToPolygon, distToPolyline, pointInPolygon } from "@/layout/geometry";
 import { layoutWorld } from "@/layout/layoutWorld";
 import type { CityLayout, Vec2 } from "@/layout/types";
 import { SLOT_COUNT } from "@/layout/utilityPlot";
@@ -10,21 +9,6 @@ import { city, grid, interLink, intraLinks } from "../fixtures/layout";
 const ROAD_CLEAR = 2.2;
 const RING_CLEAR = 1.45;
 const BUILDING_CLEAR = 3;
-
-function distToPolyline(p: Vec2, points: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!;
-    const b = points[i]!;
-    const vx = b[0] - a[0];
-    const vz = b[1] - a[1];
-    const len2 = vx * vx + vz * vz;
-    const t =
-      len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2)) : 0;
-    best = Math.min(best, Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t)));
-  }
-  return best;
-}
 
 /** Everything the plot must never touch: asphalt, buildings, water. */
 function expectPlotIsBuildable(layout: CityLayout) {
@@ -41,8 +25,8 @@ function expectPlotIsBuildable(layout: CityLayout) {
 function expectSpotIsBuildable(layout: CityLayout, at: Vec2) {
   expect(pointInPolygon(at, layout.outline)).toBe(true);
   // Dry land, and on the seaward side of the ring: a stretch of coast.
-  expect(distanceToPolygon(at, layout.outline)).toBeGreaterThan(0.3);
-  expect(distanceToPolygon(at, layout.outline)).toBeLessThan(4);
+  expect(distToPolygon(at, layout.outline)).toBeGreaterThan(0.3);
+  expect(distToPolygon(at, layout.outline)).toBeLessThan(4);
 
   for (const seg of layout.roads.segments) {
     if (seg.ring) {
@@ -58,7 +42,7 @@ function expectSpotIsBuildable(layout: CityLayout, at: Vec2) {
       r.radius + ROAD_CLEAR,
     );
   }
-  expect(distanceToPolygon(at, layout.roads.ring)).toBeGreaterThanOrEqual(RING_CLEAR - 1e-6);
+  expect(distToPolygon(at, layout.roads.ring)).toBeGreaterThanOrEqual(RING_CLEAR - 1e-6);
 
   for (const n of layout.nodes) {
     const d = Math.hypot(at[0] - n.position[0], at[1] - n.position[2]);
@@ -89,8 +73,8 @@ describe("placeUtilityPlot", () => {
     const plot = layout.utilityPlot!;
     expect(Math.hypot(plot.shoreward[0], plot.shoreward[1])).toBeCloseTo(1, 6);
 
-    const here = distanceToPolygon(plot.center, layout.outline);
-    const ahead = distanceToPolygon(
+    const here = distToPolygon(plot.center, layout.outline);
+    const ahead = distToPolygon(
       [plot.center[0] + plot.shoreward[0] * 0.5, plot.center[1] + plot.shoreward[1] * 0.5],
       layout.outline,
     );

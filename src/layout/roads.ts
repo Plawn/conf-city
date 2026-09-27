@@ -7,7 +7,7 @@ import {
   ROUNDABOUT_RADIUS,
   ROUNDABOUT_SPACING,
 } from "./constants";
-import { centroid, pointInPolygon, segSegIntersect } from "./geometry";
+import { centroid, pointInPolygon, segSegIntersect, vecKey } from "./geometry";
 import type { CityNodesLayout } from "./layoutCity";
 import { attachRing, buildRing, ringHit } from "./ringRoad";
 import {
@@ -111,10 +111,6 @@ function edgeKey(ci: number, cj: number, di: number, dj: number): string {
 
 function cornerKey(c: [number, number]): string {
   return `${c[0]},${c[1]}`;
-}
-
-function pointKey(p: Vec2): string {
-  return `${p[0]},${p[1]}`;
 }
 
 class Heap {
@@ -506,7 +502,7 @@ export function buildRoadNetwork(
     cell: [number, number],
     head: { mouth: Vec2; edge: string },
   ) => {
-    const key = `${nodeId}|${pointKey(head.mouth)}`;
+    const key = `${nodeId}|${vecKey(head.mouth)}`;
     if (!driveways.has(key)) {
       driveways.set(key, {
         mouth: head.mouth,
@@ -569,13 +565,13 @@ export function buildRoadNetwork(
       continue;
     }
     const { gate } = g;
-    ringRoundabouts.set(pointKey(gate.hit), gate.hit);
+    ringRoundabouts.set(vecKey(gate.hit), gate.hit);
     if (gate.corner === null) {
       if (gate.driveway !== g.nodeId) {
         continue;
       }
       const mouth = gate.hit;
-      const key = `${g.nodeId}|${pointKey(mouth)}`;
+      const key = `${g.nodeId}|${vecKey(mouth)}`;
       if (!driveways.has(key)) {
         driveways.set(key, { mouth, door: doorTowards(g.nodeId, from, mouth), klass: "avenue" });
       }
@@ -603,7 +599,7 @@ export function buildRoadNetwork(
     openDriveway(g.nodeId, from, head);
     const last = full[full.length - 1]!;
     const lastPos = cornerPos(last[0], last[1]);
-    const stubKey = `${cornerKey(last)}|${pointKey(gate.hit)}`;
+    const stubKey = `${cornerKey(last)}|${vecKey(gate.hit)}`;
     const stub = stubs.get(stubKey) ?? { corner: last, hit: gate.hit, uses: 0 };
     stub.uses += 1;
     stubs.set(stubKey, stub);
@@ -663,7 +659,7 @@ export function buildRoadNetwork(
     }
     const mouth = attachRing(ring, best.hit, pinned);
     pinned.add(mouth);
-    driveways.set(`${id}|${pointKey(mouth)}`, {
+    driveways.set(`${id}|${vecKey(mouth)}`, {
       mouth,
       door: doorTowards(id, cell, mouth),
       klass: "avenue",
@@ -875,7 +871,8 @@ function pickRoundabouts(
   const traffic = new Map<string, number>();
   for (const route of routes.values()) {
     for (const [x, z] of route.points) {
-      traffic.set(`${x},${z}`, (traffic.get(`${x},${z}`) ?? 0) + 1);
+      const key = vecKey([x, z]);
+      traffic.set(key, (traffic.get(key) ?? 0) + 1);
     }
   }
 
@@ -886,7 +883,7 @@ function pickRoundabouts(
     }
     const [ci, cj] = key.split(",").map(Number) as [number, number];
     const pos = cornerPos(ci, cj);
-    candidates.push({ key, pos, score: traffic.get(`${pos[0]},${pos[1]}`) ?? 0 });
+    candidates.push({ key, pos, score: traffic.get(vecKey(pos)) ?? 0 });
   }
   candidates.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
 
@@ -978,7 +975,7 @@ function ringSegments(ring: Vec2[], ringRoundabouts: ReadonlyMap<string, Vec2>):
   }
   let cuts: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (ringRoundabouts.has(pointKey(ring[i]!))) {
+    if (ringRoundabouts.has(vecKey(ring[i]!))) {
       cuts.push(i);
     }
   }

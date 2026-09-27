@@ -1,3 +1,4 @@
+import { percentile } from "../lib/stats";
 /**
  * Rendering quality tiers. Every per-frame budget the renderer scales with the
  * machine — pixels, contact shading, shadows, local lights, traffic — comes from
@@ -209,14 +210,6 @@ const EVALUATE_EVERY_MS = 500;
 const DOWN_RATIO = 1.25;
 /** Frames on a capped clock never run faster than the cadence; "holding it" is the headroom signal. */
 const UP_RATIO = 1.05;
-
-export function percentile(sorted: readonly number[], fraction: number): number {
-  if (sorted.length === 0) {
-    return 0;
-  }
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(fraction * sorted.length) - 1));
-  return sorted[index]!;
-}
 
 /**
  * Steps the tier down quickly when frames miss the cadence, and back up slowly

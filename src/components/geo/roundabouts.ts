@@ -1,3 +1,4 @@
+import { vecKey } from "../../layout/geometry";
 import type { Roundabout, Vec2 } from "../../layout/types";
 import { TAU } from "../../lib/math";
 import { arcPiece, MAX_TURN, MIN_DRIVEN_RADIUS, type PathPiece, samplePath } from "./path";
@@ -74,10 +75,6 @@ const APPROACH = 0.3;
  * `atan2(z, x)`.
  */
 const CIRCULATION = -1;
-
-function key(p: Vec2): string {
-  return `${p[0]},${p[1]}`;
-}
 
 /** Centreline of the ring: the middle of the tarmac, clear of the island. */
 export function drivingRadius(r: Roundabout): number {
@@ -209,12 +206,12 @@ export function roundaboutPieces(r: Roundabout, prev: Vec2, next: Vec2): PathPie
  * the crossing with no span to arch over — a flat bridge through the water.
  */
 function trimIntoRoundabouts(points: Vec2[], roundabouts: Roundabout[], pinned: Vec2[]): Vec2[] {
-  const centres = new Set(roundabouts.map((r) => key(r.center)));
+  const centres = new Set(roundabouts.map((r) => vecKey(r.center)));
   for (const p of pinned) {
-    centres.add(key(p));
+    centres.add(vecKey(p));
   }
   return points.filter((p, i) => {
-    if (i === 0 || i === points.length - 1 || centres.has(key(p))) {
+    if (i === 0 || i === points.length - 1 || centres.has(vecKey(p))) {
       return true;
     }
     return !roundabouts.some(
@@ -232,7 +229,7 @@ export function driveAroundRoundabouts(
     return points;
   }
 
-  const byCorner = new Map(roundabouts.map((r) => [key(r.center), r]));
+  const byCorner = new Map(roundabouts.map((r) => [vecKey(r.center), r]));
   const trimmed = trimIntoRoundabouts(points, roundabouts, pinned);
   if (trimmed.length < 3) {
     return points;
@@ -241,7 +238,7 @@ export function driveAroundRoundabouts(
   const out: Vec2[] = [trimmed[0]!];
   for (let i = 1; i < trimmed.length - 1; i++) {
     const p = trimmed[i]!;
-    const r = byCorner.get(key(p));
+    const r = byCorner.get(vecKey(p));
     if (!r) {
       out.push(p);
       continue;

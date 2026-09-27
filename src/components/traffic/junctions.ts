@@ -1,3 +1,4 @@
+import { vecKey } from "../../layout/geometry";
 import type { Roundabout } from "../../layout/types";
 import { ringRadii } from "../geo/roadStyle";
 import { drivingRadius } from "../geo/roundabouts";
@@ -65,7 +66,7 @@ export function bakeJunctions(
   const capacity_ = new Map<string, number>();
   for (const route of routes) {
     for (const junction of route.junctions ?? []) {
-      capacity_.set(`${junction.center[0]},${junction.center[1]}`, ringCapacity(junction));
+      capacity_.set(vecKey(junction.center), ringCapacity(junction));
     }
   }
   return {
@@ -107,7 +108,7 @@ export function bakeJunctions(
             if (current && start - current.end < 0.01) {
               current.end = end;
             } else {
-              current = { key: `${junction.center[0]},${junction.center[1]}`, start, end };
+              current = { key: vecKey(junction.center), start, end };
               passages.push(current);
             }
           }

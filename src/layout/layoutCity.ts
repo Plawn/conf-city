@@ -3,6 +3,7 @@ import { GOLDEN_ANGLE } from "../lib/math";
 import { fnv1a, mulberry32 } from "../lib/random";
 import { FORCE_ITERATIONS, footprintRadius, LINK_REST, PITCH } from "./constants";
 import { type Body, relax, type Spring } from "./force";
+import { cellKey } from "./geometry";
 
 /**
  * Lays out the nodes of ONE city around the local origin. World placement
@@ -214,7 +215,7 @@ function snapToLattice(
             continue;
           }
           const cell: [number, number] = [baseI + di, baseJ + dj];
-          if (!taken.has(`${cell[0]},${cell[1]}`)) {
+          if (!taken.has(cellKey(cell))) {
             candidates.push(cell);
           }
         }
@@ -227,7 +228,7 @@ function snapToLattice(
       chosen = candidates[0] ?? null;
     }
     const cell = chosen ?? [baseI, baseJ];
-    taken.add(`${cell[0]},${cell[1]}`);
+    taken.add(cellKey(cell));
     cells.set(nodes[k]!.id, cell);
     if (k < recenterCount) {
       minI = Math.min(minI, cell[0]);

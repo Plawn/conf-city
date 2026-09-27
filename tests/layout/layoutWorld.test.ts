@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { vecKey } from "@/layout/geometry";
 import { layoutWorld } from "@/layout/layoutWorld";
-import type { Vec2 } from "@/layout/types";
 import { city, grid, interLink, intraLinks } from "../fixtures/layout";
-
-const key = (p: Vec2) => `${p[0]},${p[1]}`;
 
 describe("layoutWorld", () => {
   test("bridgeheads are ring vertices and roundabout centres of their city, exactly", () => {
@@ -20,10 +18,10 @@ describe("layoutWorld", () => {
     const [headA, headB] = bridge.waterSpan;
     const a = world.cities.get("a")!.roads;
     const b = world.cities.get("b")!.roads;
-    expect(a.ring.map(key)).toContain(key(headA));
-    expect(b.ring.map(key)).toContain(key(headB));
-    expect(a.roundabouts.map((r) => key(r.center))).toContain(key(headA));
-    expect(b.roundabouts.map((r) => key(r.center))).toContain(key(headB));
+    expect(a.ring.map(vecKey)).toContain(vecKey(headA));
+    expect(b.ring.map(vecKey)).toContain(vecKey(headB));
+    expect(a.roundabouts.map((r) => vecKey(r.center))).toContain(vecKey(headA));
+    expect(b.roundabouts.map((r) => vecKey(r.center))).toContain(vecKey(headB));
     expect(bridge.crossings).toHaveLength(2);
     // Every feeder route ends on its bridgehead.
     for (const c of bridge.crossings) {
@@ -31,8 +29,8 @@ describe("layoutWorld", () => {
       const rb = b.routes.get(c.key);
       expect(ra).toBeDefined();
       expect(rb).toBeDefined();
-      expect(key(ra!.points[ra!.points.length - 1]!)).toBe(key(headA));
-      expect(key(rb!.points[rb!.points.length - 1]!)).toBe(key(headB));
+      expect(vecKey(ra!.points[ra!.points.length - 1]!)).toBe(vecKey(headA));
+      expect(vecKey(rb!.points[rb!.points.length - 1]!)).toBe(vecKey(headB));
     }
   });
 
@@ -43,10 +41,10 @@ describe("layoutWorld", () => {
     const [hx, hy] = world.bridges[0]!.waterSpan;
     const x = world.cities.get("x")!.roads;
     const y = world.cities.get("y")!.roads;
-    expect(x.ring.map(key)).toContain(key(hx));
-    expect(y.ring.map(key)).toContain(key(hy));
-    expect(x.driveways.some((d) => key(d.mouth) === key(hx))).toBe(true);
-    expect(y.driveways.some((d) => key(d.mouth) === key(hy))).toBe(true);
+    expect(x.ring.map(vecKey)).toContain(vecKey(hx));
+    expect(y.ring.map(vecKey)).toContain(vecKey(hy));
+    expect(x.driveways.some((d) => vecKey(d.mouth) === vecKey(hx))).toBe(true);
+    expect(y.driveways.some((d) => vecKey(d.mouth) === vecKey(hy))).toBe(true);
     expect(x.routes.has("ring:one")).toBe(false);
   });
 

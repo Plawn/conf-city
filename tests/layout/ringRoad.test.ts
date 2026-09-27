@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { roundedOffset } from "@/layout/geometry";
+import { distToPolygon, roundedOffset } from "@/layout/geometry";
 import { attachRing, ringHit } from "@/layout/ringRoad";
 import type { Vec2 } from "@/layout/types";
 
@@ -12,23 +12,6 @@ const square: Vec2[] = [
 
 function dist(a: Vec2, b: Vec2): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-/** Distance from `p` to the closed polygon `poly`. */
-function distToPolygon(p: Vec2, poly: Vec2[]): number {
-  let best = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i]!;
-    const b = poly[(i + 1) % poly.length]!;
-    const dx = b[0] - a[0];
-    const dz = b[1] - a[1];
-    const t = Math.max(
-      0,
-      Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)),
-    );
-    best = Math.min(best, dist(p, [a[0] + dx * t, a[1] + dz * t]));
-  }
-  return best;
 }
 
 describe("roundedOffset", () => {

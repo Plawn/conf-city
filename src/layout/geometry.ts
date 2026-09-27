@@ -11,6 +11,44 @@ import type { Vec2 } from "./types";
  * `inflateConvex` relies on to know which side is "outside".
  */
 
+/** `"x,z"` key of a point — the exact-equality key roads match on; never round first. */
+export function vecKey(p: Vec2): string {
+  return `${p[0]},${p[1]}`;
+}
+
+/** `"i,j"` key of a lattice cell — `layoutCity` and the harbour share it. */
+export function cellKey(cell: [number, number]): string {
+  return vecKey(cell);
+}
+
+/** Shortest distance from `p` to the segment `a → b` (a zero-length one is the point `a`). */
+export function distToSegment(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const len2 = dx * dx + dz * dz;
+  const t =
+    len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / len2)) : 0;
+  return Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t));
+}
+
+/** Shortest distance from `p` to an open polyline; `Infinity` below two points. */
+export function distToPolyline(p: Vec2, points: Vec2[]): number {
+  let best = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    best = Math.min(best, distToSegment(p, points[i - 1]!, points[i]!));
+  }
+  return best;
+}
+
+/** Shortest distance from `p` to the boundary of the closed `ring` (not to its interior). */
+export function distToPolygon(p: Vec2, ring: Vec2[]): number {
+  let best = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    best = Math.min(best, distToSegment(p, ring[i]!, ring[(i + 1) % ring.length]!));
+  }
+  return best;
+}
+
 function cross(o: Vec2, a: Vec2, b: Vec2): number {
   return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }
