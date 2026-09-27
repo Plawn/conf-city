@@ -152,7 +152,7 @@ RoadNetworkMesh.tsx        Whole network in 4 merged draw calls (pavements, asph
 StreetLights.tsx           Instanced lamp posts on lit classes + roundabouts
 RouteOverlay.tsx           Invisible raycast ribbon per route: hover tooltip, error tint
 BridgeMesh.tsx             Arched deck + railings + pylons over the deck span from src/geo/drivable.ts
-NodeMesh.tsx               One building: variant model, height = memory, glow = CPU, gauge ring, selection, tooltip
+NodeMesh.tsx               One building: picks InstancedBuilding / NodeModel / PortModel, gauge, selection, tooltip
 BuildingFire.tsx           Flames + smoke on incident buildings, two instanced draws
 Vegetation.tsx             One InstancedMesh per prop kind per city
 UsageBar.tsx, MetricCard.tsx, Sparkline.tsx, NodeDrawer.tsx, LogPanel.tsx, StatusBar.tsx,
@@ -164,7 +164,9 @@ Sub-folders:
 
 ```
 buildings/                 BuildingBatches (opaque buildings batched by city / model / 24-unit tile),
-                           InstancedBuilding, instances.ts (BuildingBatch / BuildingInstances, inspectBuildings),
+                           InstancedBuilding, NodeModel.tsx (discovered building + PortModel, GLB preload),
+                           GaugeRing.tsx (shared ring cache), SelectionRing.tsx,
+                           instances.ts (BuildingBatch / BuildingInstances, inspectBuildings),
                            visuals.ts (colour / height targets, settled test), animationQueue.ts (sleeping tasks
                            woken by telemetry, hover, selection, lighting), industrialGeometry.ts (7 generated
                            industrial models), harbourGeometry.ts (quay + ship fallback), propGeometry.ts
