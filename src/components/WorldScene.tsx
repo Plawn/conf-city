@@ -118,6 +118,8 @@ export function WorldScene({
   const fps = idle ? IDLE_FPS : renderMode === "office" ? 30 : 60;
   // Overlay that hosts every drei <Html>; state (not ref) so children re-render once it exists.
   const [portalEl, setPortalEl] = useState<HTMLDivElement | null>(null);
+  // Canvas re-applies its `dpr` prop (default [1, 2]) on every render, so the budget must live here.
+  const [renderDpr, setRenderDpr] = useState<number>();
   const portalRef = useMemo(() => ({ current: portalEl }), [portalEl]);
 
   const handleFocus = useCallback(
@@ -178,6 +180,7 @@ export function WorldScene({
           key={rendererAttempt}
           gl={initializeRenderer}
           frameloop="never"
+          dpr={renderDpr}
           shadows="percentage"
           // Render scale comes from the quality tier (`RenderScale`), never from interaction.
           // `regress()` suspends expensive hover raycasts, without resizing GPU targets.
@@ -191,7 +194,7 @@ export function WorldScene({
           <LightingContext.Provider value={lighting}>
             <BuildingAnimations>
               <RenderLoop fps={fps} />
-              <RenderScale />
+              <RenderScale onDpr={setRenderDpr} />
               <QualityGovernor />
               <fog attach="fog" args={["#b9d7ec", FOG_NEAR * depthScale, FOG_FAR * depthScale]} />
               <SolarLighting extent={extent} />

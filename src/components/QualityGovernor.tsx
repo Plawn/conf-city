@@ -21,17 +21,17 @@ const ACTIVITY_EVENTS = ["pointermove", "pointerdown", "wheel", "keydown", "touc
 
 /**
  * Render scale from the effective pixel budget (tier plus tweaks) and the canvas
- * size. Only a budget or layout change touches it: ClusteredLighting rebuilds its buffers on resize.
+ * size, handed to the Canvas `dpr` prop (a `setDpr` alone is reset by the next Canvas render).
+ * Only a budget or layout change touches it: ClusteredLighting rebuilds its buffers on resize.
  */
-export function RenderScale() {
+export function RenderScale({ onDpr }: { onDpr: (dpr: number) => void }) {
   // Destructured so a tweak to another budget never re-runs the resize.
   const { maxPixels, maxDpr } = useQualityProfile();
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const setDpr = useThree((s) => s.setDpr);
   useEffect(() => {
-    setDpr(resolveDpr({ maxPixels, maxDpr }, width, height, window.devicePixelRatio));
-  }, [maxPixels, maxDpr, width, height, setDpr]);
+    onDpr(resolveDpr({ maxPixels, maxDpr }, width, height, window.devicePixelRatio));
+  }, [maxPixels, maxDpr, width, height, onDpr]);
   return null;
 }
 
