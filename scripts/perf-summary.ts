@@ -1,5 +1,5 @@
 import type { LightingGpuSample, LightingPerfSample } from "../src/components/PerfTuning";
-import { percentile } from "../src/domain/quality";
+import { percentile } from "../src/lib/stats";
 
 /** Sorts `values` in place; null when empty. */
 function percentileOrNull(values: number[], fraction: number) {
