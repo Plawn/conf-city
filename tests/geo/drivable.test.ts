@@ -75,6 +75,17 @@ describe("makeDriver", () => {
     expect(arcLane).toEqual(laneOffsets("avenue"));
   });
 
+  test("ring lanes ride across the middle of the one-way tarmac", () => {
+    for (const klass of ["street", "avenue", "boulevard"] as RoadClass[]) {
+      const r = { center: [0, 0] as Vec2, radius: 1.2, klass };
+      const { inner, outer } = ringRadii(r);
+      const ridden = laneOffsets(klass).map((o) => drivingRadius(r) + o);
+      expect((ridden[0]! + ridden[1]!) / 2).toBeCloseTo((inner + outer) / 2, 9);
+      expect(Math.min(...ridden)).toBeGreaterThan(inner + 0.2);
+      expect(Math.max(...ridden)).toBeLessThan(outer - 0.2);
+    }
+  });
+
   test("a roundabout is entered and left by tangent blends, never a sharp corner", () => {
     const r = { center: [6, 0] as Vec2, radius: 1.2, klass: "avenue" as const };
     const net = network({

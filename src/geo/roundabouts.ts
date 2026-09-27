@@ -2,7 +2,7 @@ import { vecKey } from "../layout/geometry";
 import type { Roundabout, Vec2 } from "../layout/types";
 import { TAU } from "../lib/math";
 import { arcPiece, MAX_TURN, MIN_DRIVEN_RADIUS, type PathPiece, samplePath } from "./path";
-import { CLASS_STYLE, maxLaneOffset, ringRadii } from "./roadStyle";
+import { CLASS_STYLE, laneOffsets, maxLaneOffset, ringRadii } from "./roadStyle";
 
 /**
  * Sends a drivable route *around* the roundabouts it meets instead of straight
@@ -76,10 +76,14 @@ const APPROACH = 0.3;
  */
 const CIRCULATION = -1;
 
-/** Centreline of the ring: the middle of the tarmac, clear of the island. */
+/**
+ * Reference circle of the ring, which traffic rides at its lane offsets to the right (outward):
+ * set inward by their mean so the lanes sit across the middle of the one-way tarmac.
+ */
 export function drivingRadius(r: Roundabout): number {
   const { inner } = ringRadii(r);
-  return inner + CLASS_STYLE[r.klass].width / 2;
+  const [a, b] = laneOffsets(r.klass);
+  return inner + CLASS_STYLE[r.klass].width / 2 - (a + b) / 2;
 }
 
 /**

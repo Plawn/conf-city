@@ -32,7 +32,7 @@ Le panneau affiche le compte à rebours dès l’observation du bouchon ; clique
 
 ## Ronds-points
 
-Une réservation d’entrée reste attribuée jusqu’au dégagement de la sortie. La place en aval est vérifiée avant admission ; les voitures en attente restent à l’extérieur du rond-point et leurs trajectoires futures ne peuvent plus bloquer le véhicule admis. La régulation est volontairement conservatrice : une traversée réservée à la fois par rond-point.
+Une réservation d’entrée reste attribuée jusqu’au dégagement de la sortie. La place en aval est vérifiée avant admission ; les voitures en attente restent à l’extérieur du rond-point et leurs trajectoires futures ne peuvent plus bloquer le véhicule admis. Un rond-point délivre autant de réservations que son anneau contient de véhicules (`ringCapacity` : circonférence / `RING_SPACING`, par voie) ; l’insertion elle-même est une fusion arbitrée par les sondes (priorité à l’anneau, puis suivi).
 
 Les arrivées sont limitées à trois véhicules en approche par entrée physique, dédupliquée entre les itinéraires ; les véhicules d’ambiance n’apparaissent plus directement dans un rond-point. Une attente devant un rond-point qui continue de servir sa file ne provoque pas de retrait de secours. Ce retrait reste disponible si le rond-point lui-même cesse de progresser, et la durée de vie maximale des trajets reste bornée.
 
