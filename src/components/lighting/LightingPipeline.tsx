@@ -16,17 +16,22 @@ import {
   mrt,
   normalView,
   output,
+  packNormalToRGB,
   pass,
   renderOutput,
+  rtt,
+  sample,
   screenCoordinate,
   screenUV,
   smoothstep,
   uniform,
+  unpackRGBToNormal,
   vec3,
   vec4,
 } from "three/tsl";
 import {
   type Node,
+  type NodeFrame,
   type PerspectiveCamera,
   RendererUtils,
   RenderPipeline,
@@ -42,6 +47,18 @@ import { renderProfiledPipeline } from "./PipelineProfiler";
 import { gatePass } from "./passGate";
 import { gpuRenderer, isWebGPU, renderParams } from "./renderer";
 import { BEACON_VOLUME_LAYER, useLighting } from "./runtime";
+
+/** The AO denoise target first, at the top level, then the composed pipeline. */
+function renderFrame(
+  renderer: ConstructorParameters<typeof RenderPipeline>[0],
+  resources: { pipeline: RenderPipeline; filteredTexture: ReturnType<typeof rtt> | null },
+) {
+  if (resources.filteredTexture) {
+    resources.filteredTexture.textureNeedsUpdate = true;
+    resources.filteredTexture.updateBefore({ renderer } as NodeFrame);
+  }
+  resources.pipeline.render();
+}
 
 /** Owns the sole composed render; positive priority disables R3F's automatic draw. */
 export function LightingPipeline() {
@@ -69,17 +86,21 @@ export function LightingPipeline() {
   const resources = useMemo(() => {
     const scenePass = pass(scene, camera, { samples: 0 });
     scenePass.renderTarget.texture.userData.profileLabel = "City scene (MRT / materials / lights)";
-    scenePass.setMRT(mrt({ output, normal: normalView, emissive }));
+    scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView), emissive }));
+    // 8-bit normals are plenty for AO and halve that target's bandwidth in every reader.
+    scenePass.getTexture("normal").type = UnsignedByteType;
     const beauty = scenePass.getTextureNode("output");
-    const normals = scenePass.getTextureNode("normal");
+    const packedNormals = scenePass.getTextureNode("normal");
+    const normals = sample((uv) => unpackRGBToNormal(packedNormals.sample(uv)));
     const depth = scenePass.getTextureNode("depth");
     const emission = scenePass.getTextureNode("emissive");
-    // Contact shading is the tier's call: eco skips the half-resolution GTAO and the
-    // full-resolution denoise entirely rather than running them at a lower quality.
+    // Contact shading is the tier's call: eco skips the half-resolution GTAO and its
+    // denoise entirely rather than running them at a lower quality.
     const shading = aoBudget.enabled && renderParams.get("ao") !== "0";
     const ambient = shading ? ao(depth, normals, camera) : null;
     let occlusion: Node<"vec4"> | null = null;
     let filtered: ReturnType<typeof denoise> | null = null;
+    let filteredTexture: ReturnType<typeof rtt> | null = null;
     if (ambient) {
       ambient.resolutionScale = 0.5;
       ambient.samples.value = isWebGPU(renderer) ? aoBudget.samples : Math.min(8, aoBudget.samples);
@@ -90,7 +111,12 @@ export function LightingPipeline() {
       if (aoBudget.denoise) {
         filtered = denoise(ambient.getTextureNode(), depth, normals, camera);
         filtered.radius.value = 3;
-        occlusion = filtered as unknown as Node<"vec4">;
+        // Once per frame at AO resolution: inline, its 16 taps ran per full-res pixel in every reader.
+        filteredTexture = rtt(filtered).setResolutionScale(0.5);
+        // Rendered by `renderFrame` before the pipeline: nested inside FXAA's RTT it comes out black.
+        filteredTexture.autoUpdate = false;
+        filteredTexture.renderTarget!.texture.userData.profileLabel = "City AO denoise";
+        occlusion = filteredTexture as unknown as Node<"vec4">;
       }
     }
     const factor = occlusion ? mix(vec3(1), vec3(occlusion.r), 0.65) : vec3(1);
@@ -100,6 +126,9 @@ export function LightingPipeline() {
       renderParams.get("ssgi") === "1" && isWebGPU(renderer)
         ? ssgi(beauty, depth, normals, camera as PerspectiveCamera)
         : null;
+    // Bloom reads the raw beauty: emission already skips the AO multiply, so the bright
+    // pixels match, and the high pass no longer re-evaluates the whole composition.
+    let glowInput = beauty.rgb;
     if (gi) {
       gi.useTemporalFiltering = false;
       gi.sliceCount.value = 2;
@@ -157,24 +186,31 @@ export function LightingPipeline() {
     );
     if (isWebGPU(renderer) && volumeBudget && renderParams.get("volume") !== "0") {
       color = color.add(volumeBlur.getTextureNode().rgb);
+      glowInput = glowInput.add(volumeBlur.getTextureNode().rgb);
     }
     // A zero scale would allocate zero-sized mips, so no bloom node at all then.
     const glow =
       renderParams.get("bloom") === "0" || bloomScale <= 0
         ? null
-        : bloom(vec4(color, beauty.a), 0.25, 0.3, 1.15);
+        : bloom(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15);
     glow?.setResolutionScale(bloomScale);
     const pipeline = new RenderPipeline(renderer);
     pipeline.outputColorTransform = false;
-    const antialias = fxaa(renderOutput(vec4(glow ? color.add(glow.rgb) : color, beauty.a)));
-    antialias.textureNode.value.userData.profileLabel =
+    // Tone-mapped sRGB fits 8 bits like the canvas: half the bandwidth of the default half-float
+    // target, written here and read again by every FXAA tap.
+    const composition = renderOutput(vec4(glow ? color.add(glow.rgb) : color, beauty.a));
+    const composed = rtt(composition, null, null, { type: UnsignedByteType });
+    composed.renderTarget!.texture.userData.profileLabel =
       "City composition / tone mapping (FXAA input)";
+    const antialias = fxaa(composed);
     pipeline.outputNode = antialias;
     return {
       pipeline,
       scenePass,
       ambient,
       filtered,
+      filteredTexture,
+      composed,
       glow,
       gi,
       volume,
@@ -194,6 +230,9 @@ export function LightingPipeline() {
       resources.scenePass.dispose();
       resources.ambient?.dispose();
       resources.filtered?.dispose();
+      // RTTNode.dispose() only fires an event; the targets are ours to free.
+      resources.filteredTexture?.renderTarget?.dispose();
+      resources.composed.renderTarget?.dispose();
       resources.glow?.dispose();
       resources.gi?.dispose();
       resources.volumePass.dispose();
@@ -255,7 +294,7 @@ export function LightingPipeline() {
         const previous = renderer.getRenderTarget();
         try {
           renderer.setRenderTarget(target);
-          resources.pipeline.render();
+          renderFrame(renderer, resources);
         } finally {
           renderer.setRenderTarget(previous);
         }
@@ -311,7 +350,7 @@ export function LightingPipeline() {
     resources.beamOrigin.value.copy(light.position);
     resources.beamDirection.value.copy(light.target.position).sub(light.position).normalize();
     resources.beamRange.value = Math.max(0.01, light.distance);
-    renderProfiledPipeline(renderer, () => resources.pipeline.render());
+    renderProfiledPipeline(renderer, () => renderFrame(renderer, resources));
   }, 1);
   return <primitive object={resources.volume} />;
 }
