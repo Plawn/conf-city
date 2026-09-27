@@ -1,5 +1,5 @@
 import { arcLength } from "../../geo/polyline";
-import { RING_ROUNDABOUT_CLEAR } from "../constants";
+import { BRIDGEHEAD_SPACING, RING_ROUNDABOUT_CLEAR } from "../constants";
 import { centroid } from "../geometry";
 import type { CityNodesLayout } from "../layoutCity";
 import { attachRing, buildRing, ringHit } from "../ringRoad";
@@ -36,10 +36,12 @@ export interface GateRequest {
 /**
  * Plans the bridgehead of one inter-city pair on this city's ring, facing
  * `toward` (the other city), and attaches it to the ring. Candidates are the
- * usable corners with an axial way out in that general direction; the way out
- * must leave `RING_ROUNDABOUT_CLEAR` between the corner and the roundabout,
- * and the closest to where the straight line to the other city leaves the ring
- * wins. `pinned` holds the ring vertices already handed out, which must not move.
+ * usable corners with an axial way out in that general direction. A candidate
+ * whose stub (last corner → roundabout) is at least `RING_ROUNDABOUT_CLEAR`
+ * and whose roundabout stays `BRIDGEHEAD_SPACING` from the ones already
+ * planned beats any other; among equals the closest to where the straight line
+ * to the other city leaves the ring wins. `pinned` holds the ring vertices
+ * already handed out, which must not move.
  */
 export function planBridgehead(
   city: CityNodesLayout,
@@ -57,7 +59,9 @@ export function planBridgehead(
     return null;
   }
 
+  const heads = [...pinned];
   let best: {
+    tier: number;
     score: number;
     corner: [number, number];
     path: [number, number][];
@@ -79,14 +83,17 @@ export function planBridgehead(
           continue;
         }
         const start = cornerPos(ci, cj);
+        const from = cornerPos(last[0], last[1]);
         const deep = Math.hypot(hit.point[0] - start[0], hit.point[1] - start[1]);
-        if (deep < RING_ROUNDABOUT_CLEAR) {
-          continue;
-        }
+        const stub = Math.hypot(hit.point[0] - from[0], hit.point[1] - from[1]);
+        const spaced = heads.every(
+          (h) => Math.hypot(h[0] - hit.point[0], h[1] - hit.point[1]) >= BRIDGEHEAD_SPACING,
+        );
+        const tier = (stub >= RING_ROUNDABOUT_CLEAR ? 0 : 1) + (spaced ? 0 : 2);
         const score =
           Math.hypot(hit.point[0] - shore[0], hit.point[1] - shore[1]) + DEEP_WEIGHT * deep;
-        if (!best || score < best.score) {
-          best = { score, corner: [ci, cj], path, hit };
+        if (!best || tier < best.tier || (tier === best.tier && score < best.score)) {
+          best = { tier, score, corner: [ci, cj], path, hit };
         }
       }
     }

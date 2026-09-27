@@ -18,9 +18,17 @@ roundabout reservations) is described in `traffic-strategy.md`.
   the ring** by a spur (`ring:<id>` route). Every route leaves its building by a driveway onto a
   street along the plot, so vehicles only ever drive on drawn asphalt.
 - Roundabouts sit at crossroads and bridgeheads, ranked by routes through the corner, kept
-  `ROUNDABOUT_SPACING` apart, bridgeheads first. Bridgeheads are ring vertices inserted by
-  `attachRing`, which mutates the ring so the vertex is shared by identity with the route and the
-  bridge.
+  `ROUNDABOUT_SPACING` apart and `LATTICE_ROUNDABOUT_CLEAR` off the ring, bridgeheads first.
+  Bridgeheads are ring vertices inserted by `attachRing`, which mutates the ring so the vertex is
+  shared by identity with the route and the bridge.
+- **Everything joins the ring** (`roads/access.ts`): a piece of the street grid no bridgehead stub
+  reaches gets one access street, a `walkOut` then a stub meeting the ring at a T; the ring is cut
+  at every such T. No route rides it; it is drawn asphalt only.
+- Spacing on the ring, all derived from the class widths in `constants.ts`: a bridgehead stub is
+  preferably ≥ `RING_ROUNDABOUT_CLEAR` long (measured from its last lattice corner), bridgeheads
+  keep `BRIDGEHEAD_SPACING` apart, access stubs ≥ `RING_STUB_MIN`, and access Ts and ring driveways
+  prefer `RING_ROUNDABOUT_CLEAR` from any other join. Each rule is a preference tier: a city with
+  no better option keeps its road. `RING_CLEARANCE` keeps a lattice street's pavement off the ring's.
 - **One bridge per linked city pair**; each link is a `BridgeCrossing` riding its feeder streets and
   the shared deck. A second deck (construction upgrade) is a separate elevation, same crossing.
 - Ingress services are held out of `layoutCity` (in the hull they would push the coast in front of

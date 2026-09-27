@@ -1,5 +1,6 @@
 import { NODE_STYLE } from "../domain/nodeStyle";
 import type { NodeType } from "../domain/types";
+import { CLASS_STYLE, FILLET, PAVEMENT, ringRadii } from "../geo/roadStyle";
 
 /**
  * Geometry constants shared by the whole layout pipeline.
@@ -29,20 +30,31 @@ export const ROUNDABOUT_SPACING = PITCH * 2;
  * hull) keeps its pavement clear of the ring's (`4 − 1.1 − 0.85 ≈ 2.0`).
  */
 export const RING_PADDING = 4;
+const half = (klass: keyof typeof CLASS_STYLE) => CLASS_STYLE[klass].width / 2;
+/** Outer tarmac radius of a roundabout of `klass`. */
+const outerOf = (klass: keyof typeof CLASS_STYLE) =>
+  ringRadii({ center: [0, 0], radius: ROUNDABOUT_RADIUS, klass }).outer;
+/** How far a street's crossroads eats into its arms: half a street plus the kerb fillet. */
+const STREET_REACH = half("street") + FILLET;
 /**
  * Minimum distance between a lattice corner the A* may use and the ring's
- * centreline — half an avenue plus its pavement, plus half a street: a street
- * ending on such a corner never pokes into the ring's tarmac. Corners closer
- * than this (typically the diagonal corner of a building at a hull vertex) are
- * simply not part of the grid.
+ * centreline: the ring avenue and a street, each with its pavement, side by
+ * side without their kerbs touching. Corners closer than this (typically the
+ * diagonal corner of a building at a hull vertex) are simply not part of the grid.
  */
-export const RING_CLEARANCE = 1.6;
+export const RING_CLEARANCE = half("avenue") + PAVEMENT + half("street") + PAVEMENT;
 /**
- * Minimum distance, along its stub, between a bridgehead roundabout on the ring
- * and the lattice corner it is reached from: the roundabout's outer tarmac
- * (≈ 2.05 for an avenue) plus its pavement must not swallow the corner.
+ * Minimum distance between a ring roundabout and anything else joining the ring
+ * — the lattice corner its stub leaves from, another street's T, a driveway
+ * mouth: its outer tarmac and pavement, plus a street crossroads' reach.
  */
-export const RING_ROUNDABOUT_CLEAR = 3;
+export const RING_ROUNDABOUT_CLEAR = outerOf("avenue") + PAVEMENT + STREET_REACH;
+/** Shortest stub a street may join the ring by: both ends' junction reach, never touching. */
+export const RING_STUB_MIN = half("avenue") + FILLET + STREET_REACH;
+/** Two bridgehead roundabouts on one ring keep their tarmac and pavements apart. */
+export const BRIDGEHEAD_SPACING = 2 * RING_ROUNDABOUT_CLEAR;
+/** A lattice roundabout keeps its widest ring and pavement clear of the ring road's. */
+export const LATTICE_ROUNDABOUT_CLEAR = outerOf("boulevard") + PAVEMENT + half("avenue") + PAVEMENT;
 /** How far the island shore is pushed beyond the buildings' footprints (2.0 past the ring). */
 export const ISLAND_PADDING = RING_PADDING + 2;
 /** Padding of a neighbourhood slab around its members. */

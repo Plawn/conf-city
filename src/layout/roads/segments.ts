@@ -1,5 +1,5 @@
 import type { ResolvedLink } from "../../domain/types";
-import { ROUNDABOUT_SPACING } from "../constants";
+import { LATTICE_ROUNDABOUT_CLEAR, ROUNDABOUT_SPACING } from "../constants";
 import { vecKey } from "../geometry";
 import { linkKey, type RoadClass, type RoadRoute, type RoadSegment, type Vec2 } from "../types";
 import { cornerPos } from "./lattice";
@@ -49,12 +49,14 @@ export function dedupeLinks(links: ResolvedLink[]): ResolvedLink[] {
 /**
  * Which lattice crossroads become roundabouts: corners where three or more
  * streets meet, busiest first, kept `ROUNDABOUT_SPACING` apart from each other
- * and from the bridgehead roundabouts already on the ring.
+ * and from the bridgehead roundabouts already on the ring, and
+ * `LATTICE_ROUNDABOUT_CLEAR` from the ring road itself.
  */
 export function pickRoundabouts(
   cornerDirs: ReadonlyMap<string, Set<string>>,
   routes: ReadonlyMap<string, RoadRoute>,
   ringCentres: Vec2[],
+  ring: Vec2[] = [],
 ): Set<string> {
   const traffic = new Map<string, number>();
   for (const route of routes.values()) {
@@ -81,13 +83,28 @@ export function pickRoundabouts(
     const crowded = kept.some(
       (k) => Math.hypot(k[0] - c.pos[0], k[1] - c.pos[1]) < ROUNDABOUT_SPACING,
     );
-    if (crowded) {
+    if (crowded || distanceToLoop(c.pos, ring) < LATTICE_ROUNDABOUT_CLEAR) {
       continue;
     }
     kept.push(c.pos);
     out.add(c.key);
   }
   return out;
+}
+
+/** Distance from `p` to the closed polyline `loop` (Infinity when empty). */
+export function distanceToLoop(p: Vec2, loop: Vec2[]): number {
+  let best = Infinity;
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i]!;
+    const b = loop[(i + 1) % loop.length]!;
+    const dx = b[0] - a[0];
+    const dz = b[1] - a[1];
+    const l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2));
+    best = Math.min(best, Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dz * t));
+  }
+  return best;
 }
 
 /**
@@ -153,20 +170,17 @@ export function mergeSegments(
 }
 
 /**
- * The ring as avenue segments, cut at every bridgehead roundabout, and always
- * in at least two pieces so no segment is ever a closed loop.
+ * The ring as avenue segments, cut at every vertex a road joins it by (`joins`,
+ * `vecKey`s), and always in at least two pieces so no segment is ever a closed loop.
  */
-export function ringSegments(
-  ring: Vec2[],
-  ringRoundabouts: ReadonlyMap<string, Vec2>,
-): RoadSegment[] {
+export function ringSegments(ring: Vec2[], joins: ReadonlySet<string>): RoadSegment[] {
   const n = ring.length;
   if (n < 3) {
     return [];
   }
   let cuts: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (ringRoundabouts.has(vecKey(ring[i]!))) {
+    if (joins.has(vecKey(ring[i]!))) {
       cuts.push(i);
     }
   }

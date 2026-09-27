@@ -1,11 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { PITCH, ROAD_OFFSET } from "@/layout/constants";
+import {
+  BRIDGEHEAD_SPACING,
+  LATTICE_ROUNDABOUT_CLEAR,
+  PITCH,
+  RING_ROUNDABOUT_CLEAR,
+  ROAD_OFFSET,
+} from "@/layout/constants";
 import { pointInPolygon, vecKey } from "@/layout/geometry";
 import { layoutCity } from "@/layout/layoutCity";
+import { layoutWorld } from "@/layout/layoutWorld";
 import { buildRing } from "@/layout/ringRoad";
 import { buildRoadNetwork } from "@/layout/roads/network";
 import type { RoadNetwork, Vec2 } from "@/layout/types";
-import { city, grid, intraLinks } from "../fixtures/layout";
+import { city, grid, interLink, intraLinks } from "../fixtures/layout";
+import { topology } from "../fixtures/topology";
 
 function build(cityId: string, nodes: ReturnType<typeof city>, pairs: [string, string][] = []) {
   const links = intraLinks(cityId, pairs);
@@ -181,6 +189,72 @@ describe("buildRoadNetwork", () => {
           continue;
         }
         expect(steps.has(`${vecKey(a)}|${vecKey(b)}`)).toBe(true);
+      }
+    }
+  });
+
+  test("a street grid with no bridge still joins the ring, by a T off every roundabout", () => {
+    for (const [w, h, pairs] of [
+      [3, 3, [["n00", "n22"]]],
+      [
+        3,
+        3,
+        [
+          ["n00", "n22"],
+          ["n20", "n02"],
+          ["n10", "n12"],
+        ],
+      ],
+      [
+        4,
+        4,
+        [
+          ["n00", "n11"],
+          ["n33", "n22"],
+        ],
+      ],
+    ] as [number, number, [string, string][]][]) {
+      const { roads } = build("c", grid("c", w, h), pairs);
+      const topo = topology(roads);
+      expect(topo.detached).toBe(0);
+      expect(topo.latticeToRing).toBeGreaterThanOrEqual(LATTICE_ROUNDABOUT_CLEAR);
+      // The ring is cut at the T, so the access stub meets two ring runs there.
+      const ring = ringKeys(roads);
+      for (const s of roads.segments.filter((x) => !x.ring)) {
+        const end = s.points.at(-1)!;
+        if (ring.has(vecKey(end))) {
+          const runs = roads.segments.filter(
+            (x) =>
+              x.ring &&
+              (vecKey(x.points[0]!) === vecKey(end) || vecKey(x.points.at(-1)!) === vecKey(end)),
+          );
+          expect(runs).toHaveLength(2);
+        }
+      }
+      checkEnds(roads);
+    }
+  });
+
+  test("bridgeheads keep their stubs long and their roundabouts apart", () => {
+    const world = layoutWorld(
+      ["a", "b", "c"],
+      [...grid("a", 3, 3), ...grid("b", 2, 2), ...grid("c", 2, 2)],
+      [
+        ...intraLinks("a", [
+          ["n00", "n22"],
+          ["n20", "n02"],
+        ]),
+        interLink(["a", "n10"], ["b", "n01"]),
+        interLink(["a", "n21"], ["c", "n11"]),
+        interLink(["b", "n00"], ["c", "n00"]),
+      ],
+    );
+    for (const c of world.cities.values()) {
+      const topo = topology(c.roads);
+      expect(topo.detached).toBe(0);
+      expect(topo.headGap).toBeGreaterThanOrEqual(BRIDGEHEAD_SPACING);
+      if (Number.isFinite(topo.minStub)) {
+        expect(topo.minStub).toBeGreaterThanOrEqual(RING_ROUNDABOUT_CLEAR);
       }
     }
   });
