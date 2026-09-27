@@ -119,7 +119,8 @@ See `roads-and-traffic.md` for the road model and its invariants.
 geo/                       Road driving geometry: roadStyle (CLASS_STYLE, lanes, ring radii), polyline, path
                            (segments + arcs kept exact until offset), roadGraph, junctions, roundabouts,
                            drivable (THE junction of streets, roundabouts and bridges → DrivePath), markings
-                           (pavement gaps, dash / zebra / stop intervals, driveway setback)
+                           (pavement gaps, dash / zebra / stop intervals, driveway setback), bridgeScene
+                           (WorldScene's deck exits, visible bridges + hover overlays, world extent, shore)
 sim/traffic/               sim.ts (createSim, spawn, decide/move, advance), params.ts (tuning constants), pool.ts
                            (TrafficRoute, Sim, SoA Pool, place), frame.ts (probes, spatial hash, speedLimitAhead
                            priority rules), worldRoutes.ts (one route set for the whole world,
@@ -139,6 +140,8 @@ Scene composition, top down:
 App.tsx                    Data loading, discovery merge, biome resolution, panels, shortcuts, drag-drop
 WorldScene.tsx             Canvas → RenderLoop → SkyEnvironment → SceneDepth → WaterPlane → cities → bridges →
                            IngressPorts → MobilitySimulation { MetroSystem, TrafficSystem } → LightingPipeline
+useRendererRecovery.ts     Device-lost recovery: renderer generation, lighting runtime, saved camera, initializer
+SceneLoader.tsx            Suspense fallback ("Loading models…")
 CityScene.tsx              IslandMesh, zone slabs, city label + gauges, RoadNetworkMesh, RouteOverlays,
                            Vegetation, BuildingBatches { NodeMesh… }, utility district
 RenderLoop.tsx             Owns the R3F tick: frame cap (office/smooth, 15 fps idle), skipped frames run nothing

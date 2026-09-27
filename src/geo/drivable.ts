@@ -3,7 +3,7 @@ import { distToSegment } from "../layout/geometry";
 import type { RoadClass, RoadNetwork, Roundabout, Vec2 } from "../layout/types";
 import { capLaneOffsets, MAX_TURN } from "./path";
 import { closedSeam, roundCornersTagged } from "./polyline";
-import { type Lanes, laneOffsets, ringRadii } from "./roadStyle";
+import { CLASS_STYLE, type Lanes, laneOffsets, ringRadii } from "./roadStyle";
 import { driveAroundRoundabouts, roundaboutArcAt, roundaboutAround } from "./roundabouts";
 
 /**
@@ -76,6 +76,15 @@ export const UPGRADED_DECK_CLASS: RoadClass = "boulevard";
 /** The class a deck is drawn and driven at, from whether its bridge was upgraded. */
 export function deckClass(upgraded: boolean | undefined): RoadClass {
   return upgraded ? UPGRADED_DECK_CLASS : DECK_CLASS;
+}
+
+/**
+ * The deck is exactly as wide as the road class it carries — an avenue by
+ * default, a boulevard once the bridge is upgraded. Growing a bridge widens
+ * this one deck sideways; it never stacks a second level over it.
+ */
+export function deckWidth(klass: RoadClass = DECK_CLASS): number {
+  return CLASS_STYLE[klass].width;
 }
 
 function same(a: Vec2, b: Vec2): boolean {

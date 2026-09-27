@@ -2,20 +2,11 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { TERRAIN } from "../domain/nodeStyle";
-import { bridgeElevation, DECK_CLASS, deckHeight } from "../geo/drivable";
-import { CLASS_STYLE } from "../geo/roadStyle";
+import { bridgeElevation, DECK_CLASS, deckHeight, deckWidth } from "../geo/drivable";
 import type { RoadClass, Vec2 } from "../layout/types";
 import { loopWall } from "./geo/polygon";
 import { buildRibbon } from "./geo/ribbon";
 
-/**
- * The deck is exactly as wide as the road class it carries — an avenue by
- * default, a boulevard once the bridge is upgraded. Growing a bridge widens
- * this one deck sideways; it never stacks a second level over it.
- */
-export function deckWidth(klass: RoadClass = DECK_CLASS): number {
-  return CLASS_STYLE[klass].width;
-}
 /** Rails sit on the deck's own edges (±width/2), so only their height is a constant. */
 const RAIL_HEIGHT = 0.15;
 /** One pylon roughly every PYLON_SPACING world units of span. */

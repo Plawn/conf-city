@@ -1,10 +1,8 @@
-import { AdaptiveEvents, Html, OrbitControls } from "@react-three/drei";
+import { AdaptiveEvents, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { CameraTarget } from "../domain/camera";
-import { TERRAIN } from "../domain/nodeStyle";
-import { IDLE_FPS, initialTier } from "../domain/quality";
+import { IDLE_FPS } from "../domain/quality";
 import type {
   City,
   CityMeta,
@@ -13,29 +11,26 @@ import type {
   PositionedNode,
   ResolvedLink,
 } from "../domain/types";
-import { bridgeDeck, deckClass, makeDriver } from "../geo/drivable";
-import type { DeckExit } from "../geo/roadGraph";
-import { buildShoreField } from "../layout/shore";
+import {
+  deckExits as deckExitsOf,
+  bridgeOverlays as overlaysOf,
+  visibleBridges as visibleBridgesOf,
+  visibleShore,
+  worldExtent,
+} from "../geo/bridgeScene";
 import type { WorldLayout } from "../layout/types";
 import { upgradeLayout, worldRoutes } from "../sim/traffic/worldRoutes";
 import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
 import { useQualityProfile, useUiStore } from "../store/uiStore";
-import { BridgeMesh, deckWidth } from "./BridgeMesh";
+import { BridgeMesh } from "./BridgeMesh";
 import { BuildingAnimations } from "./buildings/BuildingAnimations";
 import { CameraAnimator } from "./CameraAnimator";
 import { CityScene } from "./CityScene";
-import { HtmlPortalContext, useHtmlPortal } from "./htmlPortal";
+import { HtmlPortalContext } from "./htmlPortal";
 import { LightingPipeline } from "./lighting/LightingPipeline";
 import { LocalLighting } from "./lighting/LocalLighting";
-import {
-  createRenderer,
-  gpuRenderer,
-  isWebGPU,
-  rendererDeviceInfo,
-  renderParams,
-} from "./lighting/renderer";
-import { cachedInitializer } from "./lighting/rendererInitialization";
-import { createLightingRuntime, LightingContext } from "./lighting/runtime";
+import { renderParams } from "./lighting/renderer";
+import { LightingContext } from "./lighting/runtime";
 import { SolarLighting } from "./lighting/SolarLighting";
 import { ConstructionMarkers } from "./mobility/ConstructionMarkers";
 import { IngressPorts } from "./mobility/IngressPorts";
@@ -46,8 +41,10 @@ import { QualityGovernor, RenderScale } from "./QualityGovernor";
 import { RenderLoop } from "./RenderLoop";
 import { RouteOverlay } from "./RouteOverlay";
 import { SceneDepth } from "./SceneDepth";
+import { SceneLoader } from "./SceneLoader";
 import { SkyEnvironment } from "./SkyEnvironment";
 import { TrafficSystem } from "./TrafficSystem";
+import { useRendererRecovery } from "./useRendererRecovery";
 import { WaterPlane } from "./WaterPlane";
 
 const FOG_NEAR = 40;
@@ -57,23 +54,8 @@ const CAMERA_FAR = 400;
 const MAX_DISTANCE_RATIO = 5;
 /** Closest the camera may get: below this it clips through a building. */
 const MIN_DISTANCE = 4;
-/** Half-size of the shadow frustum for a small world, and the reference the rest scales from. */
-const MIN_EXTENT = 60;
+/** The world half-size the depth cues were tuned for. */
 const REFERENCE_EXTENT = 120;
-/** Breathing room around the outermost shore. */
-const EXTENT_MARGIN = 12;
-/** Hover ribbons ride above the deck so they win the raycast against the bridge. */
-const BRIDGE_OVERLAY_LIFT = 0.04;
-function Loader() {
-  const portal = useHtmlPortal();
-  return (
-    <Html center portal={portal}>
-      <div className="glass-morphic rounded-xl px-4 py-2 text-[12px] text-white">
-        Loading models…
-      </div>
-    </Html>
-  );
-}
 
 export function WorldScene({
   worldKey,
@@ -122,40 +104,14 @@ export function WorldScene({
     () => (layout ? worldRoutes(layout, links, infra) : []),
     [layout, links, infra],
   );
-  const controlsRef = useRef<OrbitControlsImpl>(null);
-  const [rendererAttempt, setRendererAttempt] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: GPU resources belong to one renderer generation.
-  const lighting = useMemo(() => createLightingRuntime(), [rendererAttempt]);
-  const savedCamera = useRef<{
-    position: [number, number, number];
-    target: [number, number, number];
-  } | null>(null);
-  const handleDeviceLost = useCallback(() => {
-    const controls = controlsRef.current;
-    if (controls) {
-      savedCamera.current = {
-        position: controls.object.position.toArray(),
-        target: controls.target.toArray(),
-      };
-    }
-    setRendererAttempt((attempt) => Math.min(3, attempt + 1));
-  }, []);
-  const initializeRenderer = useMemo(() => {
-    const initialize = cachedInitializer(async (canvas: HTMLCanvasElement) => {
-      const gl = await createRenderer(canvas, rendererAttempt >= 2, handleDeviceLost);
-      // Pick the starting tier before any child mounts, so budgets are right on first draw.
-      const renderer = gpuRenderer(gl);
-      useUiStore.getState().setAutoTier(
-        initialTier({
-          backend: isWebGPU(renderer) ? "webgpu" : "webgl",
-          ...rendererDeviceInfo(renderer),
-          cores: navigator.hardwareConcurrency,
-        }),
-      );
-      return gl;
-    });
-    return (defaults: { canvas: unknown }) => initialize(defaults.canvas as HTMLCanvasElement);
-  }, [rendererAttempt, handleDeviceLost]);
+  const {
+    controlsRef,
+    rendererAttempt,
+    setRendererAttempt,
+    lighting,
+    savedCamera,
+    initializeRenderer,
+  } = useRendererRecovery();
   const renderMode = useUiStore((s) => s.renderMode);
   const idle = useUiStore((s) => s.idle);
   const profile = useQualityProfile();
@@ -169,80 +125,14 @@ export function WorldScene({
     [onNodeClick],
   );
 
-  // Where a deck leaves each city: the bridgehead pavement opens there. Keyed by
-  // city so every `CityScene` gets a stable array and only rebuilds its roads
-  // when the bridges do. A widened bridge needs a wider mouth, so the opening
-  // is taken from the same deck class the mesh and the traffic use.
-  const deckExits = useMemo(() => {
-    const out = new Map<string, DeckExit[]>();
-    if (!layout) {
-      return out;
-    }
-    for (const b of layout.bridges) {
-      const [a, c] = b.waterSpan;
-      const halfWidth = deckWidth(deckClass(infra.bridges[b.key])) / 2;
-      const add = (city: string, exit: DeckExit) => out.set(city, [...(out.get(city) ?? []), exit]);
-      add(b.cityA, { at: a, toward: c, halfWidth });
-      add(b.cityB, { at: c, toward: a, halfWidth });
-    }
-    return out;
-  }, [layout, infra]);
-
-  // Inter-city bridges: one deck per pair of visible cities. Each link crossing
-  // it keeps its own full drivable path (feeder streets + deck), elevated once
-  // here and reused by the hover overlay and the traffic, so they agree.
-  const visibleBridges = useMemo(() => {
-    if (!layout) {
-      return [];
-    }
-    // A crossing runs over both islands' street grids, so it can meet a roundabout
-    // on either shore — the bridgeheads included, which the driver circles up to
-    // the deck's bearing — and its lanes come from either city's roads.
-    const networks = [...layout.cities.values()].map((c) => c.roads);
-    const roundabouts = networks.flatMap((n) => n.roundabouts);
-    const driver = makeDriver(networks);
-    return layout.bridges
-      .filter((b) => visibleCities.has(b.cityA) && visibleCities.has(b.cityB))
-      .map((bridge) => {
-        const klass = deckClass(infra.bridges[bridge.key]);
-        return {
-          bridge,
-          klass,
-          deck: bridgeDeck(bridge.waterSpan, roundabouts),
-          crossings: bridge.crossings.map((crossing) => ({
-            crossing,
-            path: driver.crossing(crossing.points, crossing.waterSpan, klass),
-          })),
-        };
-      });
-  }, [layout, visibleCities, infra]);
-
-  const bridgeOverlays = useMemo(
-    () =>
-      visibleBridges.flatMap(({ crossings }) =>
-        crossings.map(({ crossing, path }) => ({
-          crossing,
-          points: path.points.map(
-            ([x, y, z]) => [x, y + BRIDGE_OVERLAY_LIFT, z] as [number, number, number],
-          ),
-        })),
-      ),
-    [visibleBridges],
+  // Bridgehead openings per city, stable until the bridges change (see `geo/bridgeScene.ts`).
+  const deckExits = useMemo(() => deckExitsOf(layout, infra), [layout, infra]);
+  const visibleBridges = useMemo(
+    () => visibleBridgesOf(layout, visibleCities, infra),
+    [layout, visibleCities, infra],
   );
-
-  // How far the world spreads: the shadow frustum, the fog and the far plane all
-  // follow it instead of the hard-coded ±60 that only fitted a single row of cities.
-  const extent = useMemo(() => {
-    let half = 0;
-    for (const c of layout?.cities.values() ?? []) {
-      half = Math.max(
-        half,
-        Math.abs(c.bounds.cx) + c.bounds.width / 2,
-        Math.abs(c.bounds.cz) + c.bounds.height / 2,
-      );
-    }
-    return Math.max(MIN_EXTENT, half + EXTENT_MARGIN);
-  }, [layout]);
+  const bridgeOverlays = useMemo(() => overlaysOf(visibleBridges), [visibleBridges]);
+  const extent = useMemo(() => worldExtent(layout), [layout]);
   // Only a world bigger than the original framing needs its depth cues stretched.
   const depthScale = Math.max(1, extent / REFERENCE_EXTENT);
   const camera = useMemo(
@@ -260,18 +150,8 @@ export function WorldScene({
    * islands alone, and let `SceneDepth` clamp the fog to it.
    */
   const waterRadius = Math.max(600, extent * MAX_DISTANCE_RATIO * 2);
-  // The coastline the sea shades against. Hidden cities render nothing, so they
-  // must leave no ghost shore either; same dependencies as `visibleBridges`, so
-  // the bake only reruns when the world itself changes.
-  const shore = useMemo(() => {
-    if (!baseLayout) {
-      return undefined;
-    }
-    const outlines = [...baseLayout.cities.values()]
-      .filter((c) => visibleCities.has(c.cityId))
-      .map((c) => c.outline);
-    return outlines.length > 0 ? buildShoreField(outlines, TERRAIN.shoreReach) : undefined;
-  }, [baseLayout, visibleCities]);
+  // Same dependencies as `visibleBridges`, so the bake only reruns when the world itself changes.
+  const shore = useMemo(() => visibleShore(baseLayout, visibleCities), [baseLayout, visibleCities]);
 
   return (
     <HtmlPortalContext.Provider value={portalRef}>
@@ -321,7 +201,7 @@ export function WorldScene({
 
               <WaterPlane size={waterRadius * 2} shore={shore} />
 
-              <Suspense fallback={<Loader />}>
+              <Suspense fallback={<SceneLoader />}>
                 {cities.map((city) => (
                   <CityScene
                     key={city.id}
