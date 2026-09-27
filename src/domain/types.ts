@@ -49,6 +49,11 @@ export interface ResolvedLink {
   inferred?: boolean;
 }
 
+/** A node known only from telemetry, not from the static graph. */
+export interface DiscoveredResolvedNode extends ResolvedNode {
+  isDiscovered: true;
+}
+
 export interface PositionedNode extends ResolvedNode {
   position: [number, number, number];
   isDiscovered?: boolean;

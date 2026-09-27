@@ -1,5 +1,10 @@
-import type { City, NodeMeta, NodeType, ResolvedLink } from "../domain/types";
-import type { DiscoveredResolvedNode } from "../layout/layoutWorld";
+import type {
+  City,
+  DiscoveredResolvedNode,
+  NodeMeta,
+  NodeType,
+  ResolvedLink,
+} from "../domain/types";
 
 export interface DiscoveredCity {
   id: string;

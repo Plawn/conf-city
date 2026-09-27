@@ -97,6 +97,9 @@ layout/outline.ts          islandOutline (roundedOffset + outward-only coast noi
 layout/harbour.ts          planHarbour: ingress services become the island's port (quay, berths, facing)
 layout/bridges.ts          One bridge per linked city pair; each link = a BridgeCrossing
 layout/layoutWorld.ts      layoutCity per city → islands relaxed in 2D → gates → roads with feeders → world coords
+layout/localCity.ts        buildLocalCity (layout, shore, ring, grid, groups), planHarbours
+layout/islands.ts          placeIslands (2D relax, integer offsets), planGates (bridgeheads per linked pair)
+layout/translate.ts        translate / translateZone / translateRoads by integer island offsets
 layout/shore.ts            Distance-to-coast grid baked per layout for the water shader
 layout/bounds.ts           Bounding boxes (fallback)
 ```
