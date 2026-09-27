@@ -1,7 +1,7 @@
 /** Deterministic 24-hour simulation at the frontend's 30 Hz; no renderer or wall-clock sleeps. */
 import { trafficStats } from "../src/components/traffic/lifecycle";
 import { advance, createSim } from "../src/components/traffic/sim";
-import { mulberry32 } from "../src/layout/random";
+import { mulberry32 } from "../src/lib/random";
 
 const hours = Number(Bun.argv[2] ?? 24);
 if (!Number.isFinite(hours) || hours <= 0) {
