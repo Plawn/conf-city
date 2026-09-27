@@ -37,7 +37,10 @@ domain/nodeStyle.ts        NODE_STYLE (colour/scale/models per type; first model
 domain/biome.ts            BIOMES (harbour|meadow|dunes|tundra|basalt) + resolveBiome(s) — see biomes.md
 domain/buildingVariant.ts  Per-building render variety seeded on the address (model, yaw, scale, tint)
 domain/color.ts            hexToHsl / hslToHex / shiftHsl / darken
-domain/metrics.ts          Saturation, cityMax, heatValue/heatColor, cityUsage, disk gauges, formatMb/Percent/Cores — see telemetry-visuals.md
+domain/metrics/saturation.ts cpu/memSaturation, netKbps, cityMax, memoryHeight, heatValue — see telemetry-visuals.md
+domain/metrics/format.ts   rankValue / formatRank, formatMb / Kbps / Percent / Cores, heatColor, saturationTone
+domain/metrics/cityUsage.ts cityUsage (host vs services), worstUsage, usageTooltip
+domain/metrics/props.ts    Utility district gauges: smokeRate, tankLevel, containerCount
 domain/incidents.ts        nodeIncident / telemetryUncertain: one truth for alerts, attention list and fires
                            (ERROR_RATE_THRESHOLD 1 %, TELEMETRY_STALE_MS 30 s)
 domain/mobility.ts         Construction state machine: pressure → job → upgrade (road widening, second deck,

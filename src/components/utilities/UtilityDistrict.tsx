@@ -2,14 +2,9 @@ import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import {
-  type CityUsage,
-  containerCount,
-  heatColor,
-  smokeRate,
-  tankLevel,
-  usageTooltip,
-} from "../../domain/metrics";
+import { type CityUsage, usageTooltip } from "../../domain/metrics/cityUsage";
+import { heatColor } from "../../domain/metrics/format";
+import { containerCount, smokeRate, tankLevel } from "../../domain/metrics/props";
 import type { UtilityPlot, UtilitySlot } from "../../layout/types";
 import { useHtmlPortal } from "../htmlPortal";
 import {

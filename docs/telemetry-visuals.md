@@ -1,6 +1,6 @@
 # Telemetry → visuals
 
-All derivations are pure functions in `src/domain/metrics.ts` and `src/domain/incidents.ts`;
+All derivations are pure functions in `src/domain/metrics/` and `src/domain/incidents.ts`;
 components only map values to colours and scales.
 
 ## View modes

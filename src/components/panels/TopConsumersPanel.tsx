@@ -1,4 +1,4 @@
-import { formatRank, heatColor as heat, RANK_LABEL } from "../../domain/metrics";
+import { formatRank, heatColor as heat, RANK_LABEL } from "../../domain/metrics/format";
 import type { ViewMode } from "../../domain/viewMode";
 import { useUiStore } from "../../store/uiStore";
 import { SegmentedControl } from "../ui";

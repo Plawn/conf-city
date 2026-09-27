@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ERROR_RATE_THRESHOLD, nodeIncident, TELEMETRY_STALE_MS } from "../domain/incidents";
-import { formatCores, formatKbps, formatMb, formatPercent, netKbps } from "../domain/metrics";
+import { formatCores, formatKbps, formatMb, formatPercent } from "../domain/metrics/format";
+import { netKbps } from "../domain/metrics/saturation";
 import { LIVENESS_TONE, NODE_STYLE, nodeAddress } from "../domain/nodeStyle";
 import type { MetricSample } from "../domain/telemetry";
 import type { NodeTelemetry, PositionedNode } from "../domain/types";

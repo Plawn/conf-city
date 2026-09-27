@@ -1,4 +1,4 @@
-import { heatColor } from "../domain/metrics";
+import { heatColor } from "../domain/metrics/format";
 import { cx } from "./ui";
 
 /**

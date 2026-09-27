@@ -1,5 +1,6 @@
 import { BIOMES, type BiomeId, type BiomeSource } from "../../domain/biome";
-import { type CityUsage, formatMbPerSec, saturationTone, usageTooltip } from "../../domain/metrics";
+import { type CityUsage, usageTooltip } from "../../domain/metrics/cityUsage";
+import { formatMbPerSec, saturationTone } from "../../domain/metrics/format";
 import type { City } from "../../domain/types";
 import { Badge, Tooltip } from "../ui";
 

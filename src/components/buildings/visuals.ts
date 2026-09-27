@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { BuildingVariant } from "../../domain/buildingVariant";
 import { ERROR_RATE_THRESHOLD } from "../../domain/incidents";
-import { heatColor } from "../../domain/metrics";
+import { heatColor } from "../../domain/metrics/format";
 import { LIVENESS_COLORS } from "../../domain/nodeStyle";
 import type { NodeTelemetry, NodeType } from "../../domain/types";
 import type { ViewMode } from "../../domain/viewMode";

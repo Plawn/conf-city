@@ -3,14 +3,9 @@ import { useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { BIOMES, DEFAULT_BIOME } from "../domain/biome";
 import { type BuildingVariant, buildingVariant } from "../domain/buildingVariant";
-import {
-  cityMax,
-  cityUsage,
-  formatCores,
-  formatMb,
-  saturationTone,
-  usageTooltip,
-} from "../domain/metrics";
+import { cityUsage, usageTooltip } from "../domain/metrics/cityUsage";
+import { formatCores, formatMb, saturationTone } from "../domain/metrics/format";
+import { cityMax } from "../domain/metrics/saturation";
 import { nodeAddress, TERRAIN } from "../domain/nodeStyle";
 import type {
   City,

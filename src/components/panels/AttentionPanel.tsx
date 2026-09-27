@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ERROR_RATE_THRESHOLD, nodeIncident, telemetryUncertain } from "../../domain/incidents";
-import { formatPercent } from "../../domain/metrics";
+import { formatPercent } from "../../domain/metrics/format";
 import { nodeAddress } from "../../domain/nodeStyle";
 import type { City, NodeTelemetry, PositionedNode } from "../../domain/types";
 import { useUiStore } from "../../store/uiStore";

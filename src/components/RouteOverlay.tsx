@@ -2,7 +2,7 @@ import { Html } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
-import { formatKbps } from "../domain/metrics";
+import { formatKbps } from "../domain/metrics/format";
 import { LINK_COLORS, TERRAIN } from "../domain/nodeStyle";
 import type { NodeTelemetry, ResolvedLink } from "../domain/types";
 import { buildRibbon } from "./geo/ribbon";

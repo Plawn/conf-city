@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { type CityUsage, containerCount, smokeRate, tankLevel, worstUsage } from "@/domain/metrics";
+import { type CityUsage, worstUsage } from "@/domain/metrics/cityUsage";
+import { containerCount, smokeRate, tankLevel } from "@/domain/metrics/props";
 
 function usage(p: Partial<CityUsage>): CityUsage {
   return {

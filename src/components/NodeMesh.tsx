@@ -5,18 +5,20 @@ import * as THREE from "three";
 import type { BuildingVariant } from "../domain/buildingVariant";
 import { nodeIncident } from "../domain/incidents";
 import {
-  type CityMax,
-  cpuSaturation,
   formatCores,
   formatKbps,
   formatMb,
   formatPercent,
   heatColor,
+} from "../domain/metrics/format";
+import {
+  type CityMax,
+  cpuSaturation,
   heatValue,
   memoryHeight,
   memSaturation,
   netKbps,
-} from "../domain/metrics";
+} from "../domain/metrics/saturation";
 import { LIVENESS_COLORS, LIVENESS_TONE, NODE_STYLE, PORT_ASSETS } from "../domain/nodeStyle";
 import type { NodeTelemetry, NodeType, PositionedNode } from "../domain/types";
 import { clamp01 } from "../lib/math";
