@@ -152,6 +152,7 @@ To isolate their contributions, reload and compare one diagnostic switch at a ti
 | `&bloom=0` | Bloom extraction, blur chain and bloom composition |
 | `&bloom=reference` | Diagnostic reference: native RGBA16F bloom storage |
 | `&ao=0` / `&volume=0` | Existing contact-shading / lighthouse-volume switches; already off in Eco |
+| `&ao=reference` | Diagnostic reference: native RGBA16F denoise target with a depth attachment |
 | `&water=0` | Water mesh and its shading (diagnostic only) |
 | `&antialias=0` | FXAA and its intermediate sRGB target; tone mapping still runs in the final draw (diagnostic only) |
 
@@ -367,6 +368,109 @@ Each future optimization must record its **kind** (same calculations, reduced
 precision, changed resolution/samples or effect removal), measured GPU/CPU gain,
 memory scope, visual differences and uncertainty. The earlier paired-Gaussian-tap
 experiment did not show a convincing whole-frame gain and was not retained.
+
+### Ambient occlusion optimization: unused storage (2026-10-04)
+
+**Classification: pipeline and memory improvement, without a lower precision or
+sampling budget.** GTAO still runs at half resolution, radius 0.9, scale 1 and
+16 samples in WebGPU High (8 in Balanced and in WebGL). The same native bilateral
+filter retains its 16 taps and radius 3. Temporal filtering remains disabled.
+Eco still skips both passes.
+
+Only the intermediate denoised result changes: R16F replaces RGBA16F, and its
+unused depth attachment is removed. Composition only consumes the red channel;
+its half-float precision is retained. At 1280×800 DPR 1, the 640×400 color buffer
+shrinks from 1.95 to 0.49 MiB. Removing the depth attachment saves another 0.98 MiB,
+for about **2.44 MiB** saved in this effect, not total application memory.
+This works on WebGPU and WebGL. `ao=reference` restores the native target.
+AO setup and resource disposal are isolated in `ambientOcclusion.ts`; the filter's
+generated noise texture is now released when rebuilding the pipeline.
+
+Four alternating WebGPU repetitions on the same AMD hardware adapter, Chromium
+149, High, Office/30 fps, 1280×800 DPR 1, 3 cities / 26 services, healthy telemetry,
+fit-all, frozen noon/night, 5 s captures after 3 s warmup:
+
+| Measurement (median run means) | Native target | R16F, no depth | Reduction |
+| --- | ---: | ---: | ---: |
+| Day denoise pass | 0.933 ms | 0.757 ms | 19% |
+| Night denoise pass | 0.914 ms | 0.781 ms | 15% |
+| Day composed pipeline | 9.37 ms | 9.07 ms | 3.1% |
+| Night composed pipeline | 11.53 ms | 11.40 ms | 1.1% |
+
+Median paired whole-pipeline savings are 0.34 ms by day and 0.19 ms at night.
+Variability is retained: one optimized night run reached 12.29 ms, versus
+11.30–11.46 ms in the other three. Thus the direct filter gain is clearer than
+the small whole-frame change. No OS GPU utilization or power reduction was measured.
+CPU submission is essentially unchanged (3.85/3.91 ms by day, 4.95/4.96 ms at night,
+optimized/native). Office remains capped at 30 fps. Native GTAO calculations are
+unchanged; the remaining approximately 1.3 ms raw AO pass still dominates this effect.
+Reports: `out/ao/compact-gpu`, asset `index-B2jhe1ud.js`; `baseline` is optimized,
+`ao-reference` is native, so its automated savings column is negative.
+
+WebGL was measured separately with three alternating 5 s repetitions and the
+same Office/High scene. Whole-pipeline native elapsed queries yielded median
+13.62 → 13.47 ms by day (1.1%) and 13.52 → 13.26 ms at night (2.0%). Median paired
+savings were 0.13/0.27 ms. CPU submission stayed around 4.8–4.9 ms; the run remained
+at 30 fps. Results: `out/ao/compact-webgl`, same asset. These are **within-WebGL**
+comparisons, not speed ratios against WebGPU's sum of exclusive passes. WebGL
+still uses 8 AO samples, its native bloom and its existing lighting fallback.
+
+The visual harness is shared with bloom, but compares only one effect at a time.
+`aoCompare=1` allocates a separate native AO/filter reading the same scene depth
+and normals, and sharing the **exact denoise noise texture**. Native DenoiseNode
+otherwise generates a random texture per instance; comparing two independently
+created filters would conflate different noise with an optimization error.
+Four synchronous captures retain the reference/reference-control and
+optimized/optimized-control pairs. Both repeated controls must be identical.
+`check:ao` exports PNGs, difference images, metrics and an interactive `review.html`.
+`CITY_ASSERT_IDENTICAL=1` also rejects any optimized/reference pixel difference.
+Comparison resources are absent from normal rendering and performance captures.
+
+Final same-frame checks in `out/ao/visual-final-webgpu` and
+`out/ao/visual-final-webgl` cover noon, dawn and night, each in fit-all and beacon
+closeup views. **All twelve optimized/reference comparisons are bit-identical**,
+as are every repeated control: mean RGB delta, worst channel delta and changed
+pixel fraction are all zero. Both runs use `index-B2jhe1ud.js`, with no browser
+errors. This records observed equivalence on the tested scenes/device, not a
+universal guarantee across every driver. No precision reduction is involved.
+Two further Balanced night views at 1279×799 are also bit-identical, including
+all repeated controls (`out/ao/visual-balanced-odd`). This exercises the 8-sample
+budget and odd half-resolution target/readback dimensions.
+
+A broader lifecycle check uncovered an existing WebGPU shadow problem after
+repeated High → Eco → Balanced → High changes: submissions reference a destroyed
+`ShadowDepthTexture`. It was reproduced on the preceding commit `1f5c7bd` in an
+isolated build (`index-BixeWkLO.js`) as well as the AO build. This is not an AO
+storage regression, and the normal fixed-quality performance/visual captures
+above had no errors. Failed lifecycle reports are retained in
+`out/ao/lifecycle-before` and `out/ao/lifecycle-webgpu`; quality switching with
+shadows is **not qualified** by this optimization. Shadow resource invalidation
+needs a separate fix. The isolated AO lifecycle check with `shadows=0` passed:
+two rounds of High/Eco/Balanced/High, resizes to 1279×799, 960×600 and 1280×800,
+and a denoise-disabled override. Native GPU pass records confirm Eco skips AO
+and the override skips only denoise. Both visual sliders were also loaded and
+checked (six views, working image load and 75% slider). Results:
+`out/ao/lifecycle-isolated/report.json`, with zero browser errors.
+
+A trial replacing fixed AO/filter uniforms with shader constants was rejected.
+It did not demonstrate a convincing speed improvement and introduced localized
+final-image differences (up to 86/255 on one channel in a High daytime view,
+including FXAA). The retained change leaves those calculations intact.
+Trial results are retained under `out/ao/pilot` and `out/ao/visual-webgpu`;
+they do not describe the final implementation.
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_RUNS=4 CITY_DURATION_MS=5000 CITY_WARMUP_MS=3000 \
+CITY_VARIANTS=baseline,ao-reference CITY_OUTPUT=out/ao/next \
+bun run bench:pipeline
+
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_ASSERT_IDENTICAL=1 CITY_OUTPUT=out/ao/visual-final-webgpu bun run check:ao
+
+CITY_BACKEND=webgl CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_ASSERT_IDENTICAL=1 CITY_OUTPUT=out/ao/visual-final-webgl bun run check:ao
+```
 
 ### WebGPU / WebGL comparison
 

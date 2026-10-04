@@ -31,6 +31,7 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
       options: Object.fromEntries(
         [
           "ao",
+          "aoCompare",
           "volume",
           "ssgi",
           "lights",

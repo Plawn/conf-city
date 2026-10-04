@@ -26,6 +26,7 @@ const { fixtureWorld, installLightingFixture, lightingCases, loadBenchmarkWorld,
 const variants = [
   { name: "baseline", params: "" },
   { name: "no-ao", params: "&ao=0" },
+  { name: "ao-reference", params: "&ao=reference" },
   { name: "no-bloom", params: "&bloom=0" },
   { name: "bloom-reference", params: "&bloom=reference" },
   { name: "no-volume", params: "&volume=0" },
@@ -40,7 +41,7 @@ if (requested?.some((name) => !variants.some((variant) => variant.name === name)
 }
 const selected = variants.filter(
   (variant) =>
-    (!requested && variant.name !== "bloom-reference") ||
+    (!requested && !["bloom-reference", "ao-reference"].includes(variant.name)) ||
     variant.name === "baseline" ||
     requested?.includes(variant.name),
 );

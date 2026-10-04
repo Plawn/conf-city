@@ -52,9 +52,22 @@ declare global {
         optimized: string;
         optimizedControl: string;
       }>;
+      captureAoComparison: () => Promise<{
+        reference: string;
+        referenceControl: string;
+        optimized: string;
+        optimizedControl: string;
+      }>;
       simulateDeviceLoss: () => void;
       focus: (position: [number, number, number], target: [number, number, number]) => void;
       inspect: () => {
+        ao: {
+          enabled: boolean;
+          samples: number;
+          denoise: boolean;
+          reference: boolean;
+          storage: string;
+        };
         bloom: { enabled: boolean; storage: string; resolutionScale: number };
         buildings: ReturnType<typeof inspectBuildings>;
         altitude: number;
