@@ -2,10 +2,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { Layers, Mesh, Vector3 } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { denoise } from "three/addons/tsl/display/DenoiseNode.js";
 import { fxaa } from "three/addons/tsl/display/FXAANode.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
-import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { ssgi } from "three/addons/tsl/display/SSGINode.js";
 import {
   emissive,
@@ -42,6 +40,7 @@ import {
 import type { OrbitControls } from "three-stdlib";
 import { useQualityProfile, useUiStore } from "../../store/uiStore";
 import { inspectBuildings } from "../buildings/instances";
+import { createAmbientOcclusion } from "./ambientOcclusion";
 import { createBeaconGeometry } from "./beaconGeometry";
 import { CompactBloomNode } from "./CompactBloomNode";
 import { renderProfiledPipeline } from "./PipelineProfiler";
@@ -130,32 +129,38 @@ export function LightingPipeline() {
     const emission = shading ? scenePass.getTextureNode("emissive") : null;
     // Contact shading is the tier's call: eco skips the half-resolution GTAO and its
     // denoise entirely rather than running them at a lower quality.
-    const ambient = shading && normals ? ao(depth, normals, camera) : null;
-    let occlusion: Node<"vec4"> | null = null;
-    let filtered: ReturnType<typeof denoise> | null = null;
-    let filteredTexture: ReturnType<typeof rtt> | null = null;
-    if (ambient) {
-      ambient.resolutionScale = 0.5;
-      ambient.samples.value = isWebGPU(renderer) ? aoBudget.samples : Math.min(8, aoBudget.samples);
-      ambient.radius.value = 0.9;
-      ambient.scale.value = 1;
-      ambient.useTemporalFiltering = false;
-      occlusion = ambient.getTextureNode() as unknown as Node<"vec4">;
-      if (aoBudget.denoise && normals) {
-        filtered = denoise(ambient.getTextureNode(), depth, normals, camera);
-        filtered.radius.value = 3;
-        // Once per frame at AO resolution: inline, its 16 taps ran per full-res pixel in every reader.
-        filteredTexture = rtt(filtered).setResolutionScale(0.5);
-        // Rendered by `renderFrame` before the pipeline: nested inside FXAA's RTT it comes out black.
-        filteredTexture.autoUpdate = false;
-        filteredTexture.renderTarget!.texture.userData.profileLabel = "City AO denoise";
-        occlusion = filteredTexture as unknown as Node<"vec4">;
-      }
-    }
+    const aoReference = renderParams.get("ao") === "reference";
+    const aoOptions = {
+      samples: isWebGPU(renderer) ? aoBudget.samples : Math.min(8, aoBudget.samples),
+      denoise: aoBudget.denoise,
+      reference: aoReference,
+    };
+    const contact =
+      shading && normals ? createAmbientOcclusion(depth, normals, camera, aoOptions) : null;
+    const {
+      ambient = null,
+      filtered = null,
+      filteredTexture = null,
+      occlusion = null,
+    } = contact ?? {};
+    const referenceContact =
+      contact && normals && renderParams.get("aoCompare") === "1"
+        ? createAmbientOcclusion(depth, normals, camera, {
+            ...aoOptions,
+            reference: true,
+            noise: filtered?.noiseNode,
+          })
+        : null;
     const factor = occlusion ? mix(vec3(1), vec3(occlusion.r), 0.65) : vec3(1);
     // Keep emissive signals out of the AO multiply; apply bloom to the final HDR result.
     let color = emission
       ? max(beauty.rgb.sub(emission.rgb), vec3(0)).mul(factor).add(emission.rgb)
+      : beauty.rgb;
+    const referenceFactor = referenceContact
+      ? mix(vec3(1), vec3(referenceContact.occlusion.r), 0.65)
+      : factor;
+    let referenceColor = emission
+      ? max(beauty.rgb.sub(emission.rgb), vec3(0)).mul(referenceFactor).add(emission.rgb)
       : beauty.rgb;
     const gi =
       indirect && normals ? ssgi(beauty, depth, normals, camera as PerspectiveCamera) : null;
@@ -167,6 +172,7 @@ export function LightingPipeline() {
       gi.sliceCount.value = 2;
       gi.stepCount.value = 4;
       color = color.add(gi.getGINode().rgb.mul(0.3));
+      referenceColor = referenceColor.add(gi.getGINode().rgb.mul(0.3));
     }
     const volumeMaterial = new VolumeNodeMaterial({ steps: 48, fog: false });
     // Geometry UVs do not identify the scene pixel behind a raymarch sample.
@@ -219,6 +225,7 @@ export function LightingPipeline() {
     );
     if (isWebGPU(renderer) && volumeBudget && renderParams.get("volume") !== "0") {
       color = color.add(volumeBlur.getTextureNode().rgb);
+      referenceColor = referenceColor.add(volumeBlur.getTextureNode().rgb);
       glowInput = glowInput.add(volumeBlur.getTextureNode().rgb);
     }
     // A zero scale would allocate zero-sized mips, so no bloom node at all then.
@@ -238,12 +245,28 @@ export function LightingPipeline() {
       glow && renderParams.get("bloomCompare") === "1"
         ? bloom(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15).setResolutionScale(bloomScale)
         : null;
-    const reference = referenceGlow
-      ? { ...createOutputPipeline(renderer, color, beauty.a, referenceGlow), glow: referenceGlow }
-      : null;
+    if (referenceGlow && referenceContact) {
+      throw new Error("Compare one effect at a time: bloomCompare or aoCompare");
+    }
+    const reference =
+      referenceGlow || referenceContact
+        ? {
+            ...createOutputPipeline(
+              renderer,
+              referenceContact ? referenceColor : color,
+              beauty.a,
+              referenceGlow ?? glow,
+            ),
+            glow: referenceGlow,
+            filteredTexture: referenceContact?.filteredTexture ?? filteredTexture,
+          }
+        : null;
     return {
       ...outputPipeline,
       reference,
+      referenceContact,
+      contact,
+      aoOptions,
       scenePass,
       ambient,
       filtered,
@@ -264,10 +287,8 @@ export function LightingPipeline() {
     () => () => {
       resources.pipeline.dispose();
       resources.scenePass.dispose();
-      resources.ambient?.dispose();
-      resources.filtered?.dispose();
-      // RTTNode.dispose() only fires an event; the targets are ours to free.
-      resources.filteredTexture?.renderTarget?.dispose();
+      resources.referenceContact?.dispose();
+      resources.contact?.dispose();
       resources.composed?.renderTarget?.dispose();
       resources.glow?.dispose();
       resources.gi?.dispose();
@@ -279,7 +300,7 @@ export function LightingPipeline() {
       resources.reference?.pipeline.dispose();
       resources.reference?.composed?.renderTarget?.dispose();
       resources.reference?.antialias?.dispose();
-      resources.reference?.glow.dispose();
+      resources.reference?.glow?.dispose();
     },
     [resources],
   );
@@ -296,6 +317,15 @@ export function LightingPipeline() {
           }
         });
         return {
+          ao: {
+            enabled: resources.ambient !== null,
+            ...resources.aoOptions,
+            storage: resources.filteredTexture
+              ? resources.aoOptions.reference
+                ? "rgba16f"
+                : "r16f"
+              : "none",
+          },
           bloom: {
             enabled: resources.glow !== null,
             storage: resources.glow instanceof CompactBloomNode ? "r11g11b10f" : "rgba16f",
@@ -334,7 +364,9 @@ export function LightingPipeline() {
       },
       async capture(reference = false) {
         if (reference && !resources.reference) {
-          throw new Error("Reference capture requires bloomCompare=1 and enabled bloom");
+          throw new Error(
+            "Reference capture requires an enabled effect and bloomCompare=1 or aoCompare=1",
+          );
         }
         const target = new RenderTarget(gl.domElement.width, gl.domElement.height, {
           type: UnsignedByteType,
@@ -347,7 +379,7 @@ export function LightingPipeline() {
             reference
               ? {
                   pipeline: resources.reference!.pipeline,
-                  filteredTexture: resources.filteredTexture,
+                  filteredTexture: resources.reference!.filteredTexture,
                 }
               : resources,
           );
@@ -382,7 +414,7 @@ export function LightingPipeline() {
         }
       },
       async captureBloomComparison() {
-        if (!resources.reference) {
+        if (!resources.reference || renderParams.get("bloomCompare") !== "1") {
           throw new Error("Bloom comparison requires bloomCompare=1 and enabled bloom");
         }
         // Queue every render/readback synchronously, before yielding to RAF. The
@@ -397,6 +429,23 @@ export function LightingPipeline() {
           referenceControl,
           optimized,
           optimizedControl,
+        ]);
+        return {
+          reference: images[0]!,
+          referenceControl: images[1]!,
+          optimized: images[2]!,
+          optimizedControl: images[3]!,
+        };
+      },
+      async captureAoComparison() {
+        if (!resources.reference || !resources.referenceContact) {
+          throw new Error("AO comparison requires aoCompare=1 and enabled AO");
+        }
+        const images = await Promise.all([
+          api.capture(true),
+          api.capture(true),
+          api.capture(),
+          api.capture(),
         ]);
         return {
           reference: images[0]!,
