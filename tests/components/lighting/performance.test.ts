@@ -1,8 +1,28 @@
-import { expect, test } from "bun:test";
-import { DirectionalLight, NodeFrame, PointLight, SpotLight } from "three/webgpu";
+import { expect, mock, test } from "bun:test";
+import {
+  DirectionalLight,
+  NodeFrame,
+  PerspectiveCamera,
+  PointLight,
+  type Renderer,
+  SpotLight,
+  Vector2,
+} from "three/webgpu";
 import { ActiveClusteredLightsNode } from "@/components/lighting/ActiveClusteredLighting";
 import { gatePass } from "@/components/lighting/passGate";
 import { LightCandidates, selectLights } from "@/components/lighting/selection";
+
+function clusterFrame() {
+  const size = new Vector2(64, 64);
+  const compute = mock(() => {});
+  const frame = new NodeFrame();
+  frame.camera = new PerspectiveCamera(50, 1, 1, 400);
+  frame.renderer = {
+    getDrawingBufferSize: (target: Vector2) => target.copy(size),
+    compute,
+  } as unknown as Renderer;
+  return { frame, compute, size };
+}
 
 test("clusters drop only zero-intensity points and restore fading lights without changing material lights", () => {
   const node = new ActiveClusteredLightsNode();
@@ -36,6 +56,8 @@ test("clusters drop only zero-intensity points and restore fading lights without
 
 test("opted-in shadowless spots cluster, compact at zero intensity and keep the material key", () => {
   const node = new ActiveClusteredLightsNode();
+  const { frame } = clusterFrame();
+  node.setSize(64, 64);
   const point = new PointLight(0xffffff, 1);
   const marked = new SpotLight(0xffffff, 1, 6);
   marked.userData.clustered = true;
@@ -57,15 +79,43 @@ test("opted-in shadowless spots cluster, compact at zero intensity and keep the 
   expect(node.materialLights).toEqual([beacon, shadowed, infinite, sun]);
   expect(node.clusteredSpots).toBe(1);
   expect(node.customCacheKey()).toBe(materialKey);
-  node.updateBefore(new NodeFrame());
+  node.updateBefore(frame);
   merged.intensity = 0.5;
   node.setLights([point, marked, merged, beacon, shadowed, infinite, sun]);
   expect(node.clusteredLights).toEqual([point, marked, merged]);
-  node.updateBefore(new NodeFrame());
+  node.updateBefore(frame);
   expect(node.work).toEqual({ dispatches: 2, pointLightVisits: 2, spotLightVisits: 3 });
   node.setLights(materialOnly);
   expect(node.clusteredSpots).toBe(0);
   expect(node.customCacheKey()).toBe(materialKey);
+});
+
+test("empty clusters skip compute across day/night changes and resizes, then resume immediately", () => {
+  const node = new ActiveClusteredLightsNode();
+  const { frame, compute, size } = clusterFrame();
+  const point = new PointLight(0xffffff, 0, 10);
+  node.work = { dispatches: 0, pointLightVisits: 0, spotLightVisits: 0 };
+  const tick = () => {
+    node.setLights([point]);
+    node.updateBefore(frame);
+  };
+  tick();
+  tick();
+  expect(compute).toHaveBeenCalledTimes(0);
+  point.intensity = 1;
+  tick();
+  expect(compute).toHaveBeenCalledTimes(1);
+  point.intensity = 0;
+  tick();
+  size.set(96, 96);
+  tick();
+  expect(compute).toHaveBeenCalledTimes(1);
+  point.intensity = 0.001;
+  tick();
+  expect(compute).toHaveBeenCalledTimes(2);
+  expect(node.work).toEqual({ dispatches: 2, pointLightVisits: 2, spotLightVisits: 0 });
+  node.updateBefore(new NodeFrame());
+  expect(node.work.dispatches).toBe(2);
 });
 
 test("suspended volume clears once, blur consumes black once, and both resume immediately", () => {

@@ -108,7 +108,7 @@ export class ClusteredLightsNode extends LightsNode {
   private readonly _lightSortOrder: number[] = [];
   /** Lights packed by the previous update; an empty list stays empty without re-uploading. */
   private _packedCount = 0;
-  private readonly _lightsCount: TslNode = uniform(0, "int");
+  private readonly _lightsCount: TslNode = uniform(0, "int").setGroup(renderGroup);
   // Render-group uniforms: shared by compute and fragment passes, refreshed in updateBefore.
   private readonly _cameraNear: TslNode = uniform(0)
     .setName("clusteredCameraNear")
@@ -192,6 +192,14 @@ export class ClusteredLightsNode extends LightsNode {
     this._cameraFar.value = perspective.far ?? 2000;
     this._cameraViewMatrix.value = camera.matrixWorldInverse;
     this._cameraProjectionMatrix.value = camera.projectionMatrix;
+    // Empty lists are gated in the fragment shader, so stale indices are never
+    // read. No dispatch (or buffer clear) is needed until a light returns.
+    if (this.clusteredLights.length > 0) {
+      this.computeClusters(renderer);
+    }
+  }
+
+  protected computeClusters(renderer: Renderer): void {
     renderer.compute(this._compute);
   }
 
@@ -262,39 +270,41 @@ export class ClusteredLightsNode extends LightsNode {
     lightingModel.directSpecular.toStack();
     super.setupLights(builder, lightNodes);
     Fn(() => {
-      Loop(this.maxLightsPerCluster, ({ i }) => {
-        const lightIndex = this.getTile(i);
-        If(lightIndex.equal(int(0)), () => {
-          Break();
+      If(this._lightsCount.greaterThan(0), () => {
+        Loop(this.maxLightsPerCluster, ({ i }) => {
+          const lightIndex = this.getTile(i);
+          If(lightIndex.equal(int(0)), () => {
+            Break();
+          });
+          const light = this.getLightShading(lightIndex.sub(1));
+          const lightVector = light.viewPosition.sub(fragmentView);
+          const distSq = dot(lightVector, lightVector);
+          // Early-out: skip the BRDF beyond the light's cutoff.
+          If(
+            light.distance.equal(0).or(distSq.lessThanEqual(light.distance.mul(light.distance))),
+            () => {
+              const lightDirection = lightVector.normalize();
+              // Points carry coneCos=-2 / penumbraCos=-1.5, so their cone factor is exactly 1.
+              const cone: TslNode = smoothstep(
+                light.coneCos,
+                light.penumbraCos,
+                lightDirection.dot(light.spotDirection),
+              );
+              // Most fragments of a touched cluster sit outside an 18° cone: skip the BRDF.
+              If(cone.greaterThan(0), () => {
+                const attenuation: TslNode = getDistanceAttenuation({
+                  lightDistance: lightVector.length(),
+                  cutoffDistance: light.distance,
+                  decayExponent: light.decay,
+                });
+                cluster.lightsNode.setupDirectLight(builder, this, {
+                  lightDirection,
+                  lightColor: light.color.mul(cone).mul(attenuation),
+                });
+              });
+            },
+          );
         });
-        const light = this.getLightShading(lightIndex.sub(1));
-        const lightVector = light.viewPosition.sub(fragmentView);
-        const distSq = dot(lightVector, lightVector);
-        // Early-out: skip the BRDF beyond the light's cutoff.
-        If(
-          light.distance.equal(0).or(distSq.lessThanEqual(light.distance.mul(light.distance))),
-          () => {
-            const lightDirection = lightVector.normalize();
-            // Points carry coneCos=-2 / penumbraCos=-1.5, so their cone factor is exactly 1.
-            const cone: TslNode = smoothstep(
-              light.coneCos,
-              light.penumbraCos,
-              lightDirection.dot(light.spotDirection),
-            );
-            // Most fragments of a touched cluster sit outside an 18° cone: skip the BRDF.
-            If(cone.greaterThan(0), () => {
-              const attenuation: TslNode = getDistanceAttenuation({
-                lightDistance: lightVector.length(),
-                cutoffDistance: light.distance,
-                decayExponent: light.decay,
-              });
-              cluster.lightsNode.setupDirectLight(builder, this, {
-                lightDirection,
-                lightColor: light.color.mul(cone).mul(attenuation),
-              });
-            });
-          },
-        );
       });
     }, "void")();
   }

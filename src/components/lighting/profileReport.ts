@@ -13,6 +13,8 @@ export interface PipelineFrameSample {
   time: number;
   cpuMs: number;
   passes: PipelinePassSample[];
+  /** WebGL whole-pipeline elapsed query; distinct from WebGPU's exclusive pass sums. */
+  gpuElapsedMs?: number | null;
 }
 
 export function passGroup(name: string, compute = false): string {
@@ -49,6 +51,11 @@ function p95(values: number[]) {
 }
 
 export function summarizePipeline(frames: readonly PipelineFrameSample[]) {
+  const elapsed = frames.flatMap((frame) =>
+    frame.gpuElapsedMs != null && Number.isFinite(frame.gpuElapsedMs) && frame.gpuElapsedMs >= 0
+      ? [frame.gpuElapsedMs]
+      : [],
+  );
   // Never treat a missing timestamp as zero or mix partially measured GPU frames.
   const complete = frames.filter(
     (frame) => frame.passes.length > 0 && frame.passes.every((pass) => pass.gpuMs !== null),
@@ -57,6 +64,9 @@ export function summarizePipeline(frames: readonly PipelineFrameSample[]) {
   const totals = complete.map((frame) => frame.passes.reduce((sum, pass) => sum + pass.gpuMs!, 0));
   const totalMs = totals.reduce((sum, ms) => sum + ms, 0);
   return {
+    gpuElapsedFrames: elapsed.length,
+    gpuElapsedMeanMs: elapsed.length ? elapsed.reduce((a, b) => a + b, 0) / elapsed.length : null,
+    gpuElapsedP95Ms: elapsed.length ? p95(elapsed) : null,
     capturedFrames: frames.length,
     completeGpuFrames: complete.length,
     gpuMeanMs: complete.length ? totalMs / complete.length : null,

@@ -1,4 +1,4 @@
-import { type Light, Lighting, type NodeFrame } from "three/webgpu";
+import { type Light, Lighting, type Renderer } from "three/webgpu";
 import { ClusteredLightsNode } from "./clustered/ClusteredLightsNode";
 
 export interface ClusterWork {
@@ -31,14 +31,13 @@ export class ActiveClusteredLightsNode extends ClusteredLightsNode {
     return this;
   }
 
-  override updateBefore(frame: NodeFrame) {
+  protected override computeClusters(renderer: Renderer): void {
     if (this.work) {
       this.work.dispatches++;
       this.work.pointLightVisits += this.clusteredLights.length - this.clusteredSpots;
       this.work.spotLightVisits += this.clusteredSpots;
     }
-    // Keep the empty dispatch: it clears cluster indices left by the previous frame.
-    return super.updateBefore(frame);
+    super.computeClusters(renderer);
   }
 }
 

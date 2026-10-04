@@ -36,6 +36,11 @@ The [lighting measurement guide](docs/lighting.md#verification-and-measurement) 
 repeatable camera benchmarks and AO/volume comparisons at a fixed viewport and DPR.
 See [rendering performance](docs/render-performance.md) for 30/60 fps qualification,
 repeated before/after measurements and larger-world fixtures.
+`bun run bench:pipeline` records GPU costs by pass and repeated one-effect-at-a-time
+comparisons; see the [pipeline benchmark](docs/render-performance.md#automated-gpu-pipeline-benchmark)
+for the fixed reference, reports and production-world options.
+`bun run bench:backends` alternates WebGPU/WebGL measurements; `bun run check:bloom`
+exports same-frame before/after images and a visual comparison slider.
 
 Traffic now has finite journeys, physical lane budgets and gradual jam recovery in one shared simulation. Sustained local queues or high occupancy trigger wider roads, double-deck bridges with widened city accesses, then metro service with pedestrians. Visible countdowns follow real time rather than simulation speed. Roundabouts reserve entry until the exit is clear; waiting for a functioning junction does not trigger emergency removal. Construction persists per world in this browser (`localStorage`); **City evolution** shows progress and provides a local reset.
 

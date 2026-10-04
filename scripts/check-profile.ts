@@ -47,12 +47,10 @@ try {
     if (!params.includes("bloom=0") && (expected?.bloomScale ?? 1) > 0) {
       required.push("Bloom");
     }
-    if (!params.includes("localLights=0")) {
+    if (!day && !params.includes("localLights=0")) {
       required.push("Light clustering");
     }
-    if (day && !params.includes("shadows=0")) {
-      required.push("Shadows");
-    }
+    // A frozen daytime shadow map can stay valid for the whole capture.
     if (expected?.ao.enabled) {
       required.push("Contact shading");
     }
@@ -63,12 +61,15 @@ try {
     }
     if (
       (params.includes("bloom=0") && groups.includes("Bloom")) ||
-      (params.includes("shadows=0") && groups.includes("Shadows"))
+      (params.includes("shadows=0") && groups.includes("Shadows")) ||
+      (day && groups.includes("Light clustering"))
     ) {
       throw new Error("A disabled pass still runs");
     }
   } else if (report.summary.completeGpuFrames !== 0) {
     throw new Error("Fallback must not fabricate GPU timestamps");
+  } else if (report.startedWith.gpuElapsedQuery && report.summary.gpuElapsedFrames < 2) {
+    throw new Error("WebGL elapsed timer was available but produced too few valid samples");
   }
   await Bun.write(`${output}/report.json`, JSON.stringify(report, null, 2));
   const jsonDownload = page.waitForEvent("download");

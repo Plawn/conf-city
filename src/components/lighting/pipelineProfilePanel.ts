@@ -18,6 +18,7 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
       backend: isWebGPU(renderer) ? "webgpu" : "webgl",
       adapter: rendererDeviceInfo(renderer),
       gpuTimestamps: profiler.supported,
+      gpuElapsedQuery: profiler.elapsedSupported,
       tier: selectTier(state),
       qualityChoice: state.quality,
       // The tier alone no longer describes the budgets: record the tweaks too.
@@ -36,6 +37,9 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
           "localLights",
           "shadows",
           "bloom",
+          "bloomCompare",
+          "water",
+          "antialias",
           "renderer",
           "idle",
         ].map((key) => [key, renderParams.get(key)]),
@@ -76,10 +80,11 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
         notes: [
           "Only work inside the 3D render pipeline is captured; simulation and DOM are excluded.",
           "GPU values are native per-pass durations, not wall-clock timestamps or GPU utilization.",
+          "WebGL gpuElapsedMs measures the whole pipeline with a disjoint timer query; per-pass GPU values remain null. Its scope differs from summed WebGPU pass durations.",
           "Frames rendered during asynchronous readback are not sampled. No GPU wait is inserted.",
           "CPU pass scopes include nested submissions: do not add them together.",
           "Scene GPU cost includes geometry, water, materials and local light shading together.",
-          "Missing GPU timestamps remain null; summaries and flamegraphs use complete frames only.",
+          "Missing per-pass GPU timestamps remain null; pass summaries and flamegraphs use complete frames only. WebGL elapsed summaries exclude missing/disjoint queries.",
           "Tweaks are recorded in `startedWith.tweaks`; `changedDuringCapture` flags a mid-capture change.",
         ],
       };
@@ -162,7 +167,9 @@ export function attachPipelineProfilePanel(renderer: WebGPURenderer) {
     status.textContent = profiler.error
       ? `Capture error: ${profiler.error}`
       : !profiler.supported
-        ? "GPU pass timestamps unavailable on this backend/device. JSON contains CPU submission scopes only."
+        ? profiler.elapsedSupported
+          ? `${phase} · WebGL whole-pipeline GPU: ${summary.gpuElapsedMeanMs?.toFixed(2) ?? "unavailable"} ms · ${summary.gpuElapsedFrames} elapsed queries. Per-pass GPU values unavailable.`
+          : "GPU timers unavailable on this backend/device. JSON contains CPU submission scopes only."
         : `${phase} · ${summary.completeGpuFrames}/${summary.capturedFrames} complete GPU samples` +
           (summary.gpuMeanMs === null
             ? ""

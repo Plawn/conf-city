@@ -43,6 +43,7 @@ import type { OrbitControls } from "three-stdlib";
 import { useQualityProfile, useUiStore } from "../../store/uiStore";
 import { inspectBuildings } from "../buildings/instances";
 import { createBeaconGeometry } from "./beaconGeometry";
+import { CompactBloomNode } from "./CompactBloomNode";
 import { renderProfiledPipeline } from "./PipelineProfiler";
 import { gatePass } from "./passGate";
 import { gpuRenderer, isWebGPU, renderParams } from "./renderer";
@@ -58,6 +59,30 @@ function renderFrame(
     resources.filteredTexture.updateBefore({ renderer } as NodeFrame);
   }
   resources.pipeline.render();
+}
+
+/** Shared by the real pipeline and the opt-in, same-frame bloom reference capture. */
+function createOutputPipeline(
+  renderer: ConstructorParameters<typeof RenderPipeline>[0],
+  color: Node<"vec3">,
+  alpha: Node<"float">,
+  glow: ReturnType<typeof bloom> | null,
+) {
+  const pipeline = new RenderPipeline(renderer);
+  pipeline.outputColorTransform = false;
+  const composition = renderOutput(vec4(glow ? color.add(glow.rgb) : color, alpha));
+  // Tone-mapped sRGB fits 8 bits, halving the bandwidth of FXAA's intermediate.
+  const composed =
+    renderParams.get("antialias") === "0"
+      ? null
+      : rtt(composition, null, null, { type: UnsignedByteType });
+  if (composed) {
+    composed.renderTarget!.texture.userData.profileLabel =
+      "City composition / tone mapping (FXAA input)";
+  }
+  const antialias = composed ? fxaa(composed) : null;
+  pipeline.outputNode = antialias ?? composition;
+  return { pipeline, composed, antialias };
 }
 
 /** Owns the sole composed render; positive priority disables R3F's automatic draw. */
@@ -84,20 +109,28 @@ export function LightingPipeline() {
     };
   }, [renderer]);
   const resources = useMemo(() => {
+    const shading = aoBudget.enabled && renderParams.get("ao") !== "0";
+    const indirect = renderParams.get("ssgi") === "1" && isWebGPU(renderer);
     const scenePass = pass(scene, camera, { samples: 0 });
     scenePass.renderTarget.texture.userData.profileLabel = "City scene (MRT / materials / lights)";
-    scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView), emissive }));
-    // 8-bit normals are plenty for AO and halve that target's bandwidth in every reader.
-    scenePass.getTexture("normal").type = UnsignedByteType;
+    // Only write attachments that an enabled effect actually reads. In particular,
+    // Eco needs neither normals nor emission; bloom reads the HDR beauty directly.
+    if (shading || indirect) {
+      scenePass.setMRT(
+        mrt({ output, normal: packNormalToRGB(normalView), ...(shading ? { emissive } : {}) }),
+      );
+      scenePass.getTexture("normal").type = UnsignedByteType;
+    }
     const beauty = scenePass.getTextureNode("output");
-    const packedNormals = scenePass.getTextureNode("normal");
-    const normals = sample((uv) => unpackRGBToNormal(packedNormals.sample(uv)));
+    const packedNormals = shading || indirect ? scenePass.getTextureNode("normal") : null;
+    const normals = packedNormals
+      ? sample((uv) => unpackRGBToNormal(packedNormals.sample(uv)))
+      : null;
     const depth = scenePass.getTextureNode("depth");
-    const emission = scenePass.getTextureNode("emissive");
+    const emission = shading ? scenePass.getTextureNode("emissive") : null;
     // Contact shading is the tier's call: eco skips the half-resolution GTAO and its
     // denoise entirely rather than running them at a lower quality.
-    const shading = aoBudget.enabled && renderParams.get("ao") !== "0";
-    const ambient = shading ? ao(depth, normals, camera) : null;
+    const ambient = shading && normals ? ao(depth, normals, camera) : null;
     let occlusion: Node<"vec4"> | null = null;
     let filtered: ReturnType<typeof denoise> | null = null;
     let filteredTexture: ReturnType<typeof rtt> | null = null;
@@ -108,7 +141,7 @@ export function LightingPipeline() {
       ambient.scale.value = 1;
       ambient.useTemporalFiltering = false;
       occlusion = ambient.getTextureNode() as unknown as Node<"vec4">;
-      if (aoBudget.denoise) {
+      if (aoBudget.denoise && normals) {
         filtered = denoise(ambient.getTextureNode(), depth, normals, camera);
         filtered.radius.value = 3;
         // Once per frame at AO resolution: inline, its 16 taps ran per full-res pixel in every reader.
@@ -121,11 +154,11 @@ export function LightingPipeline() {
     }
     const factor = occlusion ? mix(vec3(1), vec3(occlusion.r), 0.65) : vec3(1);
     // Keep emissive signals out of the AO multiply; apply bloom to the final HDR result.
-    let color = max(beauty.rgb.sub(emission.rgb), vec3(0)).mul(factor).add(emission.rgb);
+    let color = emission
+      ? max(beauty.rgb.sub(emission.rgb), vec3(0)).mul(factor).add(emission.rgb)
+      : beauty.rgb;
     const gi =
-      renderParams.get("ssgi") === "1" && isWebGPU(renderer)
-        ? ssgi(beauty, depth, normals, camera as PerspectiveCamera)
-        : null;
+      indirect && normals ? ssgi(beauty, depth, normals, camera as PerspectiveCamera) : null;
     // Bloom reads the raw beauty: emission already skips the AO multiply, so the bright
     // pixels match, and the high pass no longer re-evaluates the whole composition.
     let glowInput = beauty.rgb;
@@ -192,25 +225,29 @@ export function LightingPipeline() {
     const glow =
       renderParams.get("bloom") === "0" || bloomScale <= 0
         ? null
-        : bloom(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15);
+        : renderParams.get("bloom") !== "reference" &&
+            isWebGPU(renderer) &&
+            renderer.hasFeature("rg11b10ufloat-renderable")
+          ? new CompactBloomNode(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15)
+          : bloom(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15);
     glow?.setResolutionScale(bloomScale);
-    const pipeline = new RenderPipeline(renderer);
-    pipeline.outputColorTransform = false;
-    // Tone-mapped sRGB fits 8 bits like the canvas: half the bandwidth of the default half-float
-    // target, written here and read again by every FXAA tap.
-    const composition = renderOutput(vec4(glow ? color.add(glow.rgb) : color, beauty.a));
-    const composed = rtt(composition, null, null, { type: UnsignedByteType });
-    composed.renderTarget!.texture.userData.profileLabel =
-      "City composition / tone mapping (FXAA input)";
-    const antialias = fxaa(composed);
-    pipeline.outputNode = antialias;
+    const outputPipeline = createOutputPipeline(renderer, color, beauty.a, glow);
+    // Allocate a separate native node only for explicit visual comparisons. It
+    // reads the same HDR scene textures, so animations cannot mask blur differences.
+    const referenceGlow =
+      glow && renderParams.get("bloomCompare") === "1"
+        ? bloom(vec4(glowInput, beauty.a), 0.25, 0.3, 1.15).setResolutionScale(bloomScale)
+        : null;
+    const reference = referenceGlow
+      ? { ...createOutputPipeline(renderer, color, beauty.a, referenceGlow), glow: referenceGlow }
+      : null;
     return {
-      pipeline,
+      ...outputPipeline,
+      reference,
       scenePass,
       ambient,
       filtered,
       filteredTexture,
-      composed,
       glow,
       gi,
       volume,
@@ -221,7 +258,6 @@ export function LightingPipeline() {
       beamOrigin,
       beamDirection,
       beamRange,
-      antialias,
     };
   }, [renderer, scene, camera, runtime.frameWork, aoBudget, volumeBudget, bloomScale]);
   useEffect(
@@ -232,14 +268,18 @@ export function LightingPipeline() {
       resources.filtered?.dispose();
       // RTTNode.dispose() only fires an event; the targets are ours to free.
       resources.filteredTexture?.renderTarget?.dispose();
-      resources.composed.renderTarget?.dispose();
+      resources.composed?.renderTarget?.dispose();
       resources.glow?.dispose();
       resources.gi?.dispose();
       resources.volumePass.dispose();
       resources.volumeBlur.dispose();
       resources.volumeMaterial.dispose();
       resources.volumeGeometry.dispose();
-      resources.antialias.dispose();
+      resources.antialias?.dispose();
+      resources.reference?.pipeline.dispose();
+      resources.reference?.composed?.renderTarget?.dispose();
+      resources.reference?.antialias?.dispose();
+      resources.reference?.glow.dispose();
     },
     [resources],
   );
@@ -256,6 +296,11 @@ export function LightingPipeline() {
           }
         });
         return {
+          bloom: {
+            enabled: resources.glow !== null,
+            storage: resources.glow instanceof CompactBloomNode ? "r11g11b10f" : "rgba16f",
+            resolutionScale: resources.glow?.getResolutionScale() ?? 0,
+          },
           buildings: inspectBuildings(scene, camera, gl.domElement.getBoundingClientRect()),
           altitude: runtime.solar.altitude,
           night: runtime.night.value,
@@ -287,14 +332,25 @@ export function LightingPipeline() {
         controls?.target.set(...target);
         controls?.update();
       },
-      async capture() {
+      async capture(reference = false) {
+        if (reference && !resources.reference) {
+          throw new Error("Reference capture requires bloomCompare=1 and enabled bloom");
+        }
         const target = new RenderTarget(gl.domElement.width, gl.domElement.height, {
           type: UnsignedByteType,
         });
         const previous = renderer.getRenderTarget();
         try {
           renderer.setRenderTarget(target);
-          renderFrame(renderer, resources);
+          renderFrame(
+            renderer,
+            reference
+              ? {
+                  pipeline: resources.reference!.pipeline,
+                  filteredTexture: resources.filteredTexture,
+                }
+              : resources,
+          );
         } finally {
           renderer.setRenderTarget(previous);
         }
@@ -324,6 +380,30 @@ export function LightingPipeline() {
         } finally {
           target.dispose();
         }
+      },
+      async captureBloomComparison() {
+        if (!resources.reference) {
+          throw new Error("Bloom comparison requires bloomCompare=1 and enabled bloom");
+        }
+        // Queue every render/readback synchronously, before yielding to RAF. The
+        // scene's animation uniforms, traffic and camera stay identical throughout.
+        // Repeated controls distinguish blur differences from capture instability.
+        const reference = api.capture(true);
+        const referenceControl = api.capture(true);
+        const optimized = api.capture();
+        const optimizedControl = api.capture();
+        const images = await Promise.all([
+          reference,
+          referenceControl,
+          optimized,
+          optimizedControl,
+        ]);
+        return {
+          reference: images[0]!,
+          referenceControl: images[1]!,
+          optimized: images[2]!,
+          optimizedControl: images[3]!,
+        };
       },
       simulateDeviceLoss: () =>
         renderer.onDeviceLost({

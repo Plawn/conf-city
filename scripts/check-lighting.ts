@@ -126,7 +126,9 @@ try {
       }
       if (
         label === "noon" &&
-        (last.clusteredPointLightVisits !== 0 || last.clusteredSpotLightVisits !== 0)
+        (last.clusteredPointLightVisits !== 0 ||
+          last.clusteredSpotLightVisits !== 0 ||
+          last.clusterDispatches !== 0)
       ) {
         throw new Error("Zero-intensity daytime lights still enter cluster calculations");
       }
