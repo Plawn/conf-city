@@ -66,3 +66,21 @@ test("native pass labels separate scene shading, shadows, clustering and post-pr
   expect(passGroup("Bloom [ Blur Horizontal - 0 ]")).toBe("Bloom");
   expect(passGroup("Render Pipeline")).toBe("Composition / antialiasing");
 });
+
+test("WebGL elapsed times remain separate from per-pass sums and exclude invalid queries", () => {
+  const a = { ...frame(null), gpuElapsedMs: 12 };
+  const b = { ...frame(null), gpuElapsedMs: null };
+  const summary = summarizePipeline([
+    a,
+    b,
+    { ...frame(null), gpuElapsedMs: 8 },
+    { ...frame(null), gpuElapsedMs: Number.NaN },
+    { ...frame(null), gpuElapsedMs: -3 },
+  ]);
+  expect(summary.completeGpuFrames).toBe(0);
+  expect(summary.gpuMeanMs).toBeNull();
+  expect(summary.groups).toEqual([]);
+  expect(summary.gpuElapsedFrames).toBe(2);
+  expect(summary.gpuElapsedMeanMs).toBe(10);
+  expect(summary.gpuElapsedP95Ms).toBe(12);
+});

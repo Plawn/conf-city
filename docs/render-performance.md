@@ -4,6 +4,8 @@ The reference machine is an AMD Ryzen 5 7430U (6 cores / 12 threads), integrated
 AMD Radeon Barcelo (`amdgpu`), approximately 16 GiB RAM, running Linux. The target
 is 30 fps with the existing image quality. Resolution, AO, bloom, sunlight and
 local-light budgets, shadow quality, traffic and animation timing are preserved.
+The bloom storage optimization described below reduces intermediate color
+precision; it is explicitly recorded as a tradeoff, not a lossless change.
 
 ## Changes
 
@@ -38,6 +40,14 @@ intentionally remain active.
 The renderer reports its actual adapter in `__CITY_PERF__.adapter`, and the scene
 inspection API includes building identities, colors, heights and screen positions.
 These diagnostics do not run in normal use.
+
+The scene writes normal and emissive attachments only when an enabled effect
+reads them: Eco and `ao=0` omit both, while experimental SSGI retains normals.
+Empty clustered-light lists skip GPU compute and the fragment loop; a render-group
+count uniform prevents reading stale indices, including across the nested volume
+pass, resizes and day/night changes. Non-empty lists resume compute immediately.
+The Canvas starts with the selected pixel budget rather than first allocating
+targets at R3F's default DPR. These changes preserve the selected quality profile.
 
 Batching trades additional instance/geometry buffers and coarser per-tile culling
 for fewer draw calls. Frame-time gains depend on how much of the current workload
@@ -122,8 +132,14 @@ sampled; the report counts these skipped frames. Sampling and instrumentation ca
 affect the result, so use repeated captures and compare the ordinary HUD separately.
 GPU utilization and power consumption cannot be inferred directly from these timings.
 Queries are enabled only during a capture, with bounded sample and timestamp storage.
-WebGL2 or devices without WebGPU timestamp support retain CPU scopes and report GPU
-data as unavailable; they never substitute CPU durations. When combined with
+WebGL2 measures whole-pipeline elapsed GPU time when
+`EXT_disjoint_timer_query_webgl2` is available. Its per-pass GPU fields stay null;
+the elapsed mean/p95/sample count are separate fields. Disjoint, expired and
+unsupported queries remain null, never zero or a reused previous result. One query
+can be outstanding; availability is polled without `finish()` or a synchronous wait.
+This elapsed scope differs from WebGPU's exclusive pass sums, so it cannot establish
+a direct GPU speedup percentage between backends. Devices without GPU timers retain
+CPU scopes only; they never substitute CPU durations. When combined with
 `perf=1`, the profiler owns query resolution and the old HUD's GPU total is unavailable.
 
 The scene pass includes water, geometry, materials and local light shading together.
@@ -134,16 +150,269 @@ To isolate their contributions, reload and compare one diagnostic switch at a ti
 | `&localLights=0` | Real local lights (street lamps, vehicle spots, lighthouse projector); emissive geometry stays visible |
 | `&shadows=0` | Sun and lighthouse shadow maps |
 | `&bloom=0` | Bloom extraction, blur chain and bloom composition |
+| `&bloom=reference` | Diagnostic reference: native RGBA16F bloom storage |
 | `&ao=0` / `&volume=0` | Existing contact-shading / lighthouse-volume switches; already off in Eco |
+| `&water=0` | Water mesh and its shading (diagnostic only) |
+| `&antialias=0` | FXAA and its intermediate sRGB target; tone mapping still runs in the final draw (diagnostic only) |
 
 These are comparisons within the current renderer, not a recreation of the old
-pre-lighting renderer. Default visuals are unchanged. `window.__CITY_PROFILE__`
+pre-lighting renderer. `window.__CITY_PROFILE__`
 exposes `start(durationMs)`, `stop()`, `recording`, `resolving`, `report()` and
 `speedscope()` in profile mode. Captures last 1–30 seconds and retain at most 1,800
 sampled frames. Automated functional checks use `bun scripts/check-profile.ts`
 (default URL `http://127.0.0.1:4174/`), with `CITY_URL`, `CITY_BACKEND`,
 `CHROMIUM_PATH`, `CITY_OUTPUT` and `GPU_SOFTWARE=1` supported. Software GPU captures
 validate attribution and export only, not performance on an integrated GPU.
+
+### Automated GPU pipeline benchmark
+
+`bun run bench:pipeline` records each native GPU pass on the actual adapter, then
+ablates one effect at a time. Defaults: the repository sample, WebGPU, 1280×800 at
+DPR 1, Office (30 fps), High, frozen noon and night, a stationary fit-all camera,
+three repetitions of ten seconds after warmup. Each repetition rotates the variant
+order. Telemetry is the shared healthy fixture, not a replay of live production
+metrics or incidents. Each capture uses a fresh browser context, so persistent
+construction and user tweaks cannot change the workload between variants.
+Host metrics are supplied for every city (35% CPU, 37.5% RAM, 40% disk).
+Camera/lighting URL-hash edits keep telemetry active; only document navigation
+resets a custom world until its JSON is loaded. An enabled WebGPU lighthouse
+volume must actually run during the night baseline or the runner rejects it.
+
+```sh
+bun run build
+bun run preview --host 127.0.0.1 --port 4174 --strictPort
+# Separate terminal; optionally set CHROMIUM_PATH to the installed Chromium executable:
+bun run bench:pipeline
+# Use an exported production world and keep every parameter fixed for future comparisons:
+CITY_WORLD=/path/to/world.json CITY_OUTPUT=out/pipeline/baseline bun run bench:pipeline
+# Smaller selection for a targeted experiment (baseline is always included):
+CITY_VARIANTS=no-water,no-fxaa CITY_CASE=night CITY_OUTPUT=out/pipeline/targeted bun run bench:pipeline
+```
+
+The runner writes `summary.md`, `summary.json`, `rows.json`, the world, raw per-pass
+captures, and first-run PNGs/Speedscope exports into `out/benchmark-pipeline` (or
+`CITY_OUTPUT`). Raw JSON records the actual render resolution, budgets, adapter,
+camera, sampling coverage, CPU submission/frame intervals, draw calls and renderer
+allocation counters. Summary totals are medians of per-run GPU means; ranges are
+observed run means, not confidence intervals. Pass-family shares use equally
+weighted run means. Each ablation's saving is paired with the same repetition's
+baseline; retain negative deltas rather than claiming every removal is a gain.
+Savings are not additive: changing water or an effect can alter other passes.
+GPU milliseconds are not GPU utilization or power consumption.
+
+`CITY_RUNS`, `CITY_DURATION_MS` (1–30 s), `CITY_WARMUP_MS`, `CITY_CONTROL_MS`, `CITY_CASE`,
+`CITY_WIDTH`, `CITY_HEIGHT`, `CITY_DPR`, `CITY_RENDER_MODE`, `CITY_BACKEND`,
+`CITY_PARAMS`, `CITY_WORLD` and `CITY_WORLD_SCALE` customize the reference.
+The runner clears persisted tweaks unless `CITY_PARAMS` explicitly supplies them.
+Software fallback adapters are rejected unless `GPU_SOFTWARE=1` explicitly requests
+functional validation. WebGL2 retains CPU observations and reports a separate
+whole-pipeline GPU elapsed measurement when its timer extension is available.
+Captures with browser errors, changed budgets or fewer than ten
+complete WebGPU hardware samples fail, preserving their raw report for diagnosis.
+
+### Pipeline cost baseline (2026-10-04)
+
+Measured on the Ryzen 5 7430U / AMD hardware adapter with Chromium 149.0.7827.55,
+WebGPU, the local production-world export (3 cities, 26 services), 1280×800 at DPR 1,
+Office / 30 fps, High, no tweaks, a stationary fit-all view and frozen noon/night.
+The renderer includes the conditional MRT and empty-cluster cleanups described above.
+The healthy fixture supplies host metrics to every city and keeps reporting after
+camera/lighting hash edits. Night captures contain three active beacons, traffic
+and one selected volumetric projector. Each scenario ran three times for five
+seconds after setup and three seconds of warmup; 48 captures contain 7,197 complete
+GPU samples (149–150 per capture), with zero browser errors.
+
+| GPU pass family (mean across repetitions) | Day ms | Night ms |
+| --- | ---: | ---: |
+| Scene / materials / lighting, including water and shadow lookups | 3.77 | 3.84 |
+| Bloom | 2.66 | 2.69 |
+| Contact shading (AO + denoise) | 2.26 | 2.21 |
+| Composition / antialiasing | 1.98 | 1.96 |
+| Lighthouse volume | 0 | 1.07 |
+| Light clustering | 0 | 0.51 |
+| Shadow-map renders / VSM blur | 0 | 0.04 |
+
+Median total GPU time is **10.76 ms by day / 12.35 ms at night**. These medians
+need not equal the sum of the equally weighted pass means above. Baseline GPU p95
+medians are 11.61 / 13.22 ms. CPU update/submission averages are approximately
+3.9 / 4.9 ms; the frame cadence remains around 30 fps.
+
+| Effect removed (median paired saving) | Day ms | Night ms |
+| --- | ---: | ---: |
+| Water | 3.09 | 2.98 |
+| AO | 2.75 | 2.45 |
+| Bloom | 2.42 | 2.41 |
+| All local lighting, including the selected volume | 0.60 | 2.42 |
+| Lighthouse volume, replaced by its fallback cone | 0.30 | 1.25 |
+| Shadows | 0.39 | 0.26 |
+| FXAA and its intermediate target | 0.16 | 0.21 |
+
+Prioritise the water shader, bloom and AO. Their removal measurements are upper
+bounds for optimisations that preserve the image, not promised gains. Removing
+AO also removes its normal/emissive attachments, so its saving exceeds the AO-pass
+duration alone. Removing local lighting also removes the volume: do not add those
+savings. Shadow-map caching already makes map renders cheap in this stationary
+view; moving-camera shadows need a separate benchmark. The composition family
+includes tone mapping and effect composition that still run without FXAA, so
+disabling FXAA saves far less than that family's total cost. Volume and local
+lighting remain secondary night targets, with a separate closeup required for the
+beam. A useful next controlled comparison is quarter-resolution bloom via
+`CITY_PARAMS='&tweaks=bloomScale:0.25'`, and lower AO samples, retaining screenshots
+to assess the visual tradeoff.
+
+Raw reports, PNGs, Speedscope exports, the world, adapter/settings and loaded build
+asset hash are in the ignored local directory `out/pipeline/reference-2026-10-04`.
+The baseline build is `index-CozDt9c7.js`. Replay this exact reference against a
+production preview (set `CITY_URL` / `CHROMIUM_PATH` if necessary):
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_RUNS=3 CITY_DURATION_MS=5000 CITY_WARMUP_MS=3000 \
+CITY_OUTPUT=out/pipeline/next bun run bench:pipeline
+```
+
+These timings describe the 3D composed draw at this viewport, with healthy synthetic
+telemetry. They exclude simulation, DOM/compositor work and environment baking
+outside the pipeline, and do not establish an operating-system GPU percentage or
+power saving. The report retains run ranges; small deltas and noisier variants
+require targeted repetition before changing defaults.
+
+### Bloom optimization: storage and precision (2026-10-04)
+
+**Classification: pipeline bandwidth improvement with a precision tradeoff.**
+This is not a lossless change. On WebGPU devices supporting
+`rg11b10ufloat-renderable`, the eleven bloom targets use positive RGB R11G11B10F
+(4 bytes/texel) instead of RGBA16F (8 bytes/texel). Bloom consumes RGB only; its
+alpha channel was unused. HDR range is retained, but RGB mantissa precision is
+lower, especially blue. WebGL and unsupported WebGPU devices keep native RGBA16F.
+`bloom=reference` restores native storage for diagnosis.
+
+The native Three bloom algorithm remains intact: extraction, five mip levels,
+twelve passes, resolution scale, Gaussian kernels, strength 0.25, radius 0.3 and
+threshold 1.15. No quality tier, effect or sampling budget is lowered. The compact
+node changes only target formats, through Three r185's private target fields;
+revalidate it after Three upgrades. Output composition is factored into one helper
+shared by normal rendering and explicit visual reference captures.
+
+Four alternating repetitions on the same AMD hardware adapter, Chromium 149,
+WebGPU, High, Office/30 fps, 1280×800 DPR 1, 3 cities / 26 services, frozen noon/night,
+fit-all, healthy telemetry, 5 s measurement and 3 s warmup after setup:
+
+| Measurement (median run means) | Native RGBA16F | Compact RGB | Reduction |
+| --- | ---: | ---: | ---: |
+| Day bloom | 2.55 ms | 1.42 ms | 44% |
+| Night bloom | 2.72 ms | 1.62 ms | 40% |
+| Day composed pipeline | 10.37 ms | 9.33 ms | 10% |
+| Night composed pipeline | 12.47 ms | 11.49 ms | 8% |
+
+Median paired whole-pipeline savings are 1.10 ms by day and 0.94 ms at night.
+Raw reports retain variability, including a 14.07 ms native night run rather than
+discarding it. At this resolution, bloom targets alone shrink from approximately
+7.16 to 3.58 MiB. This does not halve total renderer memory or establish an OS GPU
+utilization/power reduction. Reports are in `out/bloom/compact-gpu`, build
+`index-B811f9Sw.js`; `baseline` means optimized and `bloom-reference` means native,
+so the automated ablation table reports negative savings for the native variant.
+
+Visual comparisons use two separate bloom nodes reading the **same scene textures
+in the same simulation frame**. Four synchronous draws queue native/native-control
+and optimized/optimized-control before yielding to animation. Both controls must
+be bit-identical, or the comparison is rejected. Metrics cover final 8-bit sRGB
+RGB values after tone mapping and FXAA; a low global average alone does not prove
+that bright details are unchanged. Numerical tolerances are indicators, not a
+perceptual guarantee.
+
+Day, dawn and night are checked in fit-all and beacon closeup views. Night has
+localized differences near lights; both the mean and the worst pixel are retained.
+Do not describe these as zero visual loss. `check:bloom` exports the original PNGs,
+differences amplified ×16, `report.json` and an interactive `review.html` slider.
+The reference node and its output targets exist only with `bloomCompare=1`, used
+by this visual check, and do not contaminate the performance benchmark.
+
+Final same-frame High captures in `out/bloom/visual-webgpu`:
+
+| View | Different pixels | Pixels with a channel delta > 1/255 | Mean absolute RGB delta /255 | Worst channel delta /255 |
+| --- | ---: | ---: | ---: | ---: |
+| Noon / dawn, fit-all and beacon | 0% | 0% | 0 | 0 |
+| Night, fit-all | 0.3146% | 0.0045% | 0.001188 | 12 |
+| Night, beacon closeup | 5.8226% | 0.1280% | 0.024803 | 39 |
+
+Every repeated control had zero differences. WebGL's six comparisons in
+`out/bloom/visual-webgl` were bit-identical because both paths retain native storage.
+Captures use `index-xzNKmrlS.js`. Screenshots do not exclude precision artifacts on
+other scenes, displays or devices, including altered gradients near bright details.
+An additional Eco night check at 1279×799 (`out/bloom/visual-eco-odd`) validates
+unaligned GPU readback and quarter-resolution bloom. Its beacon closeup had
+0.0666% of pixels with a channel delta > 1/255, but a worst delta of 66/255.
+This is another reason to retain worst-case details alongside the small mean.
+A separate control with the same Eco/resolution settings and FXAA disabled
+(`out/bloom/visual-eco-no-fxaa`) reduced the worst closeup delta to 2/255, with
+mean 0.024631/255. This supports FXAA amplifying small storage differences at
+edges. Animation states differ between these runs, so it is evidence of that
+interaction, not a universal bound on packed-format error.
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_RUNS=4 CITY_DURATION_MS=5000 CITY_WARMUP_MS=3000 \
+CITY_VARIANTS=baseline,bloom-reference CITY_OUTPUT=out/bloom/next \
+bun run bench:pipeline
+
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_OUTPUT=out/bloom/visual-webgpu bun run check:bloom
+
+CITY_BACKEND=webgl CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_OUTPUT=out/bloom/visual-webgl bun run check:bloom
+```
+
+Each future optimization must record its **kind** (same calculations, reduced
+precision, changed resolution/samples or effect removal), measured GPU/CPU gain,
+memory scope, visual differences and uncertainty. The earlier paired-Gaussian-tap
+experiment did not show a convincing whole-frame gain and was not retained.
+
+### WebGPU / WebGL comparison
+
+`bun run bench:backends` alternates hardware WebGPU and WebGL captures sequentially,
+defaults to Smooth/60 fps and the same 1280×800 DPR 1 workload, and writes raw
+reports plus `comparison.json` / `comparison.md`. It verifies the production asset
+does not change mid-comparison. Two scenarios distinguish backend behavior:
+
+- **native-high**: normal High for each backend. WebGL caps AO at 8 instead of 16,
+  limits local lighting and uses the fallback lighthouse cone without raymarching
+  or a lighthouse shadow. It also retains native bloom storage. Thus this scenario
+  measures actual application behavior, not identical image quality.
+- **common-effects**: AO 8, native RGBA16F bloom, local lights off, raymarching off,
+  lighthouse shadow off. Water, AO denoise, sun shadows, tone mapping and FXAA stay
+  active. This better controls effect differences but is not the full night look.
+
+WebGPU exclusive GPU pass sums and WebGL whole-pipeline elapsed queries are
+separate columns, never used to calculate a cross-backend GPU speedup percentage.
+FPS and CPU observations are also recorded with GPU queries disabled for
+`CITY_CONTROL_MS` (default 3 s) on the same page after each capture. This controls
+query overhead; FPS remains bounded by the selected frame ceiling. Three's tracked
+allocation counters are not OS VRAM measurements.
+
+The 2026-10-04 hardware run has three repetitions × 5 s (24 captures) in
+`out/bloom/backends`, plus one repetition × 3 s with 3 s no-query controls
+(8 captures) in `out/bloom/backend-controls`. Same world, healthy fixture and camera
+as the bloom benchmark, but Smooth/60 fps. Native GPU time columns have different
+scopes and are not a GPU speedup claim:
+
+| Scenario / time | WebGPU exclusive GPU ms (3-run median) | WebGL elapsed GPU ms (3-run median) | WebGPU FPS without queries (1 control) | WebGL FPS without queries (1 control) |
+| --- | ---: | ---: | ---: | ---: |
+| Native High, noon | 8.92 | 13.49 | 60.0 | 43.0 |
+| Native High, night | 10.45 | 13.38 | 60.0 | 42.6 |
+| Common effects, noon | 9.36 | 8.80 | 60.1 | 56.2 |
+| Common effects, night | 8.47 | 8.79 | 60.0 | 57.1 |
+
+Ordinary frame cadence is close to the profiled cadence in the controls. WebGL
+does not establish an advantage for the current full look on this machine; the
+closer common-effects results also show why native High should not be called an
+identical-quality comparison. No backend migration is included in this change.
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_RUNS=3 CITY_DURATION_MS=5000 CITY_WARMUP_MS=3000 CITY_CONTROL_MS=3000 \
+CITY_OUTPUT=out/bloom/backends-next bun run bench:backends
+```
 
 ### Tweaks
 

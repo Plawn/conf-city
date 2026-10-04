@@ -1,5 +1,6 @@
 import { InspectorBase, type WebGPURenderer } from "three/webgpu";
 import { type PipelineFrameSample, type PipelinePassSample, passGroup } from "./profileReport";
+import { WebGLPipelineTimer } from "./WebGLPipelineTimer";
 
 /** r185 backend timestamp API, absent from the current DefinitelyTyped declarations. */
 interface TimingBackend {
@@ -34,15 +35,24 @@ export class PipelineProfiler extends InspectorBase {
   private readonly backend: TimingBackend;
   private readonly previousInspector: InspectorBase;
   private readonly previousTracking: boolean;
+  private readonly webglTimer: WebGLPipelineTimer | null;
+
+  get elapsedSupported() {
+    return this.webglTimer?.supported ?? false;
+  }
 
   constructor(private readonly renderer: WebGPURenderer) {
     super();
     this.backend = renderer.backend as unknown as TimingBackend;
     this.previousInspector = renderer.inspector;
     this.previousTracking = this.backend.trackTimestamp;
-    // WebGL's disjoint queries have different semantics: leave GPU costs unavailable there.
+    // WebGL disjoint queries have different semantics: per-pass GPU costs stay unavailable.
     this.supported =
       "isWebGPUBackend" in renderer.backend && renderer.hasFeature("timestamp-query");
+    this.webglTimer =
+      "isWebGLBackend" in renderer.backend
+        ? new WebGLPipelineTimer((renderer.backend as unknown as { gl: WebGL2RenderingContext }).gl)
+        : null;
     this.backend.trackTimestamp = false;
     renderer.inspector = this;
     profilers.set(renderer, this);
@@ -78,6 +88,7 @@ export class PipelineProfiler extends InspectorBase {
     const frame: PipelineFrameSample = { time: performance.now(), cpuMs: 0, passes: [] };
     this.active = frame;
     this.backend.trackTimestamp = this.supported;
+    const elapsedQuery = this.webglTimer?.begin();
     try {
       render();
     } finally {
@@ -89,6 +100,8 @@ export class PipelineProfiler extends InspectorBase {
       // those frames run without queries until this sample has resolved.
       if (this.supported) {
         void this.resolve(frame);
+      } else if (elapsedQuery) {
+        void this.resolveElapsed(frame, elapsedQuery);
       }
       this.backend.trackTimestamp = false;
     }
@@ -167,10 +180,29 @@ export class PipelineProfiler extends InspectorBase {
     }
   }
 
+  private async resolveElapsed(frame: PipelineFrameSample, query: WebGLQuery) {
+    this.resolving = true;
+    const generation = this.generation;
+    try {
+      const ms = await this.webglTimer!.end(query);
+      if (!this.disposed && generation === this.generation) {
+        frame.gpuElapsedMs = ms;
+      }
+    } catch (error) {
+      if (!this.disposed) {
+        this.error = String(error);
+        this.stop();
+      }
+    } finally {
+      this.resolving = false;
+    }
+  }
+
   dispose() {
     this.stop();
     this.disposed = true;
     this.generation++;
+    this.webglTimer?.dispose();
     if (profilers.get(this.renderer) === this) {
       profilers.delete(this.renderer);
       this.renderer.inspector = this.previousInspector;

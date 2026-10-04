@@ -2,7 +2,7 @@ import { AdaptiveEvents, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { CameraTarget } from "../domain/camera";
-import { IDLE_FPS } from "../domain/quality";
+import { IDLE_FPS, resolveDpr } from "../domain/quality";
 import type {
   City,
   CityMeta,
@@ -119,7 +119,9 @@ export function WorldScene({
   // Overlay that hosts every drei <Html>; state (not ref) so children re-render once it exists.
   const [portalEl, setPortalEl] = useState<HTMLDivElement | null>(null);
   // Canvas re-applies its `dpr` prop (default [1, 2]) on every render, so the budget must live here.
-  const [renderDpr, setRenderDpr] = useState<number>();
+  const [renderDpr, setRenderDpr] = useState(() =>
+    resolveDpr(profile, window.innerWidth, window.innerHeight, window.devicePixelRatio),
+  );
   const portalRef = useMemo(() => ({ current: portalEl }), [portalEl]);
 
   const handleFocus = useCallback(
@@ -202,7 +204,9 @@ export function WorldScene({
               <SceneDepth extent={extent} controlsRef={controlsRef} waterRadius={waterRadius} />
               {PERF_HUD && <PerfHud />}
 
-              <WaterPlane size={waterRadius * 2} shore={shore} />
+              {renderParams.get("water") !== "0" && (
+                <WaterPlane size={waterRadius * 2} shore={shore} />
+              )}
 
               <Suspense fallback={<SceneLoader />}>
                 {cities.map((city) => (

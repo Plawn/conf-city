@@ -57,8 +57,10 @@ export async function installLightingFixture(page: Page) {
   const senders = new Set<() => void>();
   // Do not discover the stress world's services inside the sample before its JSON is loaded.
   let configured = !customWorld;
-  page.on("framenavigated", (frame) => {
-    if (frame === page.mainFrame()) {
+  page.on("request", (request) => {
+    // Camera/lighting edits update the URL hash and emit framenavigated too.
+    // Reset only on a new document, or fit-all silently empties the telemetry.
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
       configured = !customWorld;
     }
   });
@@ -103,17 +105,18 @@ export async function installLightingFixture(page: Page) {
         cityMeta: Object.fromEntries(
           cities.map((city) => [city.id, { cpuCores: 8, memMb: 16000 }]),
         ),
-        cityMetrics: configured
-          ? {
-              "paris-1": {
-                cpuUsedCores: 2.8,
-                memUsedMb: 6000,
-                diskUsedMb: 40000,
-                diskTotalMb: 100000,
-                at: now,
-              },
-            }
-          : {},
+        cityMetrics: Object.fromEntries(
+          cities.map((city) => [
+            city.id,
+            {
+              cpuUsedCores: 2.8,
+              memUsedMb: 6000,
+              diskUsedMb: 40000,
+              diskTotalMb: 100000,
+              at: now,
+            },
+          ]),
+        ),
       });
       socket.send(snapshot);
     };

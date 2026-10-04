@@ -46,9 +46,16 @@ declare global {
   interface Window {
     __CITY_RENDER__?: {
       capture: () => Promise<string>;
+      captureBloomComparison: () => Promise<{
+        reference: string;
+        referenceControl: string;
+        optimized: string;
+        optimizedControl: string;
+      }>;
       simulateDeviceLoss: () => void;
       focus: (position: [number, number, number], target: [number, number, number]) => void;
       inspect: () => {
+        bloom: { enabled: boolean; storage: string; resolutionScale: number };
         buildings: ReturnType<typeof inspectBuildings>;
         altitude: number;
         night: number;
