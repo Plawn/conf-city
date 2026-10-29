@@ -191,7 +191,7 @@ traffic/                   useVehicleGeometry / useShipGeometry over bakeGltf.ts
                            geometry), vehicleShadows.ts (instanced blob decals); the simulation is in src/sim/traffic/
 three/                     instancing.ts: dynamicInstancedMesh (per-frame pools), NO_RAYCAST, poolMatrix
 mobility/                  MobilitySimulation.tsx (drives src/sim/mobility/engine.ts), MetroSystem /
-                           MetroStation, IngressPorts.tsx (ships at the berths, MAX_BOATS 24),
+                           MetroStation, IngressPorts.tsx (ships at the berths, maxBoats from the tier),
                            ConstructionMarkers.tsx
 lighting/                  SolarLighting (sun + shadow fitting), LightingPipeline (GTAO, bloom, FXAA, lighthouse
                            volume), LocalLighting + ActiveClusteredLighting + VehicleLights (street lamps and
