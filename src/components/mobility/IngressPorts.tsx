@@ -5,10 +5,10 @@ import { TERRAIN } from "../../domain/nodeStyle";
 import type { NodeTelemetry } from "../../domain/types";
 import type { Vec2, WorldLayout } from "../../layout/types";
 import { liveTelemetry } from "../../sim/traffic/demand";
+import { useQualityProfile } from "../../store/uiStore";
 import { SceneLabel } from "../SceneLabel";
 import { useShipGeometry } from "../traffic/useShipGeometry";
 
-const MAX_BOATS = 24;
 /** Ships calling at one berth at a time; past this the RX credit is simply dropped. */
 const BOATS_PER_BERTH = 3;
 const matrix = new THREE.Object3D();
@@ -48,6 +48,7 @@ export function IngressPorts({
   visibleCities: Set<string>;
 }) {
   const { geometry, material } = useShipGeometry();
+  const { maxBoats } = useQualityProfile();
   const hull = useRef<THREE.InstancedMesh>(null);
   const wake = useRef<THREE.InstancedMesh>(null);
   const fleet = useRef<Voyage[]>([]);
@@ -75,6 +76,9 @@ export function IngressPorts({
     if (!hull.current || !wake.current) {
       return;
     }
+    if (fleet.current.length > maxBoats) {
+      fleet.current.length = maxBoats;
+    }
     const now = Date.now();
     for (const key of credits.current.keys()) {
       if (!byAddress.has(key)) {
@@ -91,7 +95,7 @@ export function IngressPorts({
           : 0;
       if (credit >= 1) {
         if (
-          fleet.current.length < MAX_BOATS &&
+          fleet.current.length < maxBoats &&
           fleet.current.filter((b) => b.address === target.address).length < BOATS_PER_BERTH
         ) {
           fleet.current.push({ address: target.address, progress: 0 });
@@ -160,14 +164,14 @@ export function IngressPorts({
       <instancedMesh
         name="ingress-ships"
         ref={hull}
-        args={[geometry, material, MAX_BOATS]}
+        args={[geometry, material, maxBoats]}
         frustumCulled={false}
         castShadow
       />
       <instancedMesh
         name="ingress-wakes"
         ref={wake}
-        args={[undefined, undefined, MAX_BOATS]}
+        args={[undefined, undefined, maxBoats]}
         frustumCulled={false}
       >
         <planeGeometry args={[0.8, 1.4]} />

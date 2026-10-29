@@ -38,6 +38,7 @@ import {
   VolumeNodeMaterial,
 } from "three/webgpu";
 import type { OrbitControls } from "three-stdlib";
+import { WEBGL_AO_MAX_SAMPLES } from "../../domain/quality";
 import { useQualityProfile, useUiStore } from "../../store/uiStore";
 import { inspectBuildings } from "../buildings/instances";
 import { createAmbientOcclusion } from "./ambientOcclusion";
@@ -90,7 +91,13 @@ export function LightingPipeline() {
   const renderer = gpuRenderer(gl);
   const runtime = useLighting();
   // Destructured: the pipeline is rebuilt only for the budgets it actually reads.
-  const { ao: aoBudget, volume: volumeBudget, bloomScale } = useQualityProfile();
+  const {
+    ao: aoBudget,
+    volume: volumeBudget,
+    volumeSteps,
+    volumeScale,
+    bloomScale,
+  } = useQualityProfile();
   useEffect(() => {
     if (renderParams.get("profile") !== "1") {
       return;
@@ -131,7 +138,9 @@ export function LightingPipeline() {
     // denoise entirely rather than running them at a lower quality.
     const aoReference = renderParams.get("ao") === "reference";
     const aoOptions = {
-      samples: isWebGPU(renderer) ? aoBudget.samples : Math.min(8, aoBudget.samples),
+      samples: isWebGPU(renderer)
+        ? aoBudget.samples
+        : Math.min(WEBGL_AO_MAX_SAMPLES, aoBudget.samples),
       denoise: aoBudget.denoise,
       reference: aoReference,
     };
@@ -174,7 +183,7 @@ export function LightingPipeline() {
       color = color.add(gi.getGINode().rgb.mul(0.3));
       referenceColor = referenceColor.add(gi.getGINode().rgb.mul(0.3));
     }
-    const volumeMaterial = new VolumeNodeMaterial({ steps: 48, fog: false });
+    const volumeMaterial = new VolumeNodeMaterial({ steps: volumeSteps, fog: false });
     // Geometry UVs do not identify the scene pixel behind a raymarch sample.
     volumeMaterial.depthNode = depth.sample(screenUV);
     // Stable spatial dithering avoids moving noise when reduced motion is enabled.
@@ -199,7 +208,7 @@ export function LightingPipeline() {
     // volume by layer, in the same scene as the actual shadow casters.
     const volumePass = pass(scene, camera, { samples: 0, depthBuffer: false })
       .setLayers(volumeLayers)
-      .setResolutionScale(0.5);
+      .setResolutionScale(volumeScale);
     volumePass.renderTarget.texture.userData.profileLabel = "City lighthouse volume";
     const volumeBlur = gaussianBlur(volumePass.getTextureNode(), 0.75, 2);
     gatePass(
@@ -284,7 +293,17 @@ export function LightingPipeline() {
       beamDirection,
       beamRange,
     };
-  }, [renderer, scene, camera, runtime.frameWork, aoBudget, volumeBudget, bloomScale]);
+  }, [
+    renderer,
+    scene,
+    camera,
+    runtime.frameWork,
+    aoBudget,
+    volumeBudget,
+    volumeSteps,
+    volumeScale,
+    bloomScale,
+  ]);
   useEffect(
     () => () => {
       resources.pipeline.dispose();

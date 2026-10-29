@@ -12,8 +12,6 @@ import {
 } from "./runtime";
 import { headlightSplit, LightCandidates } from "./selection";
 
-const BEACON_SHADOW_HZ = 15;
-
 interface Slot {
   light: PointLight | SpotLight;
   /** Second headlight of a clustered vehicle pair (WebGPU only); null elsewhere. */
@@ -64,7 +62,8 @@ export function LocalLighting() {
   const renderer = gpuRenderer(useThree((s) => s.gl));
   const gpu = isWebGPU(renderer);
   // Destructured: the light pool is rebuilt only for the budgets it actually reads.
-  const { pointLights, vehicleSpots, beaconShadow } = useQualityProfile();
+  const { pointLights, vehicleSpots, beaconShadow, beaconShadowSize, beaconShadowHz } =
+    useQualityProfile();
   const resources = useMemo(() => {
     const group = new Group();
     const points: Slot[] = [];
@@ -99,17 +98,16 @@ export function LocalLighting() {
     beacon.castShadow = shadowCapable;
     beacon.shadow.needsUpdate = shadowCapable;
     beacon.shadow.intensity = runtime.nightLights ? 1 : 0;
-    beacon.shadow.mapSize.set(512, 512);
-    // The sweep reads fine at 15 Hz; re-rendering the 512² map every frame does not.
+    beacon.shadow.mapSize.set(beaconShadowSize, beaconShadowSize);
+    // The sweep reads fine at `beaconShadowHz`; re-rendering the map every frame does not.
     beacon.shadow.autoUpdate = false;
     beacon.shadow.camera.near = 0.15;
     // Non-default mask: keeps world casters during the layer-10 volume pass, excludes the volume.
     beacon.shadow.camera.layers.enable(SHADOW_CASTER_LAYER);
-    // VSM: no depth compare, so no constant bias; `radius` is the blur in texels.
+    // PCF: `radius` spreads the five-tap disk in texels; normalBias alone handles acne.
     beacon.shadow.bias = 0;
     beacon.shadow.normalBias = 0.03;
     beacon.shadow.radius = 2;
-    beacon.shadow.blurSamples = 6;
     group.add(beacon, beacon.target);
     const beaconSlot: Slot = { light: beacon, secondary: null, split: false, id: null, fade: 0 };
     return {
@@ -138,7 +136,7 @@ export function LocalLighting() {
       sphere: new Sphere(),
       cameraPosition: new Vector3(),
     };
-  }, [gpu, runtime, pointLights, vehicleSpots, beaconShadow]);
+  }, [gpu, runtime, pointLights, vehicleSpots, beaconShadow, beaconShadowSize]);
   useEffect(() => {
     runtime.beaconLight = resources.beacon.light as SpotLight;
     return () => {
@@ -266,7 +264,7 @@ export function LocalLighting() {
     ) {
       r.beacon.light.shadow.needsUpdate = true;
       runtime.frameWork.beaconShadowRenders++;
-      r.nextBeaconShadow = clock.elapsedTime + 1 / BEACON_SHADOW_HZ;
+      r.nextBeaconShadow = clock.elapsedTime + 1 / beaconShadowHz;
     }
     // Fade-out can temporarily keep departing sources. Enforce the total fallback budget.
     if (!gpu) {

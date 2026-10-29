@@ -29,12 +29,22 @@ export interface QualityProfile {
   beaconShadow: boolean;
   /** Raymarched lighthouse volume; the cone overlay stands in otherwise. */
   volume: boolean;
+  /** Raymarch steps through the lighthouse beam. */
+  volumeSteps: number;
+  /** Volume pass resolution relative to the frame. */
+  volumeScale: number;
+  /** Lighthouse shadow map edge, in texels. */
+  beaconShadowSize: number;
+  /** Lighthouse shadow refresh rate at night, per second. */
+  beaconShadowHz: number;
   /** Clustered point-light budget (WebGPU). */
   pointLights: number;
   /** Vehicle headlight spotlights evaluated per fragment (WebGPU). */
   vehicleSpots: number;
   maxCars: number;
   maxTrucks: number;
+  /** Boats in flight across all harbours. */
+  maxBoats: number;
   /** Smoke and steam puffs per power station; large and transparent, so overdraw. */
   plumePuffs: number;
   /** Chimney puffs per city, shared by its buildings in proportion to their CPU. */
@@ -52,10 +62,15 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     shadowHz: 4,
     beaconShadow: false,
     volume: false,
+    volumeSteps: 48,
+    volumeScale: 0.5,
+    beaconShadowSize: 512,
+    beaconShadowHz: 15,
     pointLights: 96,
     vehicleSpots: 4,
     maxCars: 120,
     maxTrucks: 30,
+    maxBoats: 24,
     plumePuffs: 20,
     chimneyPuffs: 48,
   },
@@ -69,10 +84,15 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     shadowHz: 6,
     beaconShadow: true,
     volume: true,
+    volumeSteps: 48,
+    volumeScale: 0.5,
+    beaconShadowSize: 512,
+    beaconShadowHz: 15,
     pointLights: 256,
     vehicleSpots: 8,
     maxCars: 240,
     maxTrucks: 60,
+    maxBoats: 24,
     plumePuffs: 36,
     chimneyPuffs: 96,
   },
@@ -86,10 +106,15 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     shadowHz: 6,
     beaconShadow: true,
     volume: true,
+    volumeSteps: 48,
+    volumeScale: 0.5,
+    beaconShadowSize: 512,
+    beaconShadowHz: 15,
     pointLights: 1024,
     vehicleSpots: 16,
     maxCars: 240,
     maxTrucks: 60,
+    maxBoats: 24,
     plumePuffs: 56,
     chimneyPuffs: 160,
   },
@@ -102,6 +127,11 @@ export const MAX_CLUSTERED_LIGHTS = Math.max(
     return profile.pointLights + 2 * profile.vehicleSpots;
   }),
 );
+
+/** WebGL2 fallback: no clustered lighting, so every light is a forward uniform. */
+export const WEBGL_LIGHTS = { maxDirectionalLights: 1, maxPointLights: 8, maxSpotLights: 9 };
+/** GTAO sample cap on WebGL2, where the pass is markedly slower. */
+export const WEBGL_AO_MAX_SAMPLES = 8;
 
 export const QUALITY_LABELS: Record<QualityChoice, string> = {
   auto: "Auto",
