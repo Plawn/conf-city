@@ -33,6 +33,7 @@ const variants = [
   { name: "no-local-lights", params: "&localLights=0" },
   { name: "no-shadows", params: "&shadows=0" },
   { name: "no-water", params: "&water=0" },
+  { name: "water-reference", params: "&water=reference" },
   { name: "no-fxaa", params: "&antialias=0" },
 ];
 const requested = process.env.CITY_VARIANTS?.split(",");
@@ -41,10 +42,19 @@ if (requested?.some((name) => !variants.some((variant) => variant.name === name)
 }
 const selected = variants.filter(
   (variant) =>
-    (!requested && !["bloom-reference", "ao-reference"].includes(variant.name)) ||
+    (!requested &&
+      !["bloom-reference", "ao-reference", "water-reference"].includes(variant.name)) ||
     variant.name === "baseline" ||
     requested?.includes(variant.name),
 );
+const sharedWater = process.env.CITY_SHARED_WATER === "1";
+if (
+  sharedWater &&
+  (selected.length !== 2 ||
+    selected.some((variant) => !["baseline", "water-reference"].includes(variant.name)))
+) {
+  throw new Error("CITY_SHARED_WATER=1 requires CITY_VARIANTS=baseline,water-reference");
+}
 const runs = Number(process.env.CITY_RUNS ?? 3);
 const duration = Number(process.env.CITY_DURATION_MS ?? 10_000);
 const warmup = Number(process.env.CITY_WARMUP_MS ?? 5_000);
@@ -71,8 +81,12 @@ const {
   output,
   browser,
   page: initialPage,
+  errors: sharedErrors,
 } = await launchCheck("benchmark-pipeline", benchmarkPage);
-await initialPage.close();
+if (!sharedWater) {
+  await initialPage.close();
+}
+let sharedReady = false;
 const params = `${benchmarkParams()}${/tweaks=/.test(benchmarkParams()) ? "" : "&tweaks="}`;
 const rows: PipelineBenchmarkRow[] = [];
 const metadata = {
@@ -86,6 +100,8 @@ const metadata = {
   warmup,
   controlDuration,
   runs,
+  sharedWater,
+  sharedWaterScope: sharedWater ? "one page per lighting case" : null,
   variants: selected,
   camera: "fit-all, stationary",
   telemetryFixture: "healthy services; each host: 2.8/8 CPU cores, 6000/16000 MB RAM, 40% disk",
@@ -93,46 +109,83 @@ const metadata = {
 try {
   await Bun.write(`${output}/world.json`, JSON.stringify(fixtureWorld, null, 2));
   for (const [caseName, date] of cases) {
+    if (sharedWater && sharedReady) {
+      // Start each lighting case from the same simulation/persistence state.
+      // Materials still share one page throughout that case's A/B repetitions.
+      await initialPage.evaluate(() => localStorage.clear());
+      sharedReady = false;
+    }
     for (let run = 1; run <= runs; run++) {
       // Rotate the order to reduce bias from temperature, clocks and cache warmup.
       const offset = (run - 1) % selected.length;
       const ordered = [...selected.slice(offset), ...selected.slice(0, offset)];
       for (const variant of ordered) {
         const { deviceScaleFactor, ...viewport } = benchmarkPage;
-        const page = await browser.newPage({ viewport, deviceScaleFactor });
+        const page = sharedWater
+          ? initialPage
+          : await browser.newPage({ viewport, deviceScaleFactor });
         page.setDefaultTimeout(120_000);
-        const errors: string[] = [];
-        page.on("pageerror", (error) => errors.push(error.message));
-        page.on("console", (message) => {
-          if (message.type() === "error" && !message.text().includes("favicon")) {
-            errors.push(message.text());
-          }
-        });
-        await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
-        await installLightingFixture(page);
+        const errors: string[] = sharedWater ? sharedErrors : [];
+        if (!sharedWater) {
+          page.on("pageerror", (error) => errors.push(error.message));
+          page.on("console", (message) => {
+            if (message.type() === "error" && !message.text().includes("favicon")) {
+              errors.push(message.text());
+            }
+          });
+          await page.route("**/favicon.ico", (route) => route.fulfill({ status: 204 }));
+          await installLightingFixture(page);
+        }
         const options = new URLSearchParams(params);
-        new URLSearchParams(variant.params).forEach((value, key) => {
-          options.set(key, value);
-        });
+        if (sharedWater) {
+          options.set("waterCompare", "1");
+          options.delete("water");
+        } else {
+          new URLSearchParams(variant.params).forEach((value, key) => {
+            options.set(key, value);
+          });
+        }
         options.set("profile", "1");
         options.set("perf", "1");
         options.set("idle", "0");
         options.set("renderer", backend);
         const url = `${cityUrl}?${options}`;
-        await page.goto(url);
-        await page.waitForFunction(() => window.__CITY_PROFILE__ && window.__CITY_RENDER__);
-        await loadBenchmarkWorld(page);
-        metadata.adapter = await assertHardwareAdapter(page, software);
-        if (
-          !software &&
-          (metadata.adapter as { isFallbackAdapter?: boolean }).isFallbackAdapter !== false
-        ) {
-          throw new Error(
-            "GPU benchmark requires verified hardware; GPU_SOFTWARE=1 is functional only",
+        if (!sharedWater || !sharedReady) {
+          await page.goto(url);
+          await page.waitForFunction(() => window.__CITY_PROFILE__ && window.__CITY_RENDER__);
+          await loadBenchmarkWorld(page);
+          metadata.adapter = await assertHardwareAdapter(page, software);
+          if (
+            !software &&
+            (metadata.adapter as { isFallbackAdapter?: boolean }).isFallbackAdapter !== false
+          ) {
+            throw new Error(
+              "GPU benchmark requires verified hardware; GPU_SOFTWARE=1 is functional only",
+            );
+          }
+          if (sharedWater) {
+            // Compile/warm both shaders in this context. Keep textures, AO noise,
+            // simulation, driver caches and all other pipeline resources shared.
+            for (const reference of [true, false]) {
+              await page.evaluate(
+                (reference) => window.__CITY_RENDER__!.setWaterReference(reference),
+                reference,
+              );
+              await page.waitForTimeout(Math.max(warmup, 5000));
+            }
+            sharedReady = true;
+          }
+        }
+        if (!sharedWater || (run === 1 && variant.name === ordered[0]!.name)) {
+          await withLightingPanel(page, () => previewLighting(page, date));
+          await page.keyboard.press("f");
+        }
+        if (sharedWater) {
+          await page.evaluate(
+            (reference) => window.__CITY_RENDER__!.setWaterReference(reference),
+            variant.name === "water-reference",
           );
         }
-        await withLightingPanel(page, () => previewLighting(page, date));
-        await page.keyboard.press("f");
         await page.waitForTimeout(warmup);
         await page.evaluate((ms) => {
           window.__CITY_PERF__!.reset();
@@ -181,6 +234,12 @@ try {
         );
         if (errors.length || data.report.error || data.report.changedDuringCapture) {
           throw new Error(`${name}: invalid capture; inspect its JSON report`);
+        }
+        if (
+          sharedWater &&
+          (data.scene.water.mode === "reference") !== (variant.name === "water-reference")
+        ) {
+          throw new Error(`${name}: the active water material does not match the variant`);
         }
         if (
           caseName === "night" &&
@@ -243,7 +302,9 @@ try {
             0.95,
           ).toFixed(1)} ms, CPU ${mean(data.samples.map((sample) => sample.cpuMs)).toFixed(1)} ms`,
         );
-        await page.close();
+        if (!sharedWater) {
+          await page.close();
+        }
       }
     }
   }

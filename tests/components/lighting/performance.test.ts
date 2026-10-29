@@ -1,5 +1,6 @@
 import { expect, mock, test } from "bun:test";
 import {
+  type DataTexture,
   DirectionalLight,
   NodeFrame,
   PerspectiveCamera,
@@ -116,6 +117,46 @@ test("empty clusters skip compute across day/night changes and resizes, then res
   expect(node.work).toEqual({ dispatches: 2, pointLightVisits: 2, spotLightVisits: 0 });
   node.updateBefore(new NodeFrame());
   expect(node.work.dispatches).toBe(2);
+});
+
+test("resizing clusters retains bound textures and invalidates the grid before shader selection", () => {
+  const node = new ActiveClusteredLightsNode();
+  const { frame, size, compute } = clusterFrame();
+  const point = new PointLight(0xffaa00, 1, 10);
+  node.setLights([point]);
+  node.updateBefore(frame);
+  const resources = node as unknown as {
+    _lightsTexture: DataTexture;
+    _zSliceRangesTexture: DataTexture;
+    _lightIndexes: unknown;
+  };
+  const lights = resources._lightsTexture;
+  const ranges = resources._zSliceRangesTexture;
+  let disposals = 0;
+  lights.addEventListener("dispose", () => disposals++);
+  ranges.addEventListener("dispose", () => disposals++);
+  const beforeData = Array.from(lights.image.data as Float32Array);
+  let key = node.customCacheKey();
+  for (const [width, height] of [
+    [1279, 799],
+    [960, 600],
+    [1280, 800],
+  ]) {
+    const indexes = resources._lightIndexes;
+    size.set(width!, height!);
+    // Render-object cache selection happens before updateBefore in Three.
+    const nextKey = node.customCacheKey();
+    expect(nextKey).not.toBe(key);
+    expect(resources._lightIndexes).not.toBe(indexes);
+    expect(resources._lightsTexture).toBe(lights);
+    expect(resources._zSliceRangesTexture).toBe(ranges);
+    expect(Array.from(lights.image.data as Float32Array)).toEqual(beforeData);
+    node.updateBefore(frame);
+    expect(node.customCacheKey()).toBe(nextKey);
+    key = nextKey;
+  }
+  expect(disposals).toBe(0);
+  expect(compute).toHaveBeenCalledTimes(4);
 });
 
 test("suspended volume clears once, blur consumes black once, and both resume immediately", () => {

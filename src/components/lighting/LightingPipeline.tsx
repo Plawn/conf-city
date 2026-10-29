@@ -1,6 +1,6 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
-import { Layers, Mesh, Vector3 } from "three";
+import { Layers, type Material, Mesh, Vector3 } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { fxaa } from "three/addons/tsl/display/FXAANode.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
@@ -223,7 +223,8 @@ export function LightingPipeline() {
       () => volume.visible,
       () => runtime.frameWork.volumeBlurPasses++,
     );
-    if (isWebGPU(renderer) && volumeBudget && renderParams.get("volume") !== "0") {
+    const volumeEnabled = isWebGPU(renderer) && volumeBudget && renderParams.get("volume") !== "0";
+    if (volumeEnabled) {
       color = color.add(volumeBlur.getTextureNode().rgb);
       referenceColor = referenceColor.add(volumeBlur.getTextureNode().rgb);
       glowInput = glowInput.add(volumeBlur.getTextureNode().rgb);
@@ -274,6 +275,7 @@ export function LightingPipeline() {
       glow,
       gi,
       volume,
+      volumeEnabled,
       volumePass,
       volumeBlur,
       volumeMaterial,
@@ -317,6 +319,10 @@ export function LightingPipeline() {
           }
         });
         return {
+          water: {
+            enabled: !!scene.getObjectByName("City water"),
+            mode: api.waterMode,
+          },
           ao: {
             enabled: resources.ambient !== null,
             ...resources.aoOptions,
@@ -362,7 +368,7 @@ export function LightingPipeline() {
         controls?.target.set(...target);
         controls?.update();
       },
-      async capture(reference = false) {
+      async capture(reference = false, refreshScene = false) {
         if (reference && !resources.reference) {
           throw new Error(
             "Reference capture requires an enabled effect and bloomCompare=1 or aoCompare=1",
@@ -374,6 +380,19 @@ export function LightingPipeline() {
         const previous = renderer.getRenderTarget();
         try {
           renderer.setRenderTarget(target);
+          if (refreshScene) {
+            // FRAME nodes cache the beauty/effects for the entire RAF. A material
+            // comparison must redraw those inputs without advancing animation time.
+            const frame = { renderer } as unknown as NodeFrame;
+            resources.scenePass.updateBefore(frame);
+            resources.ambient?.updateBefore(frame);
+            resources.gi?.updateBefore(frame);
+            if (resources.volumeEnabled) {
+              resources.volumePass.updateBefore(frame);
+              resources.volumeBlur.updateBefore(frame);
+            }
+            resources.glow?.updateBefore(frame);
+          }
           renderFrame(
             renderer,
             reference
@@ -412,6 +431,60 @@ export function LightingPipeline() {
         } finally {
           target.dispose();
         }
+      },
+      get waterMode(): string {
+        const water = scene.getObjectByName("City water") as Mesh | undefined;
+        const resources = water?.userData.water;
+        return resources && water?.material === resources.referenceMaterial
+          ? "reference"
+          : (resources?.mode ?? "none");
+      },
+      setWaterReference(reference: boolean) {
+        const water = scene.getObjectByName("City water") as Mesh | undefined;
+        const resources = water?.userData.water;
+        if (!water || !resources?.referenceMaterial) {
+          throw new Error("Water reference switching requires waterCompare=1");
+        }
+        water.material = reference ? resources.referenceMaterial : resources.material;
+      },
+      async captureWaterComparison() {
+        const water = scene.getObjectByName("City water") as Mesh | undefined;
+        const materials = water?.userData.water as
+          | {
+              referenceMaterial: Material | null;
+              material: Material;
+            }
+          | undefined;
+        if (!water || !materials?.referenceMaterial) {
+          throw new Error("Water comparison requires waterCompare=1 and enabled water");
+        }
+        const original = water.material;
+        const visible = water.visible;
+        const images: Promise<string>[] = [];
+        try {
+          water.material = materials.referenceMaterial;
+          // Prime FRAME dependencies for this RAF before the measured captures.
+          // Explicit redraws below then use the same cached animation uniforms.
+          images.push(api.capture(false, true));
+          images.push(api.capture(false, true), api.capture(false, true));
+          water.material = materials.material;
+          images.push(api.capture(false, true), api.capture(false, true));
+          // Reject a cached scene masquerading as an identical material comparison.
+          water.visible = false;
+          images.push(api.capture(false, true), api.capture(false, true));
+        } finally {
+          water.material = original;
+          water.visible = visible;
+        }
+        const captures = await Promise.all(images);
+        return {
+          reference: captures[1]!,
+          referenceControl: captures[2]!,
+          optimized: captures[3]!,
+          optimizedControl: captures[4]!,
+          withoutWater: captures[5]!,
+          withoutWaterControl: captures[6]!,
+        };
       },
       async captureBloomComparison() {
         if (!resources.reference || renderParams.get("bloomCompare") !== "1") {

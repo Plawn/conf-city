@@ -1,5 +1,5 @@
 /** Compare one effect on the same simulation frame, including repeated controls. */
-export async function checkPostprocess(effect: "bloom" | "ao") {
+export async function checkPostprocess(effect: "bloom" | "ao" | "water") {
   process.env.CITY_RENDER_MODE ??= "office";
   process.env.CITY_WIDTH ??= "1280";
   process.env.CITY_HEIGHT ??= "800";
@@ -22,6 +22,7 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
   const baseParams = benchmarkParams();
   const params = `${baseParams}${/tweaks=/.test(baseParams) ? "" : "&tweaks="}`;
   const results: object[] = [];
+  const title = { bloom: "Bloom", ao: "Occlusion ambiante", water: "Eau" }[effect];
   const metadata = { ...benchmarkEnvironment(browser, params), buildAssets: [] as string[] };
   try {
     await page.goto(`${cityUrl}?perf=1&idle=0&${effect}Compare=1&renderer=${backend}${params}`);
@@ -33,14 +34,16 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
     );
     await loadBenchmarkWorld(page);
     metadata.adapter = await assertHardwareAdapter(page, software);
-    for (const [name, date] of lightingCases) {
+    for (const [name, date] of effect === "water" ? [...lightingCases].reverse() : lightingCases) {
       if (process.env.CITY_CASE && process.env.CITY_CASE !== name) {
         continue;
       }
       await withLightingPanel(page, () => previewLighting(page, date));
       await page.keyboard.press("f");
       await page.waitForTimeout(3000);
-      for (const view of ["fit-all", "beacon"]) {
+      for (const view of effect === "water"
+        ? ["fit-all", "beacon", "distant"]
+        : ["fit-all", "beacon"]) {
         if (view === "beacon") {
           await page.evaluate(() => {
             const api = window.__CITY_RENDER__!;
@@ -56,11 +59,38 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
           });
           await page.waitForTimeout(2000);
         }
-        const images = await page.evaluate(
+        if (view === "distant") {
+          await page.evaluate(() => {
+            const api = window.__CITY_RENDER__!;
+            const target = api.inspect().target as [number, number, number] | undefined;
+            if (!target) {
+              throw new Error("No camera target for the distant-water comparison");
+            }
+            // Every water fragment is beyond the 220-unit ripple fade. The shore
+            // remains visible, exercising foam independently of normal ripples.
+            api.focus([target[0] + 170, 240, target[2] + 170], target);
+          });
+          await page.waitForTimeout(2000);
+        }
+        if (effect === "water") {
+          // Compile both materials before inspecting their same-frame controls.
+          await page.evaluate(() => window.__CITY_RENDER__!.captureWaterComparison());
+          await page.waitForTimeout(1000);
+        }
+        const images: {
+          reference: string;
+          referenceControl: string;
+          optimized: string;
+          optimizedControl: string;
+          withoutWater?: string;
+          withoutWaterControl?: string;
+        } = await page.evaluate(
           (effect) =>
             effect === "bloom"
               ? window.__CITY_RENDER__!.captureBloomComparison()
-              : window.__CITY_RENDER__!.captureAoComparison(),
+              : effect === "ao"
+                ? window.__CITY_RENDER__!.captureAoComparison()
+                : window.__CITY_RENDER__!.captureWaterComparison(),
           effect,
         );
         const comparisons = await page.evaluate(async (images) => {
@@ -116,6 +146,22 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
           );
           const width = reference.canvas.width;
           const height = reference.canvas.height;
+          let waterControl = null;
+          if (images.withoutWater && images.withoutWaterControl) {
+            const [absent, absentControl] = await Promise.all([
+              decode(images.withoutWater),
+              decode(images.withoutWaterControl),
+            ]);
+            const { difference: _presenceDiff, ...presence } = compare(
+              optimized.pixels,
+              absent.pixels,
+            );
+            const { difference: _absentDiff, ...repeat } = compare(
+              absent.pixels,
+              absentControl.pixels,
+            );
+            waterControl = { presence, repeat };
+          }
           const diffCanvas = document.createElement("canvas");
           diffCanvas.width = width;
           diffCanvas.height = height;
@@ -126,6 +172,7 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
             comparison,
             referenceNoise,
             optimizedNoise,
+            waterControl,
             amplifiedDifference: diffCanvas.toDataURL("image/png"),
           };
         }, images);
@@ -146,6 +193,13 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
         );
         if (metrics.referenceNoise.maxChannel || metrics.optimizedNoise.maxChannel) {
           throw new Error(`${label}: repeated captures differ; the visual comparison is invalid`);
+        }
+        if (
+          metrics.waterControl &&
+          (metrics.waterControl.presence.maxChannel === 0 ||
+            metrics.waterControl.repeat.maxChannel !== 0)
+        ) {
+          throw new Error(`${label}: absent-water control failed; material comparison is invalid`);
         }
         // Report precision losses instead of hiding them behind a global average.
         // This classification is a numerical indicator, not a perceptual guarantee.
@@ -175,7 +229,7 @@ export async function checkPostprocess(effect: "bloom" | "ao") {
       `${output}/review.html`,
       `<!doctype html>
 <html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>${effect === "bloom" ? "Bloom" : "Occlusion ambiante"} : rendu avant / après</title>
+<title>${title} : rendu avant / après</title>
 <style>
 body{margin:24px;background:#111827;color:#f3f4f6;font:16px system-ui;max-width:1400px}
 select,input{font:inherit;margin:8px 0}a{color:#93c5fd}
@@ -184,8 +238,8 @@ select,input{font:inherit;margin:8px 0}a{color:#93c5fd}
 #optimized{clip-path:inset(0 50% 0 0)}#slider{width:100%}
 .labels{display:flex;justify-content:space-between}#metrics{white-space:pre-wrap;font:14px monospace}
 </style>
-<h1>${effect === "bloom" ? "Bloom" : "Occlusion ambiante"} : rendu avant / après</h1>
-<p>Les deux images utilisent le même état de simulation. ${effect === "bloom" ? "Les buffers compacts du bloom réduisent la précision : ce changement n'est pas sans pertes." : "L'AO conserve ses échantillons, sa résolution et sa précision. Seul le stockage du filtre change. Les écarts mesurés sont indiqués ci-dessous."}</p>
+<h1>${title} : rendu avant / après</h1>
+<p>Les deux images utilisent le même état de simulation. ${effect === "bloom" ? "Les buffers compacts du bloom réduisent la précision : ce changement n'est pas sans pertes." : effect === "ao" ? "L'AO conserve ses échantillons, sa résolution et sa précision. Seul le stockage du filtre change. Les écarts mesurés sont indiqués ci-dessous." : "L'eau conserve ses textures, ses vagues et son éclairage. Le shader évite l'éclairage des fragments où sa contribution est exactement nulle. Les écarts mesurés sont indiqués ci-dessous."}</p>
 <label>Vue <select id="view"></select></label>
 <div class="images"><img id="reference" alt="Rendu de référence"><img id="optimized" alt="Rendu optimisé"></div>
 <input id="slider" type="range" min="0" max="100" value="50" aria-label="Proportion du rendu optimisé">
@@ -198,7 +252,7 @@ const view=document.getElementById('view'), reference=document.getElementById('r
 for(const row of data){const option=document.createElement('option');option.value=row.label;option.textContent=row.label;view.append(option)}
 function update(){const row=data.find(row=>row.label===view.value);reference.src=row.label+'-reference.png';optimized.src=row.label+'-optimized.png';document.getElementById('difference').href=row.label+'-difference-x16.png';document.querySelector('.images').style.aspectRatio=row.width+'/'+row.height;
 document.getElementById('metrics').textContent=[
-'Format effectif : '+row.scene.${effect}.storage,
+'${effect === "water" ? "Shader eau" : "Format effectif"} : '+row.scene.${effect}.${effect === "water" ? "mode" : "storage"},
 'Pixels différents : '+(row.comparison.changedPixelFraction*100).toFixed(4)+' %',
 'Pixels avec un écart > 1/255 : '+(row.comparison.pixelsAboveOneFraction*100).toFixed(4)+' %',
 'Écart moyen RGB : '+row.comparison.meanAbsoluteRgb.toFixed(6)+' / 255',

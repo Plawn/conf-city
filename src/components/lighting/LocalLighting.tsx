@@ -88,7 +88,10 @@ export function LocalLighting() {
       spots.push({ light, secondary, split: false, id: null, fade: 0 });
       group.add(light, light.target);
     }
-    const beacon = runtime.beaconLight;
+    // The pool owns this light. Reusing runtime.beaconLight here lets the old
+    // pool's cleanup destroy shadow textures still referenced by the new pool.
+    // A new identity also keeps cached shaders from a previous shadow budget out.
+    const beacon = new SpotLight(0xffffff, 0, 18, 0.11, 0.6, 2);
     beacon.shadow.camera.name = "Lighthouse shadow";
     beacon.layers.enable(BEACON_VOLUME_LAYER);
     // Casts for the component's lifetime; night only changes the intensity uniform and refresh.
@@ -136,16 +139,16 @@ export function LocalLighting() {
       cameraPosition: new Vector3(),
     };
   }, [gpu, runtime, pointLights, vehicleSpots, beaconShadow]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    runtime.beaconLight = resources.beacon.light as SpotLight;
+    return () => {
       for (const slot of [...resources.points, ...resources.spots, resources.beacon]) {
         slot.light.dispose();
         slot.secondary?.dispose();
       }
       runtime.shadowBeaconId = null;
-    },
-    [resources, runtime],
-  );
+    };
+  }, [resources, runtime]);
   useFrame(({ camera, clock }, delta) => {
     const r = resources;
     const night = runtime.night.value;

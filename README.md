@@ -39,8 +39,10 @@ repeated before/after measurements and larger-world fixtures.
 `bun run bench:pipeline` records GPU costs by pass and repeated one-effect-at-a-time
 comparisons; see the [pipeline benchmark](docs/render-performance.md#automated-gpu-pipeline-benchmark)
 for the fixed reference, reports and production-world options.
-`bun run bench:backends` alternates WebGPU/WebGL measurements; `bun run check:bloom`
-and `bun run check:ao` export same-frame before/after images and a visual comparison slider.
+`bun run bench:backends` alternates WebGPU/WebGL measurements; `bun run check:bloom`,
+`bun run check:ao` and `bun run check:water` export same-frame before/after images and a
+visual comparison slider. `bun run check:shadows` checks repeated quality changes and
+resizes for invalid shadow resources.
 
 Traffic now has finite journeys, physical lane budgets and gradual jam recovery in one shared simulation. Sustained local queues or high occupancy trigger wider roads, double-deck bridges with widened city accesses, then metro service with pedestrians. Visible countdowns follow real time rather than simulation speed. Roundabouts reserve entry until the exit is clear; waiting for a functioning junction does not trigger emergency removal. Construction persists per world in this browser (`localStorage`); **City evolution** shows progress and provides a local reset.
 
