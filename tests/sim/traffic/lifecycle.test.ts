@@ -105,7 +105,7 @@ test("route reordering and widening preserve live vehicle identity and age", () 
 });
 
 test("metro shifts 45% of demand; stale, down and hidden services stop spawning", () => {
-  const sim = createSim(routes, 20, 4);
+  const sim = createSim(routes, 20, 4, mulberry32(1));
   const telemetry = new Map([
     ["a/api", { liveness: "healthy" as const, metrics: { netTxKbps: 2000 }, lastSeen: 1000 }],
   ]);

@@ -9,6 +9,7 @@ import {
 import { VEHICLE_TINTS } from "../domain/nodeStyle";
 import type { CityMeta, CityMetrics, NodeTelemetry } from "../domain/types";
 import type { WorldLayout } from "../layout/types";
+import { mulberry32 } from "../lib/random";
 import { createVisibleClock } from "../lib/visibleClock";
 import { congestionSignals } from "../sim/traffic/congestion";
 import { writeDemand } from "../sim/traffic/demand";
@@ -28,6 +29,8 @@ export type { TrafficRoute } from "../sim/traffic/pool";
 
 /** Both GLBs are normalised to the same length — without this the truck looks like a car. */
 const TRUCK_SCALE = 1.25;
+// Seeded so the same world replays the same traffic.
+const TRAFFIC_SEED = 0x7a1c;
 
 const scratchMatrix = new THREE.Matrix4();
 const scratchColor = new THREE.Color();
@@ -154,7 +157,7 @@ export function TrafficSystem({
   } | null>(null);
   if (!simRef.current) {
     simRef.current = {
-      sim: createSim(routes, maxCars, maxTrucks),
+      sim: createSim(routes, maxCars, maxTrucks, mulberry32(TRAFFIC_SEED)),
       routes,
       carsDirty: false,
       reportTime: 0,

@@ -6,6 +6,7 @@ import {
   type Infrastructure,
 } from "@/domain/mobility";
 import type { CityLayout, WorldLayout } from "@/layout/types";
+import { mulberry32 } from "@/lib/random";
 import { congestionSignals } from "@/sim/traffic/congestion";
 import { trafficStats } from "@/sim/traffic/lifecycle";
 import type { TrafficRoute } from "@/sim/traffic/pool";
@@ -24,7 +25,7 @@ const route: TrafficRoute = {
   rateScale: 1,
 };
 function stoppedQueue() {
-  const sim = createSim([route], 100, 0);
+  const sim = createSim([route], 100, 0, mulberry32(1));
   sim.cars.count = 3;
   for (let i = 0; i < 3; i++) {
     sim.cars.id[i] = i + 1;
