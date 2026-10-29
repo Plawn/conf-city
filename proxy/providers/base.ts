@@ -6,16 +6,12 @@ import type {
   MetricSnapshot,
   NodeMeta,
   ProviderCapability,
+  ProviderLogQuery,
   ProxyToProviderMessage,
 } from "../protocol.ts";
 
 /** A historical log query relayed by the proxy. */
-export interface LogQueryRequest {
-  nodes?: string[];
-  since: number;
-  until: number;
-  limit: number;
-}
+export type LogQueryRequest = ProviderLogQuery;
 
 // ── Configuration ──
 

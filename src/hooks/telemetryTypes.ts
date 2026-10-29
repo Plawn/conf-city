@@ -1,23 +1,8 @@
-import type { ProviderCapability } from "@proxy/protocol";
+import type { LogQueryOptions, ProviderInfo } from "@proxy/protocol";
 import type { MetricSample } from "../domain/telemetry";
 import type { CityMeta, CityMetrics, LogEntry, NodeMeta, NodeTelemetry } from "../domain/types";
 
-export interface ProviderInfo {
-  id: string;
-  providerType: string;
-  connectedAt: number;
-  capabilities?: ProviderCapability[];
-}
-
-export interface LogQueryOptions {
-  nodes?: string[];
-  levels?: LogEntry["level"][];
-  /** epoch ms, inclusive. */
-  since: number;
-  /** epoch ms, exclusive. Defaults to now, server-side. */
-  until?: number;
-  limit?: number;
-}
+export type { LogQueryOptions, ProviderInfo };
 
 export interface TelemetryState {
   telemetry: Map<string, NodeTelemetry>;

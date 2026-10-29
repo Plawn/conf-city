@@ -34,8 +34,12 @@ export interface LogEntry {
   message: string;
 }
 
+/** Building kinds the frontend draws; providers may send others, which it maps itself. */
+export type NodeType = "app" | "db" | "cache" | "queue";
+
 export interface NodeMeta {
-  type: string; // "app" | "db" | "cache" | "queue"
+  /** Usually a `NodeType`; kept open on the wire for unknown providers. */
+  type: string;
   label?: string;
   description?: string;
   /** Neighbourhood inside the city; nodes sharing a group are laid out together. */
@@ -152,6 +156,9 @@ export interface ProxyQueryLogs {
 
 export type ProxyToProviderMessage = ProxyQueryLogs;
 
+/** The range a provider answers: a `ProxyQueryLogs` without its envelope. */
+export type ProviderLogQuery = Omit<ProxyQueryLogs, "type" | "requestId">;
+
 // ── Proxy → Frontend messages ──
 
 export interface SnapshotMessage {
@@ -177,14 +184,16 @@ export interface LogsMessage {
   entries: LogEntry[];
 }
 
+export interface ProviderInfo {
+  id: string;
+  providerType: string;
+  connectedAt: number;
+  capabilities: ProviderCapability[];
+}
+
 export interface StatusMessage {
   type: "status";
-  providers: {
-    id: string;
-    providerType: string;
-    connectedAt: number;
-    capabilities: ProviderCapability[];
-  }[];
+  providers: ProviderInfo[];
 }
 
 export interface LogsResultMessage {
@@ -225,6 +234,9 @@ export interface QueryLogs {
   until?: number; // epoch ms, exclusive — defaults to now
   limit?: number;
 }
+
+/** A frontend log query without its envelope. */
+export type LogQueryOptions = Omit<QueryLogs, "type" | "requestId">;
 
 export interface RequestSnapshot {
   type: "request:snapshot";

@@ -1,6 +1,5 @@
+import type { NodeType } from "@proxy/protocol";
 import type { BiomeId } from "./biome";
-
-export type NodeType = "app" | "db" | "cache" | "queue";
 
 export interface GraphNode {
   id: string;
@@ -70,4 +69,5 @@ export type {
   MetricSnapshot,
   NodeMeta,
   NodeTelemetry,
+  NodeType,
 } from "@proxy/protocol";

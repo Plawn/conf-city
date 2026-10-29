@@ -163,7 +163,7 @@ export function useTelemetryStream(): TelemetryState {
   );
 
   const canQueryLogs = useMemo(
-    () => providers.some((p) => p.capabilities?.includes("logs-query")),
+    () => providers.some((p) => p.capabilities.includes("logs-query")),
     [providers],
   );
 
