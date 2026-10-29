@@ -16,6 +16,8 @@
     "bench:backends": "bun scripts/benchmark-backends.ts",
     "check:bloom": "bun scripts/check-bloom.ts",
     "check:ao": "bun scripts/check-ao.ts",
+    "check:shadows": "bun scripts/check-shadow-lifecycle.ts",
+    "check:water": "bun scripts/check-water.ts",
     "proxy": "bun proxy/server.ts",
     "dummy": "bun proxy/providers/dummy.ts",
     "sync:glass": "bun scripts/sync-glass-css.ts",

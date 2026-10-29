@@ -109,11 +109,12 @@ fps, CPU ms, GPU ms and draws from the HUD, then load `?perf=1` alone and confir
 Open `?profile=1&quality=eco&idle=0` on the target machine, select Office (30 fps),
 and let shaders and traffic warm up. In the **3D pipeline** panel, click **Record
 10 s**. The panel shows average GPU milliseconds per sampled frame and the share
-of each pass family: scene/materials/lighting, sun and lighthouse shadows (including
-the `VSMVertical`/`VSMHorizontal` blur passes), clustered light compute, bloom,
-contact shading, volume, composition and antialiasing.
-Pass details remain available in the export. Repeat with a frozen day/night
-preview and during camera motion, keeping the viewport and quality fixed.
+of each pass family: scene/materials/lighting, sun and lighthouse shadows,
+clustered light compute, bloom, contact shading, volume, composition and
+antialiasing.
+VSM blur passes are attributed when enabled; the current Canvas selects PCF,
+so its shadow maps do not run those blurs. Pass details remain available in the
+export. Repeat with a frozen day/night preview and during camera motion, keeping the viewport and quality fixed.
 
 **Export flamegraph** writes a Speedscope file. Open it in
 <https://www.speedscope.app/> and choose **Left Heavy** for the aggregate cost tree.
@@ -154,6 +155,7 @@ To isolate their contributions, reload and compare one diagnostic switch at a ti
 | `&ao=0` / `&volume=0` | Existing contact-shading / lighthouse-volume switches; already off in Eco |
 | `&ao=reference` | Diagnostic reference: native RGBA16F denoise target with a depth attachment |
 | `&water=0` | Water mesh and its shading (diagnostic only) |
+| `&water=reference` | Diagnostic reference: native standard-material water lighting |
 | `&antialias=0` | FXAA and its intermediate sRGB target; tone mapping still runs in the final draw (diagnostic only) |
 
 These are comparisons within the current renderer, not a recreation of the old
@@ -172,8 +174,9 @@ ablates one effect at a time. Defaults: the repository sample, WebGPU, 1280×800
 DPR 1, Office (30 fps), High, frozen noon and night, a stationary fit-all camera,
 three repetitions of ten seconds after warmup. Each repetition rotates the variant
 order. Telemetry is the shared healthy fixture, not a replay of live production
-metrics or incidents. Each capture uses a fresh browser context, so persistent
-construction and user tweaks cannot change the workload between variants.
+metrics or incidents. By default each capture uses a fresh page, so persistent construction and user
+tweaks cannot change the workload between variants. The shared water mode below
+compares both materials within one page instead.
 Host metrics are supplied for every city (35% CPU, 37.5% RAM, 40% disk).
 Camera/lighting URL-hash edits keep telemetry active; only document navigation
 resets a custom world until its JSON is loaded. An enabled WebGPU lighthouse
@@ -231,7 +234,7 @@ GPU samples (149–150 per capture), with zero browser errors.
 | Composition / antialiasing | 1.98 | 1.96 |
 | Lighthouse volume | 0 | 1.07 |
 | Light clustering | 0 | 0.51 |
-| Shadow-map renders / VSM blur | 0 | 0.04 |
+| Shadow-map renders | 0 | 0.04 |
 
 Median total GPU time is **10.76 ms by day / 12.35 ms at night**. These medians
 need not equal the sum of the equally weighted pass means above. Baseline GPU p95
@@ -443,9 +446,9 @@ repeated High → Eco → Balanced → High changes: submissions reference a des
 isolated build (`index-BixeWkLO.js`) as well as the AO build. This is not an AO
 storage regression, and the normal fixed-quality performance/visual captures
 above had no errors. Failed lifecycle reports are retained in
-`out/ao/lifecycle-before` and `out/ao/lifecycle-webgpu`; quality switching with
-shadows is **not qualified** by this optimization. Shadow resource invalidation
-needs a separate fix. The isolated AO lifecycle check with `shadows=0` passed:
+`out/ao/lifecycle-before` and `out/ao/lifecycle-webgpu`; that AO commit did not
+qualify quality switching with shadows. The separate ownership fix below now
+qualifies those transitions. The isolated AO lifecycle check with `shadows=0` passed:
 two rounds of High/Eco/Balanced/High, resizes to 1279×799, 960×600 and 1280×800,
 and a denoise-disabled override. Native GPU pass records confirm Eco skips AO
 and the override skips only denoise. Both visual sliders were also loaded and
@@ -470,6 +473,184 @@ CITY_ASSERT_IDENTICAL=1 CITY_OUTPUT=out/ao/visual-final-webgpu bun run check:ao
 
 CITY_BACKEND=webgl CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
 CITY_ASSERT_IDENTICAL=1 CITY_OUTPUT=out/ao/visual-final-webgl bun run check:ao
+```
+
+### Shadow lifecycle correction
+
+Changing the local-light budget rebuilt its pool while reusing
+`runtime.beaconLight`. Cleanup of the previous pool disposed that same light,
+including its shadow textures, which the new pool still referenced. Reusing its
+identity across shadow-budget changes also retained cached lighting shaders.
+Each pool now creates and owns its lighthouse light, publishes it to the shared
+runtime, and disposes only its own lights. The volume reads the current runtime
+light each frame. Shadow resolution, filtering and lighting budgets are unchanged.
+
+`bun run check:shadows` performs two High → Eco → Balanced → High cycles at
+both noon and night, then resizes to 1279×799, 960×600 and 1280×800 in each case:
+22 stages. It checks new submitted frames, the applied AO budget, the active
+nighttime lighthouse, GPU readback and browser errors. It uses no profiling queries.
+The checker fails on the original AO commit `1d78160`, with 33 destroyed-shadow
+texture validation errors after five completed stages
+(`out/shadows/regression-before`, asset `index-B2jhe1ud.js`). With the ownership
+fix, all 22 stages pass on hardware WebGPU and WebGL with zero browser errors
+(`out/shadows/ownership-webgpu` and `out/shadows/ownership-webgl`, asset
+`index-ByzgxUSm.js`). This is a resource-lifecycle correction, not a deliberate
+image-quality or frame-time reduction.
+
+The combined water/quality check also exposed a resize race in clustered lighting:
+`create()` disposed its fixed 1056×5 light-data texture while an already-selected
+shader still referenced it (`out/shadows/cluster-resize-before`,
+`index-BJezbrlD.js`). Light-data and Z-range textures do not depend on viewport
+size and now retain their identities across grid rebuilds. Grid resizing also
+runs before the renderer chooses a cached material shader, keeping fragment
+indexing consistent with the new compute grid. A unit regression verifies retained
+textures, unchanged packed light data, zero texture disposal, a new index buffer
+and an updated shader key before `updateBefore`.
+
+With both resource corrections and optimized water enabled, the final build
+`index-CkKh-LR1.js` passes all **22 stages on each backend**, with zero browser
+errors (`out/shadows/final-webgpu` and `out/shadows/final-webgl`).
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_OUTPUT=out/shadows/next bun run check:shadows
+
+CITY_BACKEND=webgl CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_OUTPUT=out/shadows/next-webgl bun run check:shadows
+```
+
+### Water optimization: skip zero-contribution lighting (2026-10-04)
+
+**Classification: shader-work reduction, with the existing water model.** The
+water retains its single quad, ripple and shore textures, both ripple samples,
+wave equations, foam, normal, roughness, metalness, Fresnel, sky reflection and
+native physical lighting. No render target, precision, light budget or sampling
+budget is reduced. Native material construction is extracted into
+`water/material.ts`; its optimized variant uses `water/lighting.ts`.
+
+The shader avoids the physical BRDF when a light contributes exactly zero:
+inactive analytic lights, point/spot lights outside their finite range, spot
+fragments outside the cone, and zero attenuated colors in the WebGL lighting
+fallback. WebGPU's clustered local lights already reject these cases and retain
+their native shading. There is no small-intensity threshold. Shared TSL normal,
+view-direction and lighting accumulators are initialized before light branches;
+indirect environment lighting still needs them when direct lights are disabled.
+`water=reference` restores the original standard-material lighting.
+
+`CITY_SHARED_WATER=1 CITY_VARIANTS=baseline,water-reference` alternates both
+materials within the same page for each lighting case. Each new lighting case
+reloads the world from cleared benchmark persistence, so noon and night start
+from the same simulation state. Within a case, both materials share the scene,
+textures, animated uniforms, noise, render targets and pipeline. Both shaders warm before measurement, order
+rotates between repetitions, and the active material is recorded and checked.
+Comparison materials are allocated only with `waterCompare=1`; ordinary rendering
+uses one material and still submits one water draw.
+
+`check:water` explicitly redraws the scene and dependent effects synchronously
+without advancing simulation time. Each view captures native/native-control,
+optimized/optimized-control and water-hidden/water-hidden-control images. The
+hidden-water pair verifies that the scene was actually redrawn rather than
+reusing a cached beauty pass. Repeated controls must be identical, and hiding
+water must change the image. PNGs, amplified differences, metrics and an
+interactive `review.html` are retained.
+
+Final hardware WebGPU, same AMD adapter / Chromium 149 / 3 cities and 26
+services, High, Office 30 fps, 1280×800 DPR 1, fit-all, healthy telemetry and
+frozen lighting: four alternating 5 s repetitions per material and lighting
+case, after 3 s warmup. Each lighting case starts in a fresh document. All 16
+captures pass, with 2,386 complete GPU samples and zero browser errors.
+
+| WebGPU measurement (median run means) | Native water | Culled lighting | Reduction |
+| --- | ---: | ---: | ---: |
+| Day scene / materials / lighting | 4.033 ms | 3.768 ms | 6.6% |
+| Night scene / materials / lighting | 4.130 ms | 3.560 ms | 13.8% |
+| Day composed pipeline | 9.384 ms | 9.218 ms | 1.8% |
+| Night composed pipeline | 10.912 ms | 10.526 ms | 3.5% |
+
+Median paired whole-pipeline savings are 0.226 ms by day /
+0.476 ms at night. All eight pairs improve. Day run means
+span 9.00–9.27 ms optimized and
+9.31–9.50 ms native; night means span
+10.27–10.63 ms optimized and
+10.74–11.21 ms native. CPU update/submission
+medians are 4.46/4.34 ms by day and
+5.29/5.24 ms at night (optimized/native).
+Traffic evolves during each shared-page case; these observations do not establish
+a CPU improvement. Office remains around 30 fps. Scene shading gains do not
+translate one-for-one into the complete composed pipeline.
+Reports: `out/water/culled-final-gpu-noon` and
+`out/water/culled-final-gpu-night`, asset `index-CkKh-LR1.js`. `baseline` is
+optimized, so the reference variant's automated savings column has the opposite
+sign. The earlier valid run (`out/water/culled-gpu`, `index-BJezbrlD.js`) used
+one session across both lighting cases and measured 3.1%/4.3% whole-pipeline gains;
+its accumulated simulation state differs from the final per-case protocol.
+
+Final WebGL was measured separately with three alternating 5 s repetitions per
+case, same scene and settings and fresh document per case, totaling 1,790
+native elapsed-query samples and zero browser errors. Whole-pipeline median GPU
+elapsed time drops **13.59 → 10.28 ms by day (24.4%)**
+and **13.35 → 9.83 ms at night (26.3%)**. Median paired
+savings are 3.34/3.52 ms. Every pair improves; optimized
+run means span 10.10–10.53 ms by day and
+9.74–9.97 ms at night. CPU medians are
+5.00/4.88 ms by day and 5.31/5.15
+ms at night (optimized/native); there is no established CPU saving. Office stays
+around 30 fps. Reports: `out/water/culled-final-webgl`, `index-CkKh-LR1.js`.
+These are within-WebGL improvements; its elapsed scope cannot be used for speed
+ratios against WebGPU's exclusive pass sums. WebGL retains its existing AO and
+native bloom budgets and lighting fallback. The larger gain reflects avoiding
+many zero-contribution fallback light evaluations on water. The earlier valid
+`out/water/culled-webgl` run used one session spanning both lighting cases and
+measured 24.1%/26.4%; its simulation state differs from this final protocol.
+
+Final High visual checks cover noon, dawn and night in fit-all, lighthouse closeup
+and distant-water views, on both hardware backends. All nine WebGPU comparisons
+are **bit-identical**. WebGL has six bit-identical comparisons; the noon fit-all view changes one
+pixel, while the noon closeup and distant views each change three pixels out of
+1,024,000, with worst channel difference **1/255**, maximum mean RGB delta
+0.000000977/255, and no pixel above
+1/255. All repeated controls are identical; all hidden-water controls show a real
+image change and repeat identically. These localized final-image rounding
+differences are recorded rather than declaring universal lossless equivalence.
+Reports: `out/water/visual-qualified-webgpu` and
+`out/water/visual-qualified-webgl`, final asset `index-CkKh-LR1.js`, zero browser
+errors.
+
+Three additional WebGPU Balanced night views at 1279×799 also pass the strict
+bit-identical check, including all repeated and hidden-water controls
+(`out/water/visual-balanced-odd`, same final asset). This exercises the 8-sample
+AO budget and odd target/readback dimensions. In total, 21 final comparisons
+retain the water model, with only the WebGL rounding differences above.
+All three interactive comparison reports were loaded: every image in all 21
+views loads and the slider works at 75% (`out/water/review-validation.json`).
+Build, typecheck, repository lint and all 349 CPU tests pass.
+
+An extra long-lived shared-page run spanning both lighting cases was rejected
+at the third native night capture: a non-water `MeshStandardMaterial` draw
+reported a missing vertex-buffer slot. The failed report and errors are retained
+in `out/water/long-session-rejected`; that incomplete series is excluded from
+performance claims. This distinct geometry-buffer lifecycle failure remains
+unresolved; the shadow/resize checks above do not qualify every long-running
+geometry replacement. Final benchmarks use the per-lighting-case session scope
+recorded in their metadata rather than accumulating the previous case's world state.
+
+Trials reducing ripple work or splitting the water geometry did not establish
+a convincing whole-pipeline gain and were discarded. Geometric splitting also
+introduced localized image differences and extra draws. The retained optimization
+changes only direct-light work with zero contribution. No application VRAM saving,
+OS GPU utilization or power reduction was measured.
+
+```sh
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_SHARED_WATER=1 CITY_VARIANTS=baseline,water-reference \
+CITY_RUNS=4 CITY_DURATION_MS=5000 CITY_WARMUP_MS=3000 \
+CITY_OUTPUT=out/water/next bun run bench:pipeline
+
+CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_ASSERT_IDENTICAL=1 CITY_OUTPUT=out/water/visual-next bun run check:water
+
+CITY_BACKEND=webgl CITY_WORLD=out/pipeline/reference-2026-10-04/world.json \
+CITY_OUTPUT=out/water/visual-next-webgl bun run check:water
 ```
 
 ### WebGPU / WebGL comparison

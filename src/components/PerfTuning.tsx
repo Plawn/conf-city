@@ -46,6 +46,16 @@ declare global {
   interface Window {
     __CITY_RENDER__?: {
       capture: () => Promise<string>;
+      readonly waterMode: string;
+      setWaterReference: (reference: boolean) => void;
+      captureWaterComparison: () => Promise<{
+        reference: string;
+        referenceControl: string;
+        optimized: string;
+        optimizedControl: string;
+        withoutWater: string;
+        withoutWaterControl: string;
+      }>;
       captureBloomComparison: () => Promise<{
         reference: string;
         referenceControl: string;
@@ -61,6 +71,7 @@ declare global {
       simulateDeviceLoss: () => void;
       focus: (position: [number, number, number], target: [number, number, number]) => void;
       inspect: () => {
+        water: { enabled: boolean; mode: string };
         ao: {
           enabled: boolean;
           samples: number;

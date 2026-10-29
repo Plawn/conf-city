@@ -75,8 +75,8 @@ export async function createRenderer(
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.shadowMap.enabled = true;
-  // Variance maps: one bilinear read per fragment instead of five compares, and the
-  // blur is paid per map render (rare) rather than per shaded pixel (every frame).
+  // Initial default; WorldScene's Canvas shadows="percentage" selects PCF.
+  // Application captures use five depth comparisons, with no VSM blur.
   renderer.shadowMap.type = VSMShadowMap;
   renderer.lighting = isWebGPU(renderer)
     ? new ActiveClusteredLighting(MAX_CLUSTERED_LIGHTS, 32, 24, 64)

@@ -26,6 +26,7 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
       overrides: state.renderOverrides,
       profile: selectProfile(state),
       renderMode: state.renderMode,
+      waterMode: window.__CITY_RENDER__?.waterMode ?? "none",
       width: renderer.domElement.width,
       height: renderer.domElement.height,
       options: Object.fromEntries(
@@ -40,6 +41,7 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
           "bloom",
           "bloomCompare",
           "water",
+          "waterCompare",
           "antialias",
           "renderer",
           "idle",
@@ -73,7 +75,8 @@ function createApi(profiler: PipelineProfiler, renderer: WebGPURenderer) {
         endedWith,
         // A budget changed mid-capture: the samples mix two pipelines.
         changedDuringCapture:
-          JSON.stringify(startedWith.profile) !== JSON.stringify(endedWith.profile),
+          JSON.stringify(startedWith.profile) !== JSON.stringify(endedWith.profile) ||
+          startedWith.waterMode !== endedWith.waterMode,
         skippedWhileReadingGpu: profiler.skippedFrames,
         error: profiler.error,
         summary: summarizePipeline(profiler.frames),

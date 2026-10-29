@@ -96,6 +96,7 @@ export class ClusteredLightsNode extends LightsNode {
   private _allLights: Light[] = [];
   private readonly _chunksPerCluster: number;
   private _bufferSize: Vector2 | null = null;
+  private _renderer: Renderer | null = null;
   private _lightIndexes: TslNode = null;
   private _screenClusterIndex: TslNode = null;
   private _compute: TslNode = null;
@@ -138,6 +139,11 @@ export class ClusteredLightsNode extends LightsNode {
   }
 
   override customCacheKey(): number {
+    // Resize before the renderer chooses a cached fragment shader, not only in
+    // updateBefore after that choice. The fragment grid must match compute.
+    if (this._renderer) {
+      this.updateProgram(this._renderer);
+    }
     return (this._compute ? this._compute.getCacheKey() : 0) + super.customCacheKey();
   }
 
@@ -327,6 +333,7 @@ export class ClusteredLightsNode extends LightsNode {
   }
 
   updateProgram(renderer: Renderer): void {
+    this._renderer = renderer;
     renderer.getDrawingBufferSize(_size);
     const width = this.getBufferFitSize(_size.width);
     const height = this.getBufferFitSize(_size.height);
@@ -353,15 +360,22 @@ export class ClusteredLightsNode extends LightsNode {
     const NZ = zSlices;
     const clusterCount = NX * NY * NZ;
     this._gridDimensions.value.set(NX, NY);
-    // Upstream leaked the previous textures on every resize.
-    this._lightsTexture?.dispose();
-    this._zSliceRangesTexture?.dispose();
-    this._packedCount = 0;
-    const lightsData = new Float32Array(maxLights * 4 * LIGHT_ROWS);
-    const lightsTexture = new DataTexture(lightsData, maxLights, LIGHT_ROWS, RGBAFormat, FloatType);
+    // These textures depend on fixed light/slice budgets, not viewport dimensions.
+    // Keep their identities: shaders from the previous grid may still submit during
+    // a resize, before their cache key observes the rebuilt compute/index buffer.
+    const lightsTexture =
+      this._lightsTexture ??
+      new DataTexture(
+        new Float32Array(maxLights * 4 * LIGHT_ROWS),
+        maxLights,
+        LIGHT_ROWS,
+        RGBAFormat,
+        FloatType,
+      );
     // Per Z-slice light range for Z-culling (CPU-sorted, uploaded when lights change).
-    const zSliceRangesData = new Float32Array(NZ * 4);
-    const zSliceRangesTexture = new DataTexture(zSliceRangesData, NZ, 1, RGBAFormat, FloatType);
+    const zSliceRangesData = this._zSliceRangesData ?? new Float32Array(NZ * 4);
+    const zSliceRangesTexture =
+      this._zSliceRangesTexture ?? new DataTexture(zSliceRangesData, NZ, 1, RGBAFormat, FloatType);
     // Per-cluster light-index storage (ivec4 chunks).
     // A count, not a typed array: storage() keeps the first argument as bufferCount, and every
     // shader compile then stringifies a 1.5 M-entry array (`bufferCount > 0`).
