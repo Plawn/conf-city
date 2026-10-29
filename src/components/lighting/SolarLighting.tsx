@@ -37,11 +37,10 @@ export function SolarLighting({ extent }: { extent: number }) {
     // Render before anything samples the map: Three r185 never refreshes bind groups
     // of a shadow texture that was first bound as a sample and then recreated as a target.
     sun.shadow.needsUpdate = shadowsEnabled;
-    // VSM: no depth compare, so no constant bias; `radius` is the blur in texels.
+    // PCF: `radius` spreads the five-tap disk in texels; normalBias alone handles acne.
     sun.shadow.bias = 0;
     sun.shadow.normalBias = 0.03;
     sun.shadow.radius = 3;
-    sun.shadow.blurSamples = 8;
     return {
       sun,
       ambient: new AmbientLight(0xffffff, 0.2),
