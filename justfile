@@ -5,7 +5,9 @@ set dotenv-load := true
 # Drop `-f docker-compose.victorialogs.yml` to go back to reading logs from the Docker API.
 files := "-f docker-compose.yml -f docker-compose.swarm.yml -f docker-compose.victorialogs.yml"
 # `docker stack deploy` takes -c, not -f.
-stackfiles := "-c docker-compose.yml -c docker-compose.swarm.yml -c docker-compose.victorialogs.yml"
+stackfiles := "-c docker-compose.yml -c docker-compose.swarm.yml -c docker-compose.victorialogs.yml" + auth
+# Forward-auth in front of the UI, only when `.env` names the middlewares.
+auth := if env_var_or_default("FORWARDAUTH_MIDDLEWARES", "") != "" { " -c docker-compose.forwardauth.yml" } else { "" }
 stack := "confcity"
 
 # `REGISTRY` is the registry every node pulls from. It is NOT optional on a multi-node

@@ -1,0 +1,21 @@
+# Optional overlay — put the UI behind an existing Traefik forward-auth
+# (oauth2-proxy, Authelia…). Conf City ships no auth of its own; this only adds
+# middlewares to the frontend router and sends the auth pages to the proxy.
+#
+# Enabled by the justfile as soon as FORWARDAUTH_MIDDLEWARES is set in `.env`:
+#   FORWARDAUTH_MIDDLEWARES   comma-separated Traefik middlewares, applied in order
+#                             (e.g. oauth-errors@swarm,oauth-auth@swarm)
+#   FORWARDAUTH_SERVICE       Traefik service serving the auth pages (e.g. oauth2-proxy@swarm)
+#   FORWARDAUTH_PATH_PREFIX   path of those pages on CONFCITY_HOST (default /oauth2/)
+#
+# The WebSocket (/ws/) goes through the same router: the browser sends the session
+# cookie on the upgrade request, so it is authenticated like any page load.
+
+services:
+  frontend:
+    labels:
+      - "traefik.http.routers.confcity.middlewares=${FORWARDAUTH_MIDDLEWARES:?FORWARDAUTH_MIDDLEWARES required}"
+      - "traefik.http.routers.confcity-auth.rule=Host(`${CONFCITY_HOST:-city.localhost}`) && PathPrefix(`${FORWARDAUTH_PATH_PREFIX:-/oauth2/}`)"
+      - "traefik.http.routers.confcity-auth.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.confcity-auth.tls.certresolver=${TRAEFIK_CERTRESOLVER:-resolver}"
+      - "traefik.http.routers.confcity-auth.service=${FORWARDAUTH_SERVICE:?FORWARDAUTH_SERVICE required}"
