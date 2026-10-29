@@ -1,7 +1,7 @@
 import type { WebGLRenderer } from "three";
 import { DynamicLighting } from "three/addons/lighting/DynamicLighting.js";
-import { ACESFilmicToneMapping, VSMShadowMap, WebGPURenderer } from "three/webgpu";
-import { MAX_CLUSTERED_LIGHTS } from "../../domain/quality";
+import { ACESFilmicToneMapping, PCFShadowMap, WebGPURenderer } from "three/webgpu";
+import { MAX_CLUSTERED_LIGHTS, WEBGL_LIGHTS } from "../../domain/quality";
 import { ActiveClusteredLighting } from "./ActiveClusteredLighting";
 
 export const renderParams = new URLSearchParams(
@@ -75,12 +75,11 @@ export async function createRenderer(
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.shadowMap.enabled = true;
-  // Initial default; WorldScene's Canvas shadows="percentage" selects PCF.
-  // Application captures use five depth comparisons, with no VSM blur.
-  renderer.shadowMap.type = VSMShadowMap;
+  // Matches WorldScene's Canvas shadows="percentage": five depth compares, no blur pass.
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.lighting = isWebGPU(renderer)
-    ? new ActiveClusteredLighting(MAX_CLUSTERED_LIGHTS, 32, 24, 64)
-    : new DynamicLighting({ maxDirectionalLights: 1, maxPointLights: 8, maxSpotLights: 9 });
+    ? new ActiveClusteredLighting(MAX_CLUSTERED_LIGHTS)
+    : new DynamicLighting(WEBGL_LIGHTS);
   renderer.onDeviceLost = onLost;
   // R3F's custom-renderer hook supports this runtime contract; its public gl type is WebGL-only.
   return renderer as unknown as WebGLRenderer;
