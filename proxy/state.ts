@@ -3,29 +3,21 @@ import type {
   CityMetrics,
   LivenessStatus,
   LogEntry,
+  LogQueryOptions,
   MetricSnapshot,
   NodeMeta,
   NodeTelemetry,
-  ProviderCapability,
+  ProviderInfo,
+  ProviderLogQuery,
 } from "./protocol.ts";
+
+export type { ProviderInfo };
 
 const MAX_LOG_ENTRIES = 1000;
 const STALENESS_MS = 30_000;
 
-export interface ProviderInfo {
-  id: string;
-  providerType: string;
-  connectedAt: number;
-  capabilities: ProviderCapability[];
-}
-
-export interface LogQueryFilter {
-  nodes?: string[];
-  levels?: LogEntry["level"][];
-  since: number;
-  until: number;
-  limit: number;
-}
+/** Ring-buffer query: a provider range plus the frontend's level filter. */
+export type LogQueryFilter = ProviderLogQuery & Pick<LogQueryOptions, "levels">;
 
 export class TelemetryStore {
   nodes = new Map<string, NodeTelemetry>();
