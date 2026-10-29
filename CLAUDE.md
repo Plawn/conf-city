@@ -29,6 +29,7 @@ bun run dummy        # dummy data provider
 bun run sync:glass   # regenerate src/styles/glass-ui.css (also on postinstall)
 bun scripts/traffic-soak.ts            # accelerated 24 h traffic check
 bun scripts/build-industrial-models.ts # regenerate industrial-*.glb
+bun scripts/render-replay.ts <scenario.json> out.mp4   # replay → video (docs/replay.md)
 ```
 
 Headless checks and benchmarks (`scripts/check-*.ts`, `benchmark-rendering.ts`) need a built
@@ -91,3 +92,4 @@ preview and Chromium — see `docs/render-performance.md`. Docker and `just` rec
 | Sun, sky, local lights, lighthouse volume | `docs/lighting.md` |
 | Building batching, benchmarks, functional checks | `docs/render-performance.md` |
 | Industrial building style sheet | `docs/building-style.md` |
+| Replay scenarios, camera director, MP4 export | `docs/replay.md` |

@@ -109,7 +109,7 @@ export function Lighthouse({
   // knows which way the water is.
   const seaYaw = Math.atan2(slot.shoreward[0], slot.shoreward[1]);
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     source.visible = worst != null;
     if (worst == null) {
       source.intensity = 0;
@@ -122,7 +122,7 @@ export function Lighthouse({
     }
     // The lamp breathes at the sweep's rate; the beam blinks only when the
     // figure behind it is the service sum rather than the machine.
-    const t = reducedMotion ? 0 : performance.now() / 1000;
+    const t = reducedMotion ? 0 : clock.elapsedTime;
     if (lampMaterial.current) {
       lampMaterial.current.opacity = 0.75 + 0.25 * Math.sin(t * 3);
     }

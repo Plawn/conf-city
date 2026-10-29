@@ -29,7 +29,7 @@ export function useMobilityParticipant(
     () =>
       engine.register({
         step: (dt) => callbacks.current.step(dt),
-        render: () => callbacks.current.render(),
+        render: (dt) => callbacks.current.render(dt),
       }),
     [engine],
   );

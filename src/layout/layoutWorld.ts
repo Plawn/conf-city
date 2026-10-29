@@ -5,14 +5,15 @@ import type {
   ResolvedLink,
   ResolvedNode,
 } from "../domain/types";
-import { buildBridges } from "./bridges";
+import { buildBridges, pairKey } from "./bridges";
 import { centroid, polygonBounds } from "./geometry";
 import { translateHarbour } from "./harbour";
 import { placeIslands, planGates } from "./islands";
-import { buildLocalCity, planHarbours } from "./localCity";
+import { buildGroups, buildLocalCity, type LocalCity, planHarbours } from "./localCity";
+import type { GateRequest } from "./roads/bridgehead";
 import { buildRoadNetwork } from "./roads/network";
 import { translate, translateRoads, translateZone } from "./translate";
-import type { CityLayout, Vec2, WorldLayout } from "./types";
+import { type CityLayout, linkKey, type UtilityPlot, type Vec2, type WorldLayout } from "./types";
 import { placeUtilityPlot, translateUtilityPlot } from "./utilityPlot";
 
 /**
@@ -43,6 +44,29 @@ export function layoutWorld(
   ingress: ReadonlySet<string> = new Set(),
   capacities: ReadonlyMap<string, number> = new Map(),
 ): WorldLayout {
+  return assembleWorld(
+    planWorld(cityIds, staticNodes, links, discoveredNodes, biomes, ingress, capacities),
+  );
+}
+
+/** Everything fixed before the streets: buildings, shores, island offsets, harbours, bridgeheads. */
+export interface WorldPlan {
+  locals: LocalCity[];
+  offsets: Vec2[];
+  links: ResolvedLink[];
+  pairGates: Map<string, [Vec2, Vec2]>;
+  gateRequests: Map<string, GateRequest[]>;
+}
+
+export function planWorld(
+  cityIds: string[],
+  staticNodes: ResolvedNode[],
+  links: ResolvedLink[],
+  discoveredNodes: DiscoveredResolvedNode[] = [],
+  biomes: ReadonlyMap<string, BiomeId> = new Map(),
+  ingress: ReadonlySet<string> = new Set(),
+  capacities: ReadonlyMap<string, number> = new Map(),
+): WorldPlan {
   const ids = [...new Set(cityIds)];
   const locals = ids.map((cityId) =>
     buildLocalCity(
@@ -57,39 +81,72 @@ export function layoutWorld(
   );
   const offsets = placeIslands(locals, links);
   planHarbours(locals, offsets);
-
   // Bridgeheads first: the feeder streets to them are part of the road network,
   // so roads can only be routed once the islands know who faces whom.
   const { pairGates, gateRequests } = planGates(locals, offsets, links);
+  return { locals, offsets, links, pairGates, gateRequests };
+}
 
+/**
+ * A subset of a plan, for the replay: positions stay those of the full plan
+ * (no float round-trip), streets and bridges are routed for the active links only.
+ */
+export interface ActiveSet {
+  cities: ReadonlySet<string>;
+  /** `cityId/nodeId`. */
+  nodes: ReadonlySet<string>;
+  /** `linkKey`. */
+  links: ReadonlySet<string>;
+  /** Utility plots of the full assembly, so the lighthouse never moves as the city grows. */
+  plots?: ReadonlyMap<string, UtilityPlot | undefined>;
+}
+
+export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout {
+  const links = active ? plan.links.filter((l) => active.links.has(linkKey(l))) : plan.links;
   const cities = new Map<string, CityLayout>();
   const nodes: PositionedNode[] = [];
-  locals.forEach((local, i) => {
-    const [dx, dz] = offsets[i]!;
-    const roads = buildRoadNetwork(
-      local.layout,
-      local.intraLinks,
-      gateRequests.get(local.cityId) ?? [],
-      {
-        ring: local.ring,
-        grid: local.grid,
-      },
+  plan.locals.forEach((local, i) => {
+    if (active && !active.cities.has(local.cityId)) {
+      return;
+    }
+    const [dx, dz] = plan.offsets[i]!;
+    const keep = (id: string) => !active || active.nodes.has(`${local.cityId}/${id}`);
+    const nodesLayout = active
+      ? {
+          nodes: local.layout.nodes.filter((n) => keep(n.id)),
+          cells: new Map([...local.layout.cells].filter(([id]) => keep(id))),
+        }
+      : local.layout;
+    const intraLinks = active
+      ? local.intraLinks.filter((l) => active.links.has(linkKey(l)))
+      : local.intraLinks;
+    const gates = (plan.gateRequests.get(local.cityId) ?? []).filter(
+      (r) => !active || active.links.has(r.key),
     );
+    // A copy: attaching driveways inserts vertices, and the plan is assembled again and again.
+    const roads = buildRoadNetwork(nodesLayout, intraLinks, gates, {
+      ring: [...local.ring],
+      grid: local.grid,
+    });
     // After the roads: the plot is chosen against the streets that were actually
     // drawn, and against the bridgeheads already attached to the ring.
-    const plot = placeUtilityPlot({
-      cityId: local.cityId,
-      outline: local.outline,
-      ring: local.ring,
-      roads,
-      buildings: local.layout.nodes.map((n) => [n.position[0], n.position[2]] as Vec2),
-      gates: (gateRequests.get(local.cityId) ?? []).map((r) => r.gate.hit),
-    });
-    const cityNodes = local.layout.nodes.map((n) => ({
+    const worldPlot = active?.plots?.get(local.cityId);
+    const plot = active?.plots?.has(local.cityId)
+      ? undefined
+      : placeUtilityPlot({
+          cityId: local.cityId,
+          outline: local.outline,
+          ring: roads.ring.length > 0 ? roads.ring : local.ring,
+          roads,
+          buildings: nodesLayout.nodes.map((n) => [n.position[0], n.position[2]] as Vec2),
+          gates: gates.map((r) => r.gate.hit),
+        });
+    const cityNodes = nodesLayout.nodes.map((n) => ({
       ...n,
       position: [n.position[0] + dx, n.position[1], n.position[2] + dz] as [number, number, number],
     }));
     const outline = local.outline.map((p) => translate(p, dx, dz));
+    const groups = active ? buildGroups(nodesLayout.nodes) : local.groups;
     const layout: CityLayout = {
       cityId: local.cityId,
       biome: local.biome,
@@ -101,16 +158,24 @@ export function layoutWorld(
       ...(local.land ? { land: local.land.map((p) => translate(p, dx, dz)) } : {}),
       bounds: polygonBounds(outline) ?? { cx: dx, cz: dz, width: 4, height: 4 },
       roads: translateRoads(roads, dx, dz),
-      groups: local.groups.map((g) => translateZone(g, dx, dz)),
+      groups: groups.map((g) => translateZone(g, dx, dz)),
       ...(local.discoveredZone
         ? { discoveredZone: translateZone(local.discoveredZone, dx, dz) }
         : {}),
       ...(local.harbour ? { harbour: translateHarbour(local.harbour, dx, dz) } : {}),
+      ...(worldPlot ? { utilityPlot: worldPlot } : {}),
       ...(plot ? { utilityPlot: translateUtilityPlot(plot, dx, dz) } : {}),
     };
     cities.set(local.cityId, layout);
     nodes.push(...cityNodes);
   });
 
+  const pairGates = active
+    ? new Map(
+        [...plan.pairGates].filter(([pair]) =>
+          links.some((l) => l.interCity && pairKey(l) === pair),
+        ),
+      )
+    : plan.pairGates;
   return { nodes, cities, bridges: buildBridges(cities, links, pairGates) };
 }

@@ -164,7 +164,7 @@ export function planHarbours(locals: LocalCity[], offsets: Vec2[]): void {
 }
 
 /** One zone per neighbourhood, in alphabetical order. */
-function buildGroups(nodes: PositionedNode[]): GroupZone[] {
+export function buildGroups(nodes: PositionedNode[]): GroupZone[] {
   const byGroup = new Map<string, PositionedNode[]>();
   for (const n of nodes) {
     if (!n.group) {

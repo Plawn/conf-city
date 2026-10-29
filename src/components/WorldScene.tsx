@@ -1,6 +1,14 @@
 import { AdaptiveEvents, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ComponentType,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { CameraTarget } from "../domain/camera";
 import { IDLE_FPS, resolveDpr } from "../domain/quality";
 import type {
@@ -70,6 +78,8 @@ export function WorldScene({
   telemetry,
   cityMeta,
   cityMetrics,
+  wrapCity: WrapCity,
+  children,
 }: {
   /** Identity of the loaded world, computed once in `App` (mobility store key). */
   worldKey: string;
@@ -85,6 +95,10 @@ export function WorldScene({
   telemetry?: Map<string, NodeTelemetry>;
   cityMeta?: Map<string, CityMeta>;
   cityMetrics?: Map<string, CityMetrics>;
+  /** Replay: a group around each island (rise from the sea). */
+  wrapCity?: ComponentType<{ cityId: string; children: ReactNode }>;
+  /** Extra scene content inside the animation queue (replay driver). */
+  children?: ReactNode;
 }) {
   const infra = useMobilityStore((s) => s.worlds[worldKey] ?? EMPTY_INFRA);
   useEffect(() => {
@@ -196,6 +210,7 @@ export function WorldScene({
           <LightingContext.Provider value={lighting}>
             <BuildingAnimations>
               <RenderLoop fps={fps} />
+              {children}
               <RenderScale onDpr={setRenderDpr} />
               <QualityGovernor />
               <fog attach="fog" args={["#b9d7ec", FOG_NEAR * depthScale, FOG_FAR * depthScale]} />
@@ -209,21 +224,30 @@ export function WorldScene({
               )}
 
               <Suspense fallback={<SceneLoader />}>
-                {cities.map((city) => (
-                  <CityScene
-                    key={city.id}
-                    city={city}
-                    nodes={nodes}
-                    links={links}
-                    layout={layout?.cities.get(city.id)}
-                    visible={visibleCities.has(city.id)}
-                    onFocus={handleFocus}
-                    telemetry={telemetry}
-                    meta={cityMeta?.get(city.id)}
-                    hostMetrics={cityMetrics?.get(city.id)}
-                    exits={deckExits.get(city.id)}
-                  />
-                ))}
+                {cities.map((city) => {
+                  const scene = (
+                    <CityScene
+                      key={city.id}
+                      city={city}
+                      nodes={nodes}
+                      links={links}
+                      layout={layout?.cities.get(city.id)}
+                      visible={visibleCities.has(city.id)}
+                      onFocus={handleFocus}
+                      telemetry={telemetry}
+                      meta={cityMeta?.get(city.id)}
+                      hostMetrics={cityMetrics?.get(city.id)}
+                      exits={deckExits.get(city.id)}
+                    />
+                  );
+                  return WrapCity ? (
+                    <WrapCity key={city.id} cityId={city.id}>
+                      {scene}
+                    </WrapCity>
+                  ) : (
+                    scene
+                  );
+                })}
 
                 {visibleBridges.map(({ bridge, deck, klass }) => (
                   <BridgeMesh key={bridge.key} deck={deck} klass={klass} />

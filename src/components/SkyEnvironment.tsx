@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import { BackSide, Mesh, Scene, SphereGeometry } from "three";
 import { max, mix, positionLocal, smoothstep } from "three/tsl";
 import { MeshBasicNodeMaterial, type Node, PMREMGenerator } from "three/webgpu";
+import { REPLAY_MODE } from "../store/replayStore";
 import { gpuRenderer } from "./lighting/renderer";
 import { type LightingRuntime, useLighting } from "./lighting/runtime";
 import { NO_RAYCAST } from "./three/instancing";
@@ -18,6 +19,9 @@ export function skyRadiance(direction: Node<"vec3">, light: LightingRuntime) {
   const halo = alignment.pow(32).mul(0.045);
   return base.add(light.sunColor.mul(disc.mul(3).add(halo)).mul(light.sunPower));
 }
+
+/** Re-bake once a slider settles; a replay freezes the sun up front, so it bakes at once. */
+const EDIT_DEBOUNCE_MS = REPLAY_MODE ? 0 : 250;
 
 export function SkyEnvironment() {
   const renderer = gpuRenderer(useThree((s) => s.gl));
@@ -65,7 +69,9 @@ export function SkyEnvironment() {
     const timeChanged = resources.instantUtcMs !== light.solar.instantUtcMs;
     if (
       resources.target == null ||
-      (edited ? now - light.lastEdit >= 250 : timeChanged && now - resources.lastBake >= 30_000)
+      (edited
+        ? now - light.lastEdit >= EDIT_DEBOUNCE_MS
+        : timeChanged && now - resources.lastBake >= 30_000)
     ) {
       // Keep the GPU texture and its bindings stable when the sky changes.
       resources.target = resources.pmrem.fromScene(resources.source, 0, 0.1, 10, {

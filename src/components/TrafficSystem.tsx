@@ -18,6 +18,7 @@ import type { Pool, TrafficRoute } from "../sim/traffic/pool";
 import { reconfigureSim } from "../sim/traffic/reconfigure";
 import { advance, createSim } from "../sim/traffic/sim";
 import { EMPTY_INFRA, useMobilityStore } from "../store/mobilityStore";
+import { REPLAY_MODE } from "../store/replayStore";
 import { useLighting } from "./lighting/runtime";
 import { createVehicleLights } from "./lighting/VehicleLights";
 import { useMobilityParticipant } from "./mobility/MobilitySimulation";
@@ -120,7 +121,6 @@ export function TrafficSystem({
     },
     [vehicleLights],
   );
-  const lightsTime = useRef(0);
   const car = useVehicleGeometry(VEHICLE_MODELS.car);
   const truck = useVehicleGeometry(VEHICLE_MODELS.truck);
 
@@ -200,7 +200,8 @@ export function TrafficSystem({
     (dt) => {
       const timing = simRef.current!;
       const s = timing.sim;
-      timing.reportTime += observationClock.tick(performance.now());
+      // Live delays follow observed wall time; a replay follows its own (video) time.
+      timing.reportTime += REPLAY_MODE ? dt : observationClock.tick(performance.now());
       writeDemand(
         s,
         routes,
@@ -239,12 +240,9 @@ export function TrafficSystem({
         );
       }
     },
-    () => {
+    (dt) => {
       const timing = simRef.current!;
       const s = timing.sim;
-      const now = performance.now();
-      const dt = lightsTime.current ? Math.min(0.1, (now - lightsTime.current) / 1000) : 0;
-      lightsTime.current = now;
       vehicleLights.cars.update(s.cars, dt);
       vehicleLights.trucks.update(s.trucks, dt);
       writeMatrices(s.cars, carMesh, 1);

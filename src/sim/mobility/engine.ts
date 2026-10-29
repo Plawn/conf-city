@@ -1,6 +1,7 @@
 export interface MobilityParticipant {
   step(dt: number): void;
-  render(): void;
+  /** `dt`: simulated seconds since the previous render. */
+  render(dt: number): void;
 }
 
 /** One bounded clock drives every transport; render only after all steps finish. */
@@ -27,18 +28,18 @@ export function createMobilityEngine() {
         return;
       }
       pending = Math.min(pending + delta, step * 3);
-      let changed = false;
+      let stepped = 0;
       while (pending + 1e-8 >= step) {
         for (const participant of participants) {
           participant.step(step);
         }
         seconds += step;
         pending = Math.max(0, pending - step);
-        changed = true;
+        stepped += step;
       }
-      if (changed) {
+      if (stepped > 0) {
         for (const participant of participants) {
-          participant.render();
+          participant.render(stepped);
         }
       }
     },

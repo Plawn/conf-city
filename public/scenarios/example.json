@@ -1,0 +1,44 @@
+{
+  "title": "Infra Wrapped 2026",
+  "subtitle": "Une année de construction",
+  "start": "2026-01-01",
+  "end": "2026-12-31",
+  "durationSec": 40,
+  "introSec": 3,
+  "outroSec": 5,
+  "rampSec": 1.2,
+  "sunTime": "2026-06-21T16:30:00Z",
+  "cities": [
+    {
+      "id": "paris-1",
+      "name": "Server Paris 1",
+      "biome": "meadow",
+      "meta": { "label": "Server Paris 1", "cpuCores": 16, "memMb": 32768 },
+      "nodes": [
+        { "id": "frontend", "type": "app", "label": "Frontend", "group": "web", "links": ["api"] },
+        { "id": "api", "type": "app", "label": "API Gateway", "group": "web", "links": ["db", { "to": "cache", "since": "2026-03-10" }, { "to": "queue", "since": "2026-05-02" }] },
+        { "id": "db", "type": "db", "label": "PostgreSQL", "group": "data", "links": [] },
+        { "id": "legacy-db", "type": "db", "label": "MySQL (legacy)", "group": "data", "links": [], "until": "2026-07-01" },
+        { "id": "cache", "type": "cache", "label": "Redis", "group": "data", "links": [], "since": "2026-03-01" },
+        { "id": "queue", "type": "queue", "label": "RabbitMQ", "group": "jobs", "links": ["worker"], "since": "2026-04-20" },
+        { "id": "worker", "type": "app", "label": "Worker", "group": "jobs", "links": ["db"], "since": "2026-04-25" }
+      ]
+    },
+    {
+      "id": "london-1",
+      "name": "Server London 1",
+      "since": "2026-08-01",
+      "meta": { "label": "Server London 1", "cpuCores": 8, "memMb": 16384, "biome": "dunes" },
+      "nodes": [
+        { "id": "analytics-db", "type": "db", "label": "ClickHouse", "group": "data", "links": [], "since": "2026-08-05" },
+        { "id": "analytics-cache", "type": "cache", "label": "Redis", "group": "data", "links": [], "since": "2026-08-20" },
+        { "id": "analytics-api", "type": "app", "label": "Analytics API", "group": "web", "links": ["analytics-db", "analytics-cache"], "since": "2026-09-01" },
+        { "id": "dashboard", "type": "app", "label": "Dashboard", "group": "web", "links": ["analytics-api"], "since": "2026-10-15" }
+      ]
+    }
+  ],
+  "links": [
+    { "from": "paris-1/api", "to": "london-1/analytics-api", "since": "2026-09-10" },
+    { "from": "paris-1/db", "to": "london-1/analytics-db", "since": "2026-08-10" }
+  ]
+}

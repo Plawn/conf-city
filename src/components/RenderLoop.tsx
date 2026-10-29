@@ -1,6 +1,7 @@
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import { createFrameClock } from "../lib/frameClock";
+import { CAPTURE_MODE } from "../store/replayStore";
 import { gpuRenderer, isWebGPU } from "./lighting/renderer";
 
 /** Owns the entire R3F tick: skipped frames run neither simulation nor draw calls. */
@@ -8,6 +9,10 @@ export function RenderLoop({ fps }: { fps: number }) {
   const advance = useThree((s) => s.advance);
   const get = useThree((s) => s.get);
   useEffect(() => {
+    // Headless export: the capture script advances each frame itself (`ReplayDriver`).
+    if (CAPTURE_MODE) {
+      return;
+    }
     const clock = createFrameClock(fps, get().clock.elapsedTime);
     let frame = 0;
     let inFlight = 0;

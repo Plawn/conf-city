@@ -203,7 +203,7 @@ function Plant({ cpuPct }: { cpuPct: number | undefined }) {
     mesh.instanceMatrix.needsUpdate = true;
   }, [dummy]);
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     const mesh = puffs.current;
     if (!mesh || rate == null || surgeTarget == null) {
       return;
@@ -212,7 +212,7 @@ function Plant({ cpuPct }: { cpuPct: number | undefined }) {
     s.level = plumeLevel(s.level, rate, delta);
     s.surge = plumeLevel(s.surge, surgeTarget, delta);
     const { level, surge } = s;
-    const t = reducedMotion ? 0 : performance.now() / 1000;
+    const t = reducedMotion ? 0 : clock.elapsedTime;
 
     // Steam: every puff keeps its phase; the level only fades the tail in and
     // out, so a changing load never reshuffles the column.
