@@ -789,6 +789,32 @@ Barcelo as `amd` / `rdna-2`, so the Auto tier starts at `high` in WebGPU.
 The capture helper removes WebGPU's 256-byte row padding, allowing comparison at
 arbitrary viewport widths, including 800 pixels.
 
+### Debug API (`window.__CITY_RENDER__`)
+
+The scripts drive the page through `window.__CITY_RENDER__`, installed by an effect in
+`LightingPipeline.tsx` only under `?perf`: `inspect`, `capture`, `focus`,
+`simulateDeviceLoss`, `setWaterReference`, `waterMode` and the three
+`capture{Bloom,Ao,Water}Comparison`. Its type lives in `PerfTuning.tsx`.
+
+The `?perf` gate is a runtime check, so the ~235 lines (readback, comparisons,
+device-loss hook) ship in the production bundle. That is accepted for now: nothing
+runs without `?perf`. Planned clean-up, when convenient:
+
+- **Lazy load.** Move the effect body into `lighting/renderDebugApi.ts` exporting
+  `createRenderDebugApi({ renderer, gl, resources, camera, get, runtime, scene })`,
+  and `import()` it inside the effect (with a cancelled flag for unmount). Vite then
+  splits it into its own chunk, fetched only under `?perf`. The pipeline's resources
+  type has to be exported for the context.
+- **One comparison call.** Bloom and AO captures are identical apart from their
+  guard (bloom checks `renderParams`, AO does not); water adds a material swap and
+  two "without water" frames. A single `captureComparison(effect)` returning one
+  `ComparisonImages` type would remove the ternary in `check-postprocess.ts`.
+- **Derived type.** Declare the window type as `ReturnType<typeof createRenderDebugApi>`:
+  the hand-written `capture: () => Promise<string>` hides its parameters.
+  `waterMode` duplicates `inspect().water.mode`.
+
+Verify with `check:bloom`, `check:ao`, `check:water` and `check-lighting.ts` (device loss).
+
 ## Local measurements
 
 A before/after run on 2026-09-06 used Chromium 149.0.7827.55, WebGPU with
