@@ -73,7 +73,7 @@ export function createSim(
   routes: TrafficRoute[],
   maxCars: number,
   maxTrucks: number,
-  random: () => number = Math.random,
+  random: () => number,
 ): Sim {
   const acc = new Float32Array(routes.length);
   for (let i = 0; i < acc.length; i++) {

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { mulberry32 } from "@/lib/random";
 import { createPose, samplePose, sampleTrajectory } from "@/sim/mobility/trajectory";
 import { place, type TrafficRoute } from "@/sim/traffic/pool";
 import { reconfigureSim } from "@/sim/traffic/reconfigure";
@@ -68,7 +69,7 @@ test("simulation position and anticipation sample the exact same lane path", () 
     ],
     rateScale: 1,
   };
-  const sim = createSim([route], 1, 0);
+  const sim = createSim([route], 1, 0, mulberry32(1));
   sim.cars.count = 1;
   sim.cars.id[0] = 1;
   sim.cars.lane[0] = 1;
@@ -97,7 +98,7 @@ test("a lane-only upgrade immediately reprojects the retained vehicle and preser
     lanes: [[0.25, 0.25]],
     rateScale: 1,
   };
-  const sim = createSim([route], 1, 0);
+  const sim = createSim([route], 1, 0, mulberry32(1));
   sim.cars.count = 1;
   sim.cars.id[0] = 42;
   sim.cars.age[0] = 12;

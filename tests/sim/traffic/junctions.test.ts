@@ -62,7 +62,7 @@ test("a roundabout circulates several vehicles at once, not one at a time", () =
 
 test("a vehicle waits outside the roundabout until its exit has space", async () => {
   const { reserveJunctions } = await import("@/sim/traffic/junctions");
-  const sim = createSim(roundaboutRoutes(), 10, 0);
+  const sim = createSim(roundaboutRoutes(), 10, 0, mulberry32(1));
   const p = sim.junctions.routes[0]![0]![0]!;
   sim.cars.count = 2;
   sim.cars.id[0] = 1;

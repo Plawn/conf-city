@@ -16,6 +16,7 @@ import {
 } from "@/components/lighting/shadowBounds";
 import { createVehicleLights } from "@/components/lighting/VehicleLights";
 import { PARIS } from "@/domain/solar";
+import { mulberry32 } from "@/lib/random";
 import { createSim } from "@/sim/traffic/sim";
 import { readSolarLocation, useLightingStore } from "@/store/lightingStore";
 
@@ -302,7 +303,7 @@ test("braking follows stable IDs across swaps and expires after removal", () => 
 test("vehicle projectors follow pitch/roll and release sources on pool recycling and disposal", () => {
   const runtime = createLightingRuntime();
   const lights = createVehicleLights(2, 1.4, "trucks", runtime);
-  const pool = createSim([], 2, 1).cars;
+  const pool = createSim([], 2, 1, mulberry32(1)).cars;
   const q = new Quaternion().setFromEuler(new Euler(0.2, 0.7, -0.1));
   pool.count = 1;
   pool.id[0] = 42;
