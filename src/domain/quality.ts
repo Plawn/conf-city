@@ -103,7 +103,8 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
   high: {
     tier: "high",
     maxPixels: 5_000_000,
-    maxDpr: 2,
+    // DPR 2 cost a third more GPU per frame on an M4 Retina for no visible gain after FXAA.
+    maxDpr: 1.5,
     ao: { enabled: true, samples: 16, denoise: true },
     bloomScale: 0.5,
     shadowMapSize: 2048,

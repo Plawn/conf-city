@@ -58,12 +58,14 @@ whole world; reduced draw calls alone do not establish a GPU speedup.
 
 Every per-frame budget that scales with the machine comes from one profile in
 `src/domain/quality.ts`; components never carry their own constants for these.
-`high` is the reference look, capped at 5 Mpx so a 4K or DPR 2 display does not
-render four to eight times the pixels of a 1080p screen.
+`high` is the reference look, capped at 5 Mpx and 1.5× so a 4K or DPR 2 display does
+not render four to eight times the pixels of a 1080p screen. On an M4 Retina (3024×1602
+at 2×), 1.5× cut the pipeline from 9.1 to 6.1 ms GPU per frame; a ¼ bloom chain saved
+nothing there, because its high-pass and first blur cost the same at either scale.
 
 | | eco | balanced | high |
 | --- | --- | --- | --- |
-| Rendered pixels / render scale | ≤ 1.2 Mpx, ≤ 1× | ≤ 2.4 Mpx, ≤ 1.5× | ≤ 5 Mpx, ≤ 2× |
+| Rendered pixels / render scale | ≤ 1.2 Mpx, ≤ 1× | ≤ 2.4 Mpx, ≤ 1.5× | ≤ 5 Mpx, ≤ 1.5× |
 | Contact shading (GTAO) | off | 8 samples + denoise | 16 samples + denoise |
 | Bloom mip chain | ¼ resolution | ½ resolution | ½ resolution |
 | Sun shadow map / refresh ceiling | 1024² ≤ 4 Hz | 2048² ≤ 6 Hz | 2048² ≤ 6 Hz |

@@ -38,7 +38,7 @@ describe("quality profiles", () => {
 
   test("high keeps the reference look", () => {
     const high = QUALITY_PROFILES.high;
-    expect(high.maxDpr).toBe(2);
+    expect(high.maxDpr).toBe(1.5);
     expect(high.shadowMapSize).toBe(2048);
     expect(high.pointLights).toBe(1024);
     expect(high.vehicleSpots).toBe(16);
@@ -67,7 +67,7 @@ describe("render scale", () => {
   test("high-DPI displays respect the per-tier ratio cap", () => {
     expect(resolveDpr(QUALITY_PROFILES.eco, 1440, 900, 2)).toBe(0.95);
     expect(resolveDpr(QUALITY_PROFILES.balanced, 1440, 900, 2)).toBe(1.35);
-    expect(resolveDpr(QUALITY_PROFILES.high, 1440, 900, 2)).toBe(1.95);
+    expect(resolveDpr(QUALITY_PROFILES.high, 1440, 900, 2)).toBe(1.5);
   });
 
   test("4K at DPR 1 is capped by pixels, never below the floor", () => {
