@@ -728,6 +728,22 @@ Headless runs take the same grammar through the URL, e.g. `CITY_PARAMS="&tweaks=
 `check-profile.ts` and `check-lighting.ts` merge it before asserting which passes must run.
 In `auto` quality the governor still steps the tier under tweaks, so pin a tier while measuring.
 
+### External reference: Threejs-Punk
+
+[Threejs-Punk](https://threejspunk.vercel.app/) (Anderson Mancini and Sunag, source
+`ektogamat/threejs-conference`) is the yardstick for a stylish three.js scene that still runs
+well. It uses the same building blocks as `high`: WebGPU/TSL, GTAO `ao()` at ½ resolution
+(6 samples), BloomNode on an emissive MRT at ½, SMAA, and DPR capped at 1.5.
+
+| 2026-11-04, Mac M4 Retina, Chrome | Canvas | Cadence | Frame interval median / p95 |
+| --- | --- | --- | --- |
+| Threejs-Punk, in game, uncapped (120 Hz) | 2268×1201 | ~98 fps | 8.4 / 16.8 ms |
+| Conf City `high`, smooth mode (60 cap) | 2268×1285 | 60 fps | 16.6 / 19.8 ms; GPU 6.1 ms summed per pass |
+
+Measure only after **Enter** then **Let's ride**: the title and briefing screens are not the
+game. The numbers are not strictly comparable: theirs is display cadence, ours is capped at 60
+and its GPU time is the sum of per-pass timestamps.
+
 
 ## Reproducible comparison
 
