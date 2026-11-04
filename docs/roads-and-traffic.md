@@ -31,6 +31,13 @@ roundabout reservations) is described in `traffic-strategy.md`.
   no better option keeps its road. `RING_CLEARANCE` keeps a lattice street's pavement off the ring's.
 - **One bridge per linked city pair**; each link is a `BridgeCrossing` riding its feeder streets and
   the shared deck. A second deck (construction upgrade) is a separate elevation, same crossing.
+- **Cloud services** (`City.cloud`, a managed service such as Azure or Scaleway) float at
+  `CLOUD_ALTITUDE` on a deck that hugs their buildings (`layout/cloud.ts`, at least
+  `CLOUD_MIN_RADIUS`): no ring, no streets, no capacity, no bridge. `planGates` skips links with a
+  cloud end; a link between an island and a cloud becomes a **cable car** instead
+  (`layout/cableway.ts`, one per island–cloud pair like a bridge): a mast just off the island's
+  shore, a hut on the deck, two sagging cables and cabins both ways, more of them as the source
+  services send more, within `maxCabins` (`quality.ts`). Links between two clouds are not drawn.
 - Ingress services are held out of `layoutCity` (in the hull they would push the coast in front of
   themselves) and put back on a synthetic cell outside the ring, so `roads/` gives them a
   `ring:<id>` avenue by the isolated-building fallback (`layout/harbour.ts`).

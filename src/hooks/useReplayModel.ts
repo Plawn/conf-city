@@ -29,6 +29,7 @@ export function useReplayBase(tl: Timeline): ReplayBase {
       }
     }
     const ingress = new Set(nodes.filter((n) => n.ingress).map(nodeAddress));
+    const clouds = new Set(tl.world.cities.filter((c) => c.cloud).map((c) => c.id));
     const plan = planWorld(
       tl.world.cities.map((c) => c.id),
       nodes,
@@ -37,6 +38,7 @@ export function useReplayBase(tl: Timeline): ReplayBase {
       biomes,
       ingress,
       capacities,
+      clouds,
     );
     const full = assembleWorld(plan);
     const plots = new Map([...full.cities].map(([id, c]) => [id, c.utilityPlot]));
@@ -86,13 +88,23 @@ export function useReplayScene(tl: Timeline, base: ReplayBase, key: string) {
       }
       telemetry.set(addr, entry);
     }
+    let clouds = 0;
+    for (const id of active.cities) {
+      if (base.full.cities.get(id)?.cloud) {
+        clouds++;
+      }
+    }
     return {
       layout,
       cities,
       links,
       telemetry,
       visibleCities: active.cities,
-      counts: { cities: active.cities.size, nodes: active.nodes.size },
+      counts: {
+        cities: active.cities.size - clouds,
+        clouds,
+        nodes: active.nodes.size,
+      },
     };
   }, [tl, base, key, telemetryCache]);
 }

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { BIOMES } from "@/domain/biome";
 import { buildingVariant } from "@/domain/buildingVariant";
 import { hexToHsl } from "@/domain/color";
-import { NODE_STYLE } from "@/domain/nodeStyle";
+import { BUILDING_KINDS, NODE_STYLE } from "@/domain/nodeStyle";
 import type { NodeType } from "@/domain/types";
 
 const TYPES: NodeType[] = ["app", "db", "cache", "queue"];
@@ -68,6 +69,29 @@ describe("buildingVariant", () => {
       const v = buildingVariant("c/none", type, BIOMES.basalt, new Set());
       expect(v.model).toBe(NODE_STYLE[type].models[0]!.path);
       expect(v.model).toBe(NODE_STYLE[type].modelPath);
+    }
+  });
+});
+
+describe("building kinds", () => {
+  test("a kind of the node's type replaces its models, keeping the rest of the draw", () => {
+    const plain = buildingVariant("quartz/worker", "app", BIOMES.basalt);
+    const factory = buildingVariant("quartz/worker", "app", BIOMES.basalt, undefined, "factory");
+    expect(factory.model).toBe("/models/kind-factory.glb");
+    expect({ ...factory, model: plain.model, fit: plain.fit }).toEqual(plain);
+  });
+
+  test("unknown kinds and kinds of another type fall back to the type", () => {
+    const plain = buildingVariant("c/n", "db", BIOMES.meadow);
+    expect(buildingVariant("c/n", "db", BIOMES.meadow, undefined, "nope")).toEqual(plain);
+    expect(buildingVariant("c/n", "db", BIOMES.meadow, undefined, "factory")).toEqual(plain);
+  });
+
+  test("every kind model ships", () => {
+    for (const kind of Object.values(BUILDING_KINDS)) {
+      for (const m of kind.models) {
+        expect(existsSync(`public${m.path}`)).toBe(true);
+      }
     }
   });
 });

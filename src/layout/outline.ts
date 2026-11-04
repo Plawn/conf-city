@@ -192,7 +192,8 @@ function resample(poly: Vec2[], step: number): Vec2[] {
   return out;
 }
 
-function radiusAround(center: Vec2, points: Vec2[]): number {
+/** Farthest reach of `points` from `center`. */
+export function radiusAround(center: Vec2, points: Vec2[]): number {
   let r = 0;
   for (const p of points) {
     r = Math.max(r, Math.hypot(p[0] - center[0], p[1] - center[1]));

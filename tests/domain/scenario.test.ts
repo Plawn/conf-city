@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BLAST_SEC } from "@/domain/blast";
+import { clockSec } from "@/domain/replayClock";
 import {
   activeKey,
   dateAt,
@@ -15,11 +16,74 @@ describe("scenario", () => {
   const tl = parseScenario(example);
 
   test("maps dates onto the video clock", () => {
-    expect(tl.totalSec).toBe(3 + 40 + 5);
+    const linear = parseScenario({ ...example, minGapSec: 0, staggerSec: 0 });
+    expect(linear.totalSec).toBeCloseTo(3 + 40 + 5);
     expect(dateAt(tl, 0).toISOString().slice(0, 10)).toBe("2026-01-01");
-    expect(dateAt(tl, 43).toISOString().slice(0, 10)).toBe("2026-12-31");
+    expect(
+      dateAt(tl, tl.totalSec - 5)
+        .toISOString()
+        .slice(0, 10),
+    ).toBe("2026-12-31");
     const cache = tl.nodes.get("paris-1/cache")!;
     expect(dateAt(tl, cache.from).toISOString().slice(0, 10)).toBe("2026-03-01");
+  });
+
+  test("slows down where events crowd", () => {
+    expect(tl.totalSec).toBeGreaterThan(3 + 40 + 5);
+    const ats = [...new Set(tl.events.map((e) => e.at))];
+    for (let i = 1; i < ats.length; i++) {
+      expect(ats[i]! - ats[i - 1]!).toBeGreaterThanOrEqual(tl.rampSec - 1e-9);
+    }
+    // A demolition leaves room for its blast.
+    const legacy = tl.nodes.get("paris-1/legacy-db")!;
+    const next = ats.find((t) => t > legacy.to)!;
+    expect(next - legacy.to).toBeGreaterThanOrEqual(BLAST_SEC);
+    // Same-date events stay together.
+    const worker = tl.nodes.get("paris-1/worker")!;
+    expect(tl.linkSpans.get("paris-1/queue->paris-1/worker")!.from).toBe(worker.from);
+  });
+
+  test("same-date events play as a cascade while the date holds", () => {
+    const scn = structuredClone(example);
+    const city = {
+      id: "berlin-1",
+      name: "Berlin",
+      since: "2026-06-01",
+      nodes: [
+        { id: "a", type: "app", label: "A", links: ["b"] },
+        { id: "b", type: "db", label: "B" },
+        { id: "c", type: "cache", label: "C", until: "2026-06-15" },
+        { id: "d", type: "cache", label: "D", since: "2026-06-15" },
+      ],
+    };
+    (scn.cities as unknown[]).push(city);
+    const t = parseScenario(scn);
+    const at = (addr: string) => t.nodes.get(addr)!.from;
+    const island = t.cities.get("berlin-1")!.from;
+    // Island first, then each building in turn; a road rises with its last end.
+    expect(at("berlin-1/a") - island).toBeCloseTo(t.rampSec);
+    expect(at("berlin-1/b") - at("berlin-1/a")).toBeCloseTo(t.rampSec / 2);
+    expect(at("berlin-1/c") - at("berlin-1/b")).toBeCloseTo(t.rampSec / 2);
+    expect(t.linkSpans.get("berlin-1/a->berlin-1/b")!.from).toBe(at("berlin-1/b"));
+    for (const x of [island, at("berlin-1/c")]) {
+      expect(dateAt(t, x).toISOString().slice(0, 10)).toBe("2026-06-01");
+    }
+    // A migration: the new building rises, then the old one blows up.
+    const gone = t.nodes.get("berlin-1/c")!.to;
+    expect(gone - at("berlin-1/d")).toBeCloseTo(t.rampSec);
+    // staggerSec 0 keeps them together.
+    const together = parseScenario({ ...scn, staggerSec: 0 });
+    expect(together.nodes.get("berlin-1/a")!.from).toBe(together.nodes.get("berlin-1/c")!.from);
+  });
+
+  test("the clock is monotone and dateAt inverts it", () => {
+    const { ms, sec } = tl.clock;
+    for (let i = 1; i < ms.length; i++) {
+      expect(sec[i]!).toBeGreaterThan(sec[i - 1]!);
+    }
+    for (const e of tl.events) {
+      expect(clockSec(tl.clock, dateAt(tl, e.at).getTime())).toBeCloseTo(e.at, 6);
+    }
   });
 
   test("a node never outlives its city, a link never outlives its ends", () => {

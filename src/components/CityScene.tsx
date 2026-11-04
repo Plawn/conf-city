@@ -19,10 +19,13 @@ import type { DrivePath } from "../geo/drivable";
 import { makeDriver } from "../geo/drivable";
 import type { DeckExit } from "../geo/roadGraph";
 import { computeBounds } from "../layout/bounds";
+import { cityAltitude } from "../layout/cloud";
 import { type CityLayout, type GroupZone, linkKey, type Vec2 } from "../layout/types";
 import { fnv1a } from "../lib/random";
+import { REPLAY_MODE } from "../store/replayStore";
 import { BuildingBatches } from "./buildings/BuildingBatches";
 import { BuildingSmoke, type Chimney, ROOF_HEIGHT } from "./buildings/BuildingSmoke";
+import { CloudBase } from "./CloudBase";
 import { IslandMesh } from "./IslandMesh";
 import { Landfill } from "./Landfill";
 import { NodeMesh } from "./NodeMesh";
@@ -87,7 +90,7 @@ export function CityScene({
     const out = new Map<string, BuildingVariant>();
     for (const n of cityNodes) {
       const addr = nodeAddress(n);
-      out.set(addr, buildingVariant(addr, n.type, biome));
+      out.set(addr, buildingVariant(addr, n.type, biome, undefined, n.building));
     }
     return out;
   }, [cityNodes, biome]);
@@ -165,13 +168,23 @@ export function CityScene({
     [cityTelemetry, meta, hostMetrics],
   );
 
+  const cloud = layout?.cloud === true;
+  const lift = cityAltitude(layout);
+
   if (!visible) {
     return null;
   }
 
   return (
-    <group>
-      {layout ? (
+    <group position-y={lift}>
+      {layout && cloud ? (
+        <CloudBase
+          cityId={city.id}
+          outline={layout.outline}
+          center={layout.center}
+          nodes={layout.nodes}
+        />
+      ) : layout ? (
         <>
           {land && <Landfill outline={layout.outline} />}
           <IslandMesh outline={land ?? layout.outline} palette={islandPalette} />
@@ -220,8 +233,8 @@ export function CityScene({
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-[0.2em] text-surface-200 backdrop-blur-sm">
           <span>{city.name}</span>
           {/* A machine can be worth a badge with no visible service: the host sample
-              still describes it. */}
-          {(usage.nodeCount > 0 || usage.fromHost || usage.diskPct != null) && (
+              still describes it. A replay's telemetry is synthetic: name only. */}
+          {!REPLAY_MODE && (usage.nodeCount > 0 || usage.fromHost || usage.diskPct != null) && (
             <span className="flex items-center gap-1 tracking-normal normal-case">
               <Tooltip label={usageTooltip(usage, "cpu")}>
                 <Badge tone={saturationTone(usage.cpuPct != null ? usage.cpuPct / 100 : undefined)}>
@@ -285,7 +298,8 @@ export function CityScene({
       <BuildingBatches>
         {cityNodes.map((node) => {
           const addr = nodeAddress(node);
-          const variant = variants.get(addr) ?? buildingVariant(addr, node.type, biome);
+          const variant =
+            variants.get(addr) ?? buildingVariant(addr, node.type, biome, undefined, node.building);
           return (
             <NodeMesh
               key={node.id}

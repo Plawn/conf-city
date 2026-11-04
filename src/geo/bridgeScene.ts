@@ -118,7 +118,7 @@ export function visibleShore(
     return undefined;
   }
   const outlines = [...layout.cities.values()]
-    .filter((c) => visibleCities.has(c.cityId))
+    .filter((c) => visibleCities.has(c.cityId) && !c.cloud)
     .map((c) => c.outline);
   return outlines.length > 0 ? buildShoreField(outlines, TERRAIN.shoreReach) : undefined;
 }

@@ -10,6 +10,8 @@ export interface GraphNode {
   ingress?: boolean;
   /** Neighbourhood: nodes sharing a group are laid out together on a tinted ground. */
   group?: string;
+  /** Requested look, a `BUILDING_KINDS` id; ignored when unknown or meant for another type. */
+  building?: string;
   links: string[];
 }
 
@@ -25,6 +27,8 @@ export interface City {
   description?: string;
   /** Look of the island, chosen by hand; omitted = deduced from the content (see `domain/biome.ts`). */
   biome?: BiomeId;
+  /** A managed cloud service, drawn as a floating island above the sea: no streets, no shore. */
+  cloud?: boolean;
   nodes: GraphNode[];
 }
 
@@ -54,6 +58,7 @@ export interface DiscoveredResolvedNode extends ResolvedNode {
 }
 
 export interface PositionedNode extends ResolvedNode {
+  /** World coordinates; y is the deck the building stands on (sea level, or a cloud's platform). */
   position: [number, number, number];
   isDiscovered?: boolean;
   /** Ingress service moved to the shore: drawn as the island's port, not a building. */

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { planShots, shotAt, TRANSITION } from "@/domain/director";
 import { parseScenario } from "@/domain/scenario";
+import { CLOUD_ALTITUDE } from "@/layout/cloud";
 import { layoutWorld } from "@/layout/layoutWorld";
 import { loadWorld } from "@/loaders/loadWorld";
 import example from "../../public/scenarios/example.json";
@@ -56,5 +57,61 @@ describe("director", () => {
       (Math.min(london[0], paris[0]) + Math.max(london[0], paris[0])) / 2,
       -1,
     );
+  });
+});
+
+describe("director, cloud services", () => {
+  const tl = parseScenario({
+    title: "Sky",
+    start: "2026-01-01",
+    end: "2026-12-31",
+    durationSec: 40,
+    cities: [
+      {
+        id: "tools",
+        name: "Tools",
+        nodes: [
+          { id: "api", type: "app", label: "API", links: [] },
+          { id: "llm", type: "app", label: "LLM", links: [] },
+          { id: "web", type: "app", label: "Web", links: [], since: "2026-06-05" },
+          { id: "jobs", type: "app", label: "Jobs", links: [], since: "2026-06-12" },
+        ],
+      },
+      {
+        id: "azure",
+        name: "Azure",
+        cloud: true,
+        since: "2026-06-01",
+        nodes: [{ id: "openai", type: "app", label: "OpenAI", links: [], since: "2026-06-15" }],
+      },
+    ],
+    links: [{ from: "tools/llm", to: "azure/openai", since: "2026-06-15" }],
+  });
+  const { nodes, links } = loadWorld(tl.world);
+  const layout = layoutWorld(
+    tl.world.cities.map((c) => c.id),
+    nodes,
+    links,
+    [],
+    new Map(),
+    new Set(),
+    new Map(),
+    new Set(["azure"]),
+  );
+  const keys = planShots(tl, layout);
+  const arrival = tl.cities.get("azure")!.from;
+  const service = tl.nodes.get("azure/openai")!.from;
+
+  test("a cloud's arrival is framed at its altitude, apart from the island's work", () => {
+    const shot = keys.findLast((k) => k.t <= arrival)!;
+    const cloud = layout.cities.get("azure")!.center;
+    expect(shot.lookAt[1]).toBeGreaterThan(CLOUD_ALTITUDE / 2);
+    expect(Math.hypot(shot.lookAt[0] - cloud[0], shot.lookAt[2] - cloud[1])).toBeLessThan(15);
+  });
+
+  test("the shot holds while the cloud lands and its service rises", () => {
+    const shot = keys.findLast((k) => k.t <= arrival)!;
+    const next = keys[keys.indexOf(shot) + 1];
+    expect(next?.t ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(service + tl.rampSec);
   });
 });

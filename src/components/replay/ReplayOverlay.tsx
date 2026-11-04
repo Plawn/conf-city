@@ -9,7 +9,7 @@ export function ReplayOverlay({
   counts,
 }: {
   timeline: Timeline;
-  counts: { cities: number; nodes: number };
+  counts: { cities: number; clouds: number; nodes: number };
 }) {
   // Whole-tenth resolution: the overlay re-renders 10× a second, not every frame.
   const t = useReplayStore((s) => Math.floor(s.t * 10) / 10);
@@ -33,10 +33,17 @@ export function ReplayOverlay({
         </div>
         <div className="mt-1 flex gap-4 text-sm text-surface-200 tabular-nums">
           <span>
-            <strong className="text-white">{counts.cities}</strong> servers
+            <strong className="text-white">{counts.cities}</strong>{" "}
+            {counts.cities === 1 ? "server" : "servers"}
           </span>
+          {counts.clouds > 0 && (
+            <span>
+              <strong className="text-white">{counts.clouds}</strong> cloud
+            </span>
+          )}
           <span>
-            <strong className="text-white">{counts.nodes}</strong> services
+            <strong className="text-white">{counts.nodes}</strong>{" "}
+            {counts.nodes === 1 ? "service" : "services"}
           </span>
         </div>
       </div>

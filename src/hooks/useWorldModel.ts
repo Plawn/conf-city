@@ -170,6 +170,7 @@ export function useWorldModel(
         biomes,
         ingressAddresses,
         capacities,
+        new Set(allCities.filter((c) => c.cloud).map((c) => c.id)),
       ),
     [allCities, staticNodes, links, discoveredNodes, biomes, ingressAddresses, capacities],
   );

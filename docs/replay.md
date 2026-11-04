@@ -23,18 +23,25 @@ over the period, each piece dated. Types: `Scenario` in `src/domain/scenario.ts`
 | Field | Meaning |
 |---|---|
 | `title`, `subtitle` | Intro card |
-| `start`, `end` | ISO dates bounding the timeline (mapped linearly onto `durationSec`) |
-| `durationSec` | Video seconds between `start` and `end` |
+| `start`, `end` | ISO dates bounding the timeline (mapped onto `durationSec`, slowed where busy) |
+| `durationSec` | Video seconds between `start` and `end` at the base pace |
+| `minGapSec` | Least video seconds between two distinct event dates (default `rampSec`, 0 = linear) |
+| `staggerSec` | Seconds between buildings arriving on the same date (default `rampSec / 2`, 0 = together) |
 | `introSec` / `outroSec` | Wide shot before / after (default 3 / 4) |
 | `rampSec` | Seconds a building takes to rise or sink (default 1.2) |
 | `sunTime` | ISO instant the sun is frozen at |
 | `cities[]` | `id`, `name`, `biome`, `meta` (`CityMeta`: `memMb` sizes the island), `nodes[]` |
 | `cities[].nodes[]` | `GraphNode` fields; `links` items are a node id or `{ "to", "since", "until" }` |
+| `cities[].nodes[].building` | Look (`BUILDING_KINDS`): `factory`, `legacy-shack`, `office-tower`, `storefront`, `workshop`, `watchtower`, `library`, `switchboard`, `relay-pylon`, `relay-station` (app), `silo`, `offshore-vault`, `analytics-warehouse` (db), `kiosk` (cache); unknown or other-type kinds draw the type's models |
 | `links[]` | Inter-city links `{ "from": "city/node", "to": "city/node" }` → bridges |
 
 Every city, node and link takes optional `since` / `until` (ISO dates; omitted = from the start /
 until the end). Lifetimes are clipped: a node never outlives its city, a link never outlives
 either end. `parseScenario` lists every problem at once.
+
+Check a scenario (errors, the timeline as the video plays it, warnings such as simultaneous
+events) with `bun scripts/check-scenario.ts <file.json>`. The Claude skill
+`.claude/skills/write-scenario` writes and dates scenarios with it.
 
 A skeleton from today's infrastructure (everything present from 1 January), then date by hand:
 
@@ -49,9 +56,18 @@ bun scripts/scenario-from-snapshot.ts snapshot.json --year 2026 --out public/sce
   active)` rebuilds roads, gates and bridges for the pieces alive at an instant, reusing the
   union's positions and utility plots. Nothing moves when a city grows, and the exact-equality
   invariant holds (`tests/layout/pinnedLayout.test.ts`).
+- **Slow motion** — dates map to video time through `tl.clock` (`src/domain/replayClock.ts`),
+  piecewise linear: two distinct event dates sit at least `minGapSec` apart (`BLAST_SEC` after
+  a demolition), so a busy week plays out one step at a time and the date on screen slows down.
+  Events on the **same date** play as a cascade while the date holds: islands, then each
+  building `staggerSec` after the previous one (its roads rise with it), then demolitions
+  `minGapSec` later — a migration reads as "the new one rises, the old one blows up". Quiet
+  months keep the base pace; the video grows by the time added (the checker prints it).
 - **Everything is a function of video time `t`** — `presenceAt(timeline, t)` gives each entity a
   presence in [0, 1] with eased ramps. Buildings scale up from the ground, islands rise from
-  the sea (`RisingCity`), and leaving links and islands sink. `activeKey(presence)` only changes
+  the sea and cloud services come down from the sky (`RisingCity`, offset by `cityLift` in
+  `src/domain/replayLift.ts`, shared with the blasts), and leaving links and islands sink. A
+  cable car is strung once both its island and its cloud have settled. `activeKey(presence)` only changes
   at an event, so React reassembles the world at events, not every frame.
 - **Demolitions explode** — a leaving building stays in the scene `BLAST_SEC` (2.6 s):
   `presence.blasts` gives its age, the building swells then vanishes, and `ReplayBlasts` draws a
@@ -60,7 +76,9 @@ bun scripts/scenario-from-snapshot.ts snapshot.json --year 2026 --out public/sce
   after they blow up.
 - **Director** — `planShots` (`src/domain/director.ts`) groups events into shots (wide intro →
   close-up per burst of events → wide outro) and `shotAt` interpolates them. Demolitions never
-  share a shot with arrivals, and the camera holds on them through the blast (`BLAST_HOLD`). Untick
+  share a shot with arrivals, and the camera holds on them through the blast (`BLAST_HOLD`). A
+  cloud service's arrival and its buildings get a shot of their own too, framed at its altitude
+  with the nearest mast of its cable car, held until they are up. Untick
   **Director** in the bar to orbit freely.
 - **Synthetic telemetry** — every service is healthy with a stable per-address request rate, so
   traffic flows on the roads. Automatic constructions count video time instead of wall time.

@@ -2,7 +2,7 @@ import { useGLTF } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { BuildingVariant } from "../../domain/buildingVariant";
-import { NODE_STYLE, PORT_ASSETS } from "../../domain/nodeStyle";
+import { BUILDING_KINDS, NODE_STYLE, PORT_ASSETS } from "../../domain/nodeStyle";
 import type { NodeType } from "../../domain/types";
 import { BuildingFire } from "../BuildingFire";
 import { useBuildingAnimation } from "./BuildingAnimations";
@@ -19,7 +19,7 @@ import {
 } from "./visuals";
 
 // Preload every model a variant may pick
-for (const config of Object.values(NODE_STYLE)) {
+for (const config of [...Object.values(NODE_STYLE), ...Object.values(BUILDING_KINDS)]) {
   for (const m of config.models) {
     useGLTF.preload(m.path);
   }

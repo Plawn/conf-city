@@ -1,7 +1,7 @@
 import { fnv1a, mulberry32 } from "../lib/random";
 import type { Biome } from "./biome";
 import { darken, shiftHsl } from "./color";
-import { NODE_STYLE } from "./nodeStyle";
+import { modelsOf, NODE_STYLE } from "./nodeStyle";
 import type { NodeType } from "./types";
 
 /**
@@ -16,7 +16,7 @@ import type { NodeType } from "./types";
  * scale too, so they stay identical across variants.
  */
 export interface BuildingVariant {
-  /** GLB path — one of `NODE_STYLE[type].models`. */
+  /** GLB path — one of `modelsOf(type, building)`. */
   model: string;
   /** Scale factor that brings this model to the type's reference height. */
   fit: number;
@@ -40,17 +40,20 @@ const SCALE_MAX = 1.08;
  * model to a type reshuffles nothing but the model choice.
  *
  * `available`, when given, restricts the models to those paths — anything not
- * in it falls back to the type's first model, which always ships.
+ * in it falls back to the first candidate, which always ships. `building` picks a
+ * `BUILDING_KINDS` look in place of the type's models.
  */
 export function buildingVariant(
   addr: string,
   type: NodeType,
   biome: Biome,
   available?: ReadonlySet<string>,
+  building?: string,
 ): BuildingVariant {
   const style = NODE_STYLE[type];
-  const candidates = available ? style.models.filter((m) => available.has(m.path)) : style.models;
-  const models = candidates.length > 0 ? candidates : style.models.slice(0, 1);
+  const all = modelsOf(type, building);
+  const candidates = available ? all.filter((m) => available.has(m.path)) : all;
+  const models = candidates.length > 0 ? candidates : all.slice(0, 1);
   const rand = mulberry32(fnv1a(addr));
 
   const model = models[Math.min(models.length - 1, Math.floor(rand() * models.length))]!;

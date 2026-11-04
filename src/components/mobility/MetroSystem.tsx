@@ -19,7 +19,7 @@ import {
   retargetPassengers,
 } from "../../sim/mobility/passengers";
 import { buildStationAccesses } from "../../sim/mobility/station";
-import { liveTelemetry } from "../../sim/traffic/demand";
+import { sourceFlowKbps } from "../../sim/traffic/demand";
 import { buildRibbon } from "../geo/ribbon";
 import { MetroStation } from "./MetroStation";
 import { useMobilityParticipant } from "./MobilitySimulation";
@@ -92,10 +92,7 @@ export function MetroSystem({
         let sum = 0;
         const now = Date.now();
         for (const node of city.nodes) {
-          const value = telemetry?.get(`${city.cityId}/${node.id}`);
-          if (liveTelemetry(value, now)) {
-            sum += Math.max(0, value.metrics.netTxKbps ?? (value.metrics.rps ?? 0) * 20);
-          }
+          sum += sourceFlowKbps(telemetry?.get(`${city.cityId}/${node.id}`), now);
         }
         demand.current = sum;
       }

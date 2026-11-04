@@ -54,6 +54,9 @@ export function worldRoutes(
 ): TrafficRoute[] {
   const out: TrafficRoute[] = [];
   for (const [cityId, city] of layout.cities) {
+    if (city.cloud) {
+      continue;
+    }
     const driver = makeDriver([city.roads]);
     const occurrences = new Map<string, number>();
     for (const link of links.filter((l) => !l.interCity && l.fromCityId === cityId)) {

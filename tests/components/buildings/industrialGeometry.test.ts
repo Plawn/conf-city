@@ -3,7 +3,8 @@ import {
   type IndustrialStyle,
   industrialGeometry,
 } from "@/components/buildings/industrialGeometry";
-import { NODE_STYLE } from "@/domain/nodeStyle";
+import { kindGeometry } from "@/components/buildings/kindGeometry";
+import { BUILDING_KINDS, KIND_STYLES, NODE_STYLE } from "@/domain/nodeStyle";
 import { footprintRadius } from "@/layout/constants";
 
 test("industrial buildings fit existing plots even at maximum variant scale and rotated", () => {
@@ -26,6 +27,24 @@ test("industrial buildings fit existing plots even at maximum variant scale and 
     expect(radius * NODE_STYLE[type].scale * 1.08).toBeLessThanOrEqual(footprintRadius(type));
     expect(g.boundingBox!.min.y).toBeCloseTo(0);
     expect(g.boundingBox!.max.y * 1.15).toBeLessThan(1);
+    expect(g.getAttribute("color").count).toBe(position.count);
+    g.dispose();
+  }
+});
+
+test("scenario building kinds fit their type's plots at any yaw and variant scale", () => {
+  for (const style of KIND_STYLES) {
+    const kind = BUILDING_KINDS[style];
+    expect(kind).toBeDefined();
+    const type = kind!.type;
+    const g = kindGeometry(style);
+    const position = g.getAttribute("position");
+    let radius = 0;
+    for (let i = 0; i < position.count; i++) {
+      radius = Math.max(radius, Math.hypot(position.getX(i), position.getZ(i)));
+    }
+    expect(radius * NODE_STYLE[type].scale * 1.08).toBeLessThanOrEqual(footprintRadius(type));
+    expect(g.boundingBox!.min.y).toBeCloseTo(0);
     expect(g.getAttribute("color").count).toBe(position.count);
     g.dispose();
   }

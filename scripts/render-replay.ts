@@ -34,7 +34,7 @@ const framesDir = flags.get("frames");
 // A file under public/ is served from the site root.
 const scenarioUrl = scenario.startsWith("http")
   ? scenario
-  : `/${scenario.replace(/^(\.\/)?public\//, "")}`;
+  : `/${scenario.replace(/^(\.?\/)?(public\/)?/, "")}`;
 
 const webm = output.endsWith(".webm");
 const ffmpeg = findFfmpeg(webm);

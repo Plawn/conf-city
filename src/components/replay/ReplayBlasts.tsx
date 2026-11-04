@@ -12,13 +12,14 @@ import {
   shardAt,
 } from "../../domain/blast";
 import { NODE_STYLE } from "../../domain/nodeStyle";
+import { cityLift } from "../../domain/replayLift";
 import type { PositionedNode } from "../../domain/types";
+import type { WorldLayout } from "../../layout/types";
 import { replayPresence } from "../../store/replayStore";
 import { NO_RAYCAST } from "../three/instancing";
-import { islandY } from "./ReplayDriver";
 
-/** Simultaneous blasts drawn; more are skipped (a scenario rarely demolishes a dozen at once). */
-const MAX_BLASTS = 12;
+/** Simultaneous blasts drawn; more are skipped (a migration can retire a whole island at once). */
+const MAX_BLASTS = 64;
 const SHARDS = 26;
 const FLAMES = 6;
 const PUFFS = 9;
@@ -29,8 +30,11 @@ const COOL = new THREE.Color("#3a2a24");
 
 interface Site {
   x: number;
+  /** Deck the building stood on. */
+  y: number;
   z: number;
   cityId: string;
+  cloud: boolean;
   /** Building height and footprint, from its type's reference scale. */
   height: number;
   width: number;
@@ -39,7 +43,7 @@ interface Site {
 }
 
 /** Buildings leaving the replay explode: fireball, flying debris, smoke. Three pooled draws. */
-export function ReplayBlasts({ nodes }: { nodes: PositionedNode[] }) {
+export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
   const shardMesh = useRef<THREE.InstancedMesh>(null);
   const fireMesh = useRef<THREE.InstancedMesh>(null);
   const smokeMesh = useRef<THREE.InstancedMesh>(null);
@@ -49,8 +53,8 @@ export function ReplayBlasts({ nodes }: { nodes: PositionedNode[] }) {
   const puff = useMemo(() => ({ x: 0, y: 0, z: 0, scale: 0 }), []);
   const sites = useMemo(() => new Map<string, Site>(), []);
   const byAddr = useMemo(
-    () => new Map(nodes.map((n) => [`${n.cityId}/${n.id}`, n] as const)),
-    [nodes],
+    () => new Map(layout.nodes.map((n) => [`${n.cityId}/${n.id}`, n] as const)),
+    [layout.nodes],
   );
 
   useLayoutEffect(() => {
@@ -74,12 +78,12 @@ export function ReplayBlasts({ nodes }: { nodes: PositionedNode[] }) {
       if (blasts >= MAX_BLASTS || age >= BLAST_SEC) {
         continue;
       }
-      const site = siteOf(sites, byAddr, addr);
+      const site = siteOf(sites, byAddr, layout, addr);
       if (!site) {
         continue;
       }
       blasts++;
-      const y = islandY(replayPresence.cities.get(site.cityId) ?? 0);
+      const y = site.y + cityLift(replayPresence.cities.get(site.cityId) ?? 0, site.cloud);
       for (const s of site.shards) {
         shardAt(s, age, site.width, site.height, shard);
         dummy.position.set(site.x + shard.x, y + shard.y, site.z + shard.z);
@@ -128,8 +132,13 @@ export function ReplayBlasts({ nodes }: { nodes: PositionedNode[] }) {
       mesh.count = count;
       mesh.visible = count > 0;
       if (count > 0) {
+        // Upload only the live instances, not the whole pool.
+        mesh.instanceMatrix.clearUpdateRanges();
+        mesh.instanceMatrix.addUpdateRange(0, count * 16);
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor && mesh === fireMesh.current) {
+          mesh.instanceColor.clearUpdateRanges();
+          mesh.instanceColor.addUpdateRange(0, count * 3);
           mesh.instanceColor.needsUpdate = true;
         }
       }
@@ -177,6 +186,7 @@ function fireMix(heat: number) {
 function siteOf(
   sites: Map<string, Site>,
   byAddr: Map<string, PositionedNode>,
+  layout: WorldLayout,
   addr: string,
 ): Site | undefined {
   let site = sites.get(addr);
@@ -188,8 +198,10 @@ function siteOf(
     const scale = NODE_STYLE[node.type].scale;
     site = {
       x: node.position[0],
+      y: node.position[1],
       z: node.position[2],
       cityId: node.cityId,
+      cloud: layout.cities.get(node.cityId)?.cloud === true,
       height: scale * 1.4,
       width: scale * 0.8,
       shards: blastShards(addr, SHARDS),

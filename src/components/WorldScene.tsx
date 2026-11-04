@@ -40,6 +40,7 @@ import { LocalLighting } from "./lighting/LocalLighting";
 import { renderParams } from "./lighting/renderer";
 import { LightingContext } from "./lighting/runtime";
 import { SolarLighting } from "./lighting/SolarLighting";
+import { Cableways } from "./mobility/Cableways";
 import { ConstructionMarkers } from "./mobility/ConstructionMarkers";
 import { IngressPorts } from "./mobility/IngressPorts";
 import { MetroSystem } from "./mobility/MetroSystem";
@@ -79,6 +80,7 @@ export function WorldScene({
   cityMeta,
   cityMetrics,
   wrapCity: WrapCity,
+  cityPresence,
   children,
 }: {
   /** Identity of the loaded world, computed once in `App` (mobility store key). */
@@ -96,7 +98,9 @@ export function WorldScene({
   cityMeta?: Map<string, CityMeta>;
   cityMetrics?: Map<string, CityMetrics>;
   /** Replay: a group around each island (rise from the sea). */
-  wrapCity?: ComponentType<{ cityId: string; children: ReactNode }>;
+  wrapCity?: ComponentType<{ cityId: string; cloud: boolean; children: ReactNode }>;
+  /** Replay: how far each city has arrived (0..1); cable cars wait for both ends. */
+  cityPresence?: (cityId: string) => number;
   /** Extra scene content inside the animation queue (replay driver). */
   children?: ReactNode;
 }) {
@@ -241,7 +245,7 @@ export function WorldScene({
                     />
                   );
                   return WrapCity ? (
-                    <WrapCity key={city.id} cityId={city.id}>
+                    <WrapCity key={city.id} cityId={city.id} cloud={!!city.cloud}>
                       {scene}
                     </WrapCity>
                   ) : (
@@ -263,6 +267,15 @@ export function WorldScene({
                     )}
                   />
                 ))}
+
+                {layout && (
+                  <Cableways
+                    layout={layout}
+                    telemetry={telemetry}
+                    visibleCities={visibleCities}
+                    cityPresence={cityPresence}
+                  />
+                )}
 
                 {layout && (
                   <IngressPorts

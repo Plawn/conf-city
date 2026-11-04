@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { Camera, Group, InstancedMesh, Object3D } from "three";
 import { type ShotKey, shotAt } from "../../domain/director";
+import { cityLift } from "../../domain/replayLift";
 import { activeKey, presenceAt, type Timeline } from "../../domain/scenario";
 import {
   CAPTURE_MODE,
@@ -173,20 +174,19 @@ async function until(ready: () => boolean, timeoutMs = 30_000) {
   }
 }
 
-/** How deep an island starts under the sea. */
-const ISLAND_DROP = 4;
-
-/** Island height at a presence: shared with the blasts so debris ride a sinking island. */
-export function islandY(presence: number) {
-  return -ISLAND_DROP * (1 - presence) ** 3;
-}
-
-/** An island emerging from (or sinking back into) the sea with its city's presence. */
-export function RisingCity({ cityId, children }: { cityId: string; children: ReactNode }) {
+/** A city emerging from the sea, or a cloud service coming down from the sky, with its presence. */
+export function RisingCity({
+  cityId,
+  cloud,
+  children,
+}: {
+  cityId: string;
+  cloud: boolean;
+  children: ReactNode;
+}) {
   const group = useRef<Group>(null);
   useFrame(() => {
-    const p = replayPresence.cities.get(cityId) ?? 0;
-    group.current!.position.y = islandY(p);
+    group.current!.position.y = cityLift(replayPresence.cities.get(cityId) ?? 0, cloud);
   }, -29);
   return <group ref={group}>{children}</group>;
 }

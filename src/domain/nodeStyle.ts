@@ -80,6 +80,47 @@ export const NODE_STYLE: Record<
   },
 };
 
+/** Generated looks (`public/models/kind-*.glb`, from `scripts/build-industrial-models.ts`), each tied to the type whose footprint it fits. */
+export const KIND_TYPES = {
+  factory: "app",
+  "legacy-shack": "app",
+  storefront: "app",
+  workshop: "app",
+  silo: "db",
+  watchtower: "app",
+  kiosk: "cache",
+  library: "app",
+  switchboard: "app",
+  "relay-pylon": "app",
+  "relay-station": "app",
+  "offshore-vault": "db",
+} as const satisfies Record<string, NodeType>;
+
+export type KindStyle = keyof typeof KIND_TYPES;
+export const KIND_STYLES = Object.keys(KIND_TYPES) as KindStyle[];
+
+/**
+ * Looks a node can ask for with `building` (scenario field): the generated kinds, plus
+ * `office-tower` (the app skyscrapers) and `analytics-warehouse`. Unknown kinds draw the type's own models.
+ */
+export const BUILDING_KINDS: Record<string, { type: NodeType; models: readonly BuildingModel[] }> =
+  {
+    ...Object.fromEntries(
+      KIND_STYLES.map((kind) => [
+        kind,
+        { type: KIND_TYPES[kind], models: [{ path: `/models/kind-${kind}.glb`, fit: 1 }] },
+      ]),
+    ),
+    "office-tower": { type: "app", models: NODE_STYLE.app.models },
+    "analytics-warehouse": { type: "db", models: NODE_STYLE.db.models.slice(0, 2) },
+  };
+
+/** Models a node is drawn with: its kind's when the kind matches its type, else the type's. */
+export function modelsOf(type: NodeType, building?: string): readonly BuildingModel[] {
+  const kind = building ? BUILDING_KINDS[building] : undefined;
+  return kind?.type === type ? kind.models : NODE_STYLE[type].models;
+}
+
 export const LIVENESS_COLORS: Record<LivenessStatus, string> = {
   healthy: "#44cc66",
   degraded: "#ff9a3c",

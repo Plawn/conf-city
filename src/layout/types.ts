@@ -1,6 +1,7 @@
 import type { BiomeId } from "../domain/biome";
 import type { PositionedNode, ResolvedLink } from "../domain/types";
 import type { CityBounds } from "./bounds";
+import type { Cableway } from "./cableway";
 import type { HarbourSite } from "./harbour";
 
 /**
@@ -154,6 +155,8 @@ export interface CityLayout {
   harbour?: HarbourSite;
   /** Where the machine gauges stand. Absent on an island with no free land. */
   utilityPlot?: UtilityPlot;
+  /** A cloud service floating above the sea: no streets drawn, no shore, no bridges. */
+  cloud?: true;
 }
 
 /**
@@ -191,4 +194,6 @@ export interface WorldLayout {
   nodes: PositionedNode[];
   cities: Map<string, CityLayout>;
   bridges: Bridge[];
+  /** Island ↔ cloud service links, carried by cable car instead of a bridge. */
+  cableways: Cableway[];
 }

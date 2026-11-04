@@ -45,6 +45,8 @@ export interface QualityProfile {
   maxTrucks: number;
   /** Boats in flight across all harbours. */
   maxBoats: number;
+  /** Cable-car cabins in flight across all cloud services. */
+  maxCabins: number;
   /** Smoke and steam puffs per power station; large and transparent, so overdraw. */
   plumePuffs: number;
   /** Chimney puffs per city, shared by its buildings in proportion to their CPU. */
@@ -71,6 +73,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 120,
     maxTrucks: 30,
     maxBoats: 24,
+    maxCabins: 12,
     plumePuffs: 20,
     chimneyPuffs: 48,
   },
@@ -93,6 +96,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 240,
     maxTrucks: 60,
     maxBoats: 24,
+    maxCabins: 24,
     plumePuffs: 36,
     chimneyPuffs: 96,
   },
@@ -115,6 +119,7 @@ export const QUALITY_PROFILES: Record<QualityTier, QualityProfile> = {
     maxCars: 240,
     maxTrucks: 60,
     maxBoats: 24,
+    maxCabins: 40,
     plumePuffs: 56,
     chimneyPuffs: 160,
   },

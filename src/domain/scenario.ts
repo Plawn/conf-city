@@ -1,6 +1,7 @@
 import type { SnapshotMessage } from "@proxy/protocol";
 import { loadWorld } from "../loaders/loadWorld";
 import { BLAST_SEC, BLAST_SINK_DELAY } from "./blast";
+import { buildClock, type Clock, clockMs, emptyMoment, type Moment } from "./replayClock";
 import type { CityMeta, GraphNode, InterCityLink, NodeType, ResolvedLink, World } from "./types";
 
 /**
@@ -29,6 +30,8 @@ export interface ScenarioCity extends Lifetime {
   name: string;
   description?: string;
   biome?: string;
+  /** External managed service (LLM API, hosted DB): a floating island in the sky. */
+  cloud?: boolean;
   /** Machine capacity: `memMb` sizes the island. */
   meta?: CityMeta;
   nodes: ScenarioNode[];
@@ -40,8 +43,12 @@ export interface Scenario {
   /** ISO dates bounding the timeline. */
   start: string;
   end: string;
-  /** Video seconds spent between `start` and `end`. */
+  /** Video seconds between `start` and `end` at the base pace; slow motion adds to it. */
   durationSec: number;
+  /** Least video seconds between two distinct event dates (default `rampSec`, 0 = linear). */
+  minGapSec?: number;
+  /** Seconds between buildings that arrive on the same date (default half `rampSec`, 0 = together). */
+  staggerSec?: number;
   /** Wide shot before the first date / after the last one. */
   introSec?: number;
   outroSec?: number;
@@ -65,6 +72,8 @@ export interface Timeline {
   cityMeta: Map<string, CityMeta>;
   totalSec: number;
   rampSec: number;
+  /** Date → video second knots (ms, s): piecewise linear, slower where events crowd. */
+  clock: Clock;
   /** cityId → [appear, vanish) in video seconds. */
   cities: Map<string, Span>;
   /** `cityId/nodeId` → span, clipped to its city's. */
@@ -141,11 +150,10 @@ export function parseScenario(json: unknown): Timeline {
   const intro = scn.introSec ?? DEFAULT_INTRO_SEC;
   const outro = scn.outroSec ?? DEFAULT_OUTRO_SEC;
   const rampSec = scn.rampSec ?? DEFAULT_RAMP_SEC;
-  const toVideo = (ms: number) => intro + ((ms - start) / (end - start)) * scn.durationSec;
-  const totalSec = intro + scn.durationSec + outro;
+  // Spans are dated in ms first (±Infinity = open), mapped to video seconds once the clock is known.
   const spanOf = (life: Lifetime, where: string, within?: Span): Span => {
-    let from = life.since ? toVideo(parseDate(life.since, `${where}.since`, errors)) : 0;
-    let to = life.until ? toVideo(parseDate(life.until, `${where}.until`, errors)) : Infinity;
+    let from = life.since ? parseDate(life.since, `${where}.since`, errors) : -Infinity;
+    let to = life.until ? parseDate(life.until, `${where}.until`, errors) : Infinity;
     if (within) {
       from = Math.max(from, within.from);
       to = Math.min(to, within.to);
@@ -172,6 +180,7 @@ export function parseScenario(json: unknown): Timeline {
       name: c.name ?? c.id,
       ...(c.description ? { description: c.description } : {}),
       ...(c.biome ? { biome: c.biome as World["cities"][number]["biome"] } : {}),
+      ...(c.cloud === true ? { cloud: true } : {}),
       nodes: (c.nodes ?? []).map((n) => {
         const { since: _s, until: _u, links: raw, ...node } = n;
         const links: string[] = [];
@@ -203,14 +212,77 @@ export function parseScenario(json: unknown): Timeline {
   // A link lives only while both of its ends do.
   for (const l of links) {
     const key = linkKeyOf(l);
-    const span = linkSpans.get(key) ?? { from: 0, to: Infinity };
+    const span = linkSpans.get(key) ?? { from: -Infinity, to: Infinity };
     const a = nodes.get(`${l.fromCityId}/${l.fromNodeId}`);
     const b = nodes.get(`${l.toCityId}/${l.toNodeId}`);
     linkSpans.set(key, {
-      from: Math.max(span.from, a?.from ?? 0, b?.from ?? 0),
+      from: Math.max(span.from, a?.from ?? -Infinity, b?.from ?? -Infinity),
       to: Math.min(span.to, a?.to ?? Infinity, b?.to ?? Infinity),
     });
   }
+
+  // What happens on each date, in scenario order: the clock plays each date as a cascade.
+  const moments = new Map<number, Moment>();
+  const momentAt = (ms: number) => {
+    let m = moments.get(ms);
+    if (!m) {
+      m = emptyMoment();
+      moments.set(ms, m);
+    }
+    return m;
+  };
+  const mark = (span: Span, key: string, add: (m: Moment) => void, blast: boolean) => {
+    if (!(span.from < span.to)) {
+      return;
+    }
+    if (Number.isFinite(span.from)) {
+      add(momentAt(span.from));
+    }
+    if (Number.isFinite(span.to)) {
+      const m = momentAt(span.to);
+      m.removals.push(`${key}<`);
+      m.blast ||= blast;
+    }
+  };
+  for (const [id, span] of cities) {
+    mark(span, `c:${id}`, (m) => m.cities.push(`c:${id}>`), true);
+  }
+  for (const [addr, span] of nodes) {
+    mark(span, `n:${addr}`, (m) => m.nodes.push(`n:${addr}>`), true);
+  }
+  for (const l of links) {
+    const key = linkKeyOf(l);
+    const ends = [`${l.fromCityId}/${l.fromNodeId}`, `${l.toCityId}/${l.toNodeId}`];
+    mark(
+      linkSpans.get(key)!,
+      `l:${key}`,
+      (m) => m.links.push({ key: `l:${key}>`, ends: ends.map((a) => `n:${a}>`) }),
+      false,
+    );
+  }
+  for (const s of [scn.minGapSec, scn.staggerSec]) {
+    if (!(s === undefined || s >= 0)) {
+      throw new ScenarioError("minGapSec and staggerSec must be >= 0");
+    }
+  }
+  const { clock, at } = buildClock({ start, end, intro, durationSec: scn.durationSec }, moments, {
+    gap: scn.minGapSec ?? rampSec,
+    stagger: scn.staggerSec ?? rampSec / 2,
+  });
+  const toVideo = (s: Span, key: string): Span => ({
+    from: Number.isFinite(s.from) ? at(s.from, `${key}>`) : 0,
+    to: Number.isFinite(s.to) ? at(s.to, `${key}<`) : Infinity,
+  });
+  for (const [prefix, spans] of [
+    ["c", cities],
+    ["n", nodes],
+    ["l", linkSpans],
+  ] as const) {
+    for (const [id, s] of spans) {
+      spans.set(id, toVideo(s, `${prefix}:${id}`));
+    }
+  }
+  const totalSec = clock.sec[clock.sec.length - 1]! + outro;
 
   const events: TimelineEvent[] = [];
   const push = (span: Span, what: TimelineEvent["what"], id: string, cityId: string) => {
@@ -239,6 +311,7 @@ export function parseScenario(json: unknown): Timeline {
     cityMeta,
     totalSec,
     rampSec,
+    clock,
     cities,
     nodes,
     linkSpans,
@@ -296,15 +369,11 @@ export function activeKey(p: Presence): string {
 
 /** Scenario date shown at video second `t`, clamped to the period. */
 export function dateAt(tl: Timeline, t: number): Date {
-  const scn = tl.scenario;
-  const start = Date.parse(scn.start);
-  const end = Date.parse(scn.end);
-  const intro = scn.introSec ?? DEFAULT_INTRO_SEC;
-  const f = Math.max(0, Math.min(1, (t - intro) / scn.durationSec));
-  return new Date(start + f * (end - start));
+  const { ms } = tl.clock;
+  return new Date(Math.max(ms[0]!, Math.min(ms[ms.length - 1]!, clockMs(tl.clock, t))));
 }
 
-const NODE_TYPES: ReadonlySet<string> = new Set<NodeType>(["app", "db", "cache", "queue"]);
+export const NODE_TYPES: ReadonlySet<string> = new Set<NodeType>(["app", "db", "cache", "queue"]);
 
 /**
  * A scenario skeleton from a proxy snapshot: today's infrastructure, everything there from

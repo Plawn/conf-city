@@ -6,6 +6,8 @@ import type {
   ResolvedNode,
 } from "../domain/types";
 import { buildBridges, pairKey } from "./bridges";
+import { buildCableways } from "./cableway";
+import { cityAltitude, cloudOutline } from "./cloud";
 import { centroid, polygonBounds } from "./geometry";
 import { translateHarbour } from "./harbour";
 import { placeIslands, planGates } from "./islands";
@@ -13,7 +15,14 @@ import { buildGroups, buildLocalCity, type LocalCity, planHarbours } from "./loc
 import type { GateRequest } from "./roads/bridgehead";
 import { buildRoadNetwork } from "./roads/network";
 import { translate, translateRoads, translateZone } from "./translate";
-import { type CityLayout, linkKey, type UtilityPlot, type Vec2, type WorldLayout } from "./types";
+import {
+  type CityLayout,
+  linkKey,
+  type RoadNetwork,
+  type UtilityPlot,
+  type Vec2,
+  type WorldLayout,
+} from "./types";
 import { placeUtilityPlot, translateUtilityPlot } from "./utilityPlot";
 
 /**
@@ -43,9 +52,10 @@ export function layoutWorld(
   biomes: ReadonlyMap<string, BiomeId> = new Map(),
   ingress: ReadonlySet<string> = new Set(),
   capacities: ReadonlyMap<string, number> = new Map(),
+  clouds: ReadonlySet<string> = new Set(),
 ): WorldLayout {
   return assembleWorld(
-    planWorld(cityIds, staticNodes, links, discoveredNodes, biomes, ingress, capacities),
+    planWorld(cityIds, staticNodes, links, discoveredNodes, biomes, ingress, capacities, clouds),
   );
 }
 
@@ -56,7 +66,21 @@ export interface WorldPlan {
   links: ResolvedLink[];
   pairGates: Map<string, [Vec2, Vec2]>;
   gateRequests: Map<string, GateRequest[]>;
+  /**
+   * Cloud services: placed like islands, but never given a bridgehead. Their deck,
+   * in world coordinates, sized once from the full plan so it never resizes or rebuilds.
+   */
+  clouds: ReadonlyMap<string, { outline: Vec2[]; center: Vec2 }>;
 }
+
+/** A cloud service carries no streets. */
+const NO_ROADS: RoadNetwork = {
+  segments: [],
+  roundabouts: [],
+  driveways: [],
+  ring: [],
+  routes: new Map(),
+};
 
 export function planWorld(
   cityIds: string[],
@@ -66,6 +90,7 @@ export function planWorld(
   biomes: ReadonlyMap<string, BiomeId> = new Map(),
   ingress: ReadonlySet<string> = new Set(),
   capacities: ReadonlyMap<string, number> = new Map(),
+  clouds: ReadonlySet<string> = new Set(),
 ): WorldPlan {
   const ids = [...new Set(cityIds)];
   const locals = ids.map((cityId) =>
@@ -76,15 +101,28 @@ export function planWorld(
       discoveredNodes,
       biomes.get(cityId) ?? DEFAULT_BIOME,
       ingress,
-      capacities.get(cityId),
+      // A managed service has no machine to size: its cloud fits what it carries.
+      clouds.has(cityId) ? undefined : capacities.get(cityId),
     ),
   );
   const offsets = placeIslands(locals, links);
   planHarbours(locals, offsets);
   // Bridgeheads first: the feeder streets to them are part of the road network,
   // so roads can only be routed once the islands know who faces whom.
-  const { pairGates, gateRequests } = planGates(locals, offsets, links);
-  return { locals, offsets, links, pairGates, gateRequests };
+  // Links still pull a cloud next to its users, but no bridge climbs to the sky.
+  const grounded = links.filter(
+    (l) => !l.interCity || (!clouds.has(l.fromCityId) && !clouds.has(l.toCityId)),
+  );
+  const { pairGates, gateRequests } = planGates(locals, offsets, grounded);
+  const decks = new Map<string, { outline: Vec2[]; center: Vec2 }>();
+  locals.forEach((local, i) => {
+    if (clouds.has(local.cityId)) {
+      const [dx, dz] = offsets[i]!;
+      const outline = cloudOutline(local.layout.nodes).map((p) => translate(p, dx, dz));
+      decks.set(local.cityId, { outline, center: centroid(outline) });
+    }
+  });
+  return { locals, offsets, links, pairGates, gateRequests, clouds: decks };
 }
 
 /**
@@ -123,41 +161,48 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
     const gates = (plan.gateRequests.get(local.cityId) ?? []).filter(
       (r) => !active || active.links.has(r.key),
     );
+    const deck = plan.clouds.get(local.cityId);
+    const cloud = deck !== undefined;
     // A copy: attaching driveways inserts vertices, and the plan is assembled again and again.
-    const roads = buildRoadNetwork(nodesLayout, intraLinks, gates, {
-      ring: [...local.ring],
-      grid: local.grid,
-    });
+    const roads = cloud
+      ? NO_ROADS
+      : buildRoadNetwork(nodesLayout, intraLinks, gates, {
+          ring: [...local.ring],
+          grid: local.grid,
+        });
     // After the roads: the plot is chosen against the streets that were actually
     // drawn, and against the bridgeheads already attached to the ring.
     const worldPlot = active?.plots?.get(local.cityId);
-    const plot = active?.plots?.has(local.cityId)
-      ? undefined
-      : placeUtilityPlot({
-          cityId: local.cityId,
-          outline: local.outline,
-          ring: roads.ring.length > 0 ? roads.ring : local.ring,
-          roads,
-          buildings: nodesLayout.nodes.map((n) => [n.position[0], n.position[2]] as Vec2),
-          gates: gates.map((r) => r.gate.hit),
-        });
+    const plot =
+      cloud || active?.plots?.has(local.cityId)
+        ? undefined
+        : placeUtilityPlot({
+            cityId: local.cityId,
+            outline: local.outline,
+            ring: roads.ring.length > 0 ? roads.ring : local.ring,
+            roads,
+            buildings: nodesLayout.nodes.map((n) => [n.position[0], n.position[2]] as Vec2),
+            gates: gates.map((r) => r.gate.hit),
+          });
+    // World y is the deck's altitude: cameras and effects aim at a cloud's buildings, not the sea.
+    const y = cityAltitude({ cloud });
     const cityNodes = nodesLayout.nodes.map((n) => ({
       ...n,
-      position: [n.position[0] + dx, n.position[1], n.position[2] + dz] as [number, number, number],
+      position: [n.position[0] + dx, y, n.position[2] + dz] as [number, number, number],
     }));
-    const outline = local.outline.map((p) => translate(p, dx, dz));
-    const groups = active ? buildGroups(nodesLayout.nodes) : local.groups;
+    const outline = deck?.outline ?? local.outline.map((p) => translate(p, dx, dz));
+    const groups = cloud ? [] : active ? buildGroups(nodesLayout.nodes) : local.groups;
     const layout: CityLayout = {
       cityId: local.cityId,
       biome: local.biome,
       ...(local.crowding != null ? { crowding: local.crowding } : {}),
       ...(local.packed ? { packed: true } : {}),
       nodes: cityNodes,
-      center: centroid(outline),
+      center: deck?.center ?? centroid(outline),
       outline,
       ...(local.land ? { land: local.land.map((p) => translate(p, dx, dz)) } : {}),
       bounds: polygonBounds(outline) ?? { cx: dx, cz: dz, width: 4, height: 4 },
-      roads: translateRoads(roads, dx, dz),
+      roads: cloud ? NO_ROADS : translateRoads(roads, dx, dz),
       groups: groups.map((g) => translateZone(g, dx, dz)),
       ...(local.discoveredZone
         ? { discoveredZone: translateZone(local.discoveredZone, dx, dz) }
@@ -165,6 +210,7 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
       ...(local.harbour ? { harbour: translateHarbour(local.harbour, dx, dz) } : {}),
       ...(worldPlot ? { utilityPlot: worldPlot } : {}),
       ...(plot ? { utilityPlot: translateUtilityPlot(plot, dx, dz) } : {}),
+      ...(cloud ? { cloud: true as const } : {}),
     };
     cities.set(local.cityId, layout);
     nodes.push(...cityNodes);
@@ -177,5 +223,10 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
         ),
       )
     : plan.pairGates;
-  return { nodes, cities, bridges: buildBridges(cities, links, pairGates) };
+  return {
+    nodes,
+    cities,
+    bridges: buildBridges(cities, links, pairGates),
+    cableways: buildCableways(cities, links),
+  };
 }

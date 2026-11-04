@@ -26,6 +26,8 @@ themselves with the commercial palette.
 
 `industrial-warehouse/sheds/datacenter.glb` are datastore hangars; `industrial-depot/cold-storage.glb` are cache depots; `industrial-terminal/containers.glb` are queue buildings. These models are created by this project, not imported from Kenney. Regenerate with `bun scripts/build-industrial-models.ts`. Each uses one merged geometry with vertex colours, no textures, and fits the existing building plots. Height variation is constrained for industrial models.
 
+`kind-factory/legacy-shack/storefront/workshop/watchtower/library/switchboard/relay-pylon/relay-station/silo/offshore-vault/kiosk.glb` come from the same script (`src/components/buildings/kindGeometry.ts`): the looks a scenario node asks for with `building`, listed in `BUILDING_KINDS` (`src/domain/nodeStyle.ts`) with the type whose plot they fit.
+
 ## Adding a building variant
 
 `src/domain/nodeStyle.ts` lists, per type, the models a building may be drawn with

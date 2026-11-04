@@ -8,6 +8,7 @@ import {
   CINEMA_MODE,
   REPLAY_URL,
   replayCommit,
+  replayPresence,
   useReplayStore,
 } from "../../store/replayStore";
 import { WorldScene } from "../WorldScene";
@@ -83,6 +84,8 @@ export function ReplayApp() {
   );
 }
 
+const presenceOf = (cityId: string) => replayPresence.cities.get(cityId) ?? 0;
+
 function ReplayPlayer({ timeline, onOpen }: { timeline: Timeline; onOpen: (file: File) => void }) {
   const base = useReplayBase(timeline);
   const key = useReplayStore((s) => s.activeKey);
@@ -105,9 +108,10 @@ function ReplayPlayer({ timeline, onOpen }: { timeline: Timeline; onOpen: (file:
         telemetry={scene.telemetry}
         cityMeta={timeline.cityMeta}
         wrapCity={RisingCity}
+        cityPresence={presenceOf}
       >
         <ReplayDriver timeline={timeline} shots={base.shots} />
-        <ReplayBlasts nodes={scene.layout.nodes} />
+        <ReplayBlasts layout={scene.layout} />
       </WorldScene>
       <ReplayOverlay timeline={timeline} counts={scene.counts} />
       {!CINEMA_MODE && <ReplayBar timeline={timeline} onOpen={onOpen} />}

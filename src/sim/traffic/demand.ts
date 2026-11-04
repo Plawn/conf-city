@@ -5,6 +5,12 @@ import type { Sim, TrafficRoute } from "./pool";
 export function liveTelemetry(t: NodeTelemetry | undefined, now: number): t is NodeTelemetry {
   return !!t && t.liveness !== "down" && t.liveness !== "unknown" && now - t.lastSeen < 30_000;
 }
+
+/** What a live service sends, in kbps (TX, else requests at ~20 kbps each); 0 when it isn't live. */
+export function sourceFlowKbps(t: NodeTelemetry | undefined, now: number): number {
+  return liveTelemetry(t, now) ? Math.max(0, t.metrics.netTxKbps ?? (t.metrics.rps ?? 0) * 20) : 0;
+}
+
 export function writeDemand(
   sim: Sim,
   routes: TrafficRoute[],
@@ -28,7 +34,7 @@ export function writeDemand(
     if (route.sourceAddr) {
       const t = telemetry?.get(route.sourceAddr);
       if (liveTelemetry(t, now)) {
-        flow = Math.max(0, t.metrics.netTxKbps ?? (t.metrics.rps ?? 0) * 20);
+        flow = sourceFlowKbps(t, now);
         rate = route.rate ?? 0.15 + 0.5 * Math.min(flow / 2000, 3);
       }
     } else if (route.ambientCityId) {

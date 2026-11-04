@@ -1,6 +1,7 @@
 import type { CameraTarget } from "../domain/camera";
 import type { PositionedNode } from "../domain/types";
 import type { CityBounds } from "../layout/bounds";
+import { cityAltitude } from "../layout/cloud";
 import type { WorldLayout } from "../layout/types";
 
 const DEFAULT_CAMERA_DISTANCE = 30;
@@ -14,7 +15,8 @@ export function fitAllTarget(layout: WorldLayout, visibleCities: Set<string>): C
   let minX = Infinity,
     maxX = -Infinity,
     minZ = Infinity,
-    maxZ = -Infinity;
+    maxZ = -Infinity,
+    maxY = 0;
   for (const [cityId, city] of layout.cities) {
     if (!visibleCities.has(cityId)) {
       continue;
@@ -23,16 +25,20 @@ export function fitAllTarget(layout: WorldLayout, visibleCities: Set<string>): C
     maxX = Math.max(maxX, city.bounds.cx + city.bounds.width / 2);
     minZ = Math.min(minZ, city.bounds.cz - city.bounds.height / 2);
     maxZ = Math.max(maxZ, city.bounds.cz + city.bounds.height / 2);
+    maxY = Math.max(maxY, cityAltitude(city));
   }
   if (minX === Infinity) {
     return resetTarget();
   }
-  return targetFor({
-    cx: (minX + maxX) / 2,
-    cz: (minZ + maxZ) / 2,
-    width: maxX - minX,
-    height: maxZ - minZ,
-  });
+  return targetFor(
+    {
+      cx: (minX + maxX) / 2,
+      cz: (minZ + maxZ) / 2,
+      width: maxX - minX,
+      height: maxZ - minZ,
+    },
+    maxY / 2,
+  );
 }
 
 export function fitCityTarget(layout: WorldLayout, cityId: string): CameraTarget | null {
@@ -40,14 +46,14 @@ export function fitCityTarget(layout: WorldLayout, cityId: string): CameraTarget
   if (!city) {
     return null;
   }
-  return targetFor(city.bounds);
+  return targetFor(city.bounds, cityAltitude(city));
 }
 
 export function nodeTarget(node: PositionedNode): CameraTarget {
   return { lookAt: [...node.position], nonce: Date.now() };
 }
 
-function targetFor(bounds: CityBounds): CameraTarget {
+function targetFor(bounds: CityBounds, y = 0): CameraTarget {
   const span = Math.max(bounds.width, bounds.height, 4);
-  return { lookAt: [bounds.cx, 0, bounds.cz], distance: span + 10, nonce: Date.now() };
+  return { lookAt: [bounds.cx, y, bounds.cz], distance: span + 10, nonce: Date.now() };
 }

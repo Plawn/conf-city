@@ -1,6 +1,6 @@
 import { useGLTF } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { Color, type Group, Matrix4 } from "three";
+import { Color, type Group, Matrix4, type Object3D } from "three";
 import { buildingBlastScale } from "../../domain/blast";
 import type { BuildingVariant } from "../../domain/buildingVariant";
 import { NODE_STYLE } from "../../domain/nodeStyle";
@@ -69,8 +69,7 @@ export function InstancedBuilding({
   const registration = useRef<ReturnType<typeof batches.add> | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new position must move the registration to its new spatial batch.
   useLayoutEffect(() => {
-    modelGroup.current!.updateWorldMatrix(true, false);
-    binding.matrix.copy(modelGroup.current!.matrixWorld);
+    batchLocal(binding.matrix, modelGroup.current!, batches.group);
     const registered = batches.add(binding, model.parts);
     registration.current = registered;
     return () => {
@@ -88,10 +87,10 @@ export function InstancedBuilding({
       if (REPLAY_MODE) {
         riseTo(riseGroup.current!, addr);
       }
-      modelGroup.current!.updateWorldMatrix(true, false);
-      const transformChanged = !binding.matrix.equals(modelGroup.current!.matrixWorld);
+      batchLocal(SCRATCH, modelGroup.current!, batches.group);
+      const transformChanged = !binding.matrix.equals(SCRATCH);
       if (transformChanged) {
-        binding.matrix.copy(modelGroup.current!.matrixWorld);
+        binding.matrix.copy(SCRATCH);
       }
       const result = animation.advance(materials, visual, night, time, delta);
       if (transformChanged || result.changed) {
@@ -136,4 +135,13 @@ function riseTo(group: Group, addr: string) {
   const up = 1 - (1 - presence) ** 3;
   const xz = 0.6 + 0.4 * presence;
   group.scale.set(xz, Math.max(0.001, up), xz);
+}
+
+const SCRATCH = new Matrix4();
+
+/** `object`'s transform in the batch group's space: the batch is drawn inside the city's (lifted) group. */
+function batchLocal(out: Matrix4, object: Object3D, root: Object3D) {
+  object.updateWorldMatrix(true, false);
+  root.updateWorldMatrix(true, false);
+  return out.copy(root.matrixWorld).invert().multiply(object.matrixWorld);
 }

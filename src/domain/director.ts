@@ -1,3 +1,5 @@
+import { MAST_HEIGHT } from "../layout/cableway";
+import { cityAltitude } from "../layout/cloud";
 import type { WorldLayout } from "../layout/types";
 import type { Timeline, TimelineEvent } from "./scenario";
 
@@ -41,6 +43,9 @@ interface Box {
   maxX: number;
   minZ: number;
   maxZ: number;
+  /** Altitude range: sea level, or a cloud service's deck. */
+  minY: number;
+  maxY: number;
 }
 
 function frame(box: Box | null): Omit<ShotKey, "t"> | null {
@@ -49,20 +54,49 @@ function frame(box: Box | null): Omit<ShotKey, "t"> | null {
   }
   const span = Math.max(box.maxX - box.minX, box.maxZ - box.minZ, 4);
   return {
-    lookAt: [(box.minX + box.maxX) / 2, 0, (box.minZ + box.maxZ) / 2],
+    lookAt: [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2, (box.minZ + box.maxZ) / 2],
     distance: Math.max(MIN_DISTANCE, (span + 10) * 1.05),
   };
 }
 
-function grow(box: Box | null, minX: number, maxX: number, minZ: number, maxZ: number): Box {
+function grow(box: Box | null, minX: number, maxX: number, minZ: number, maxZ: number, y = 0): Box {
   return box
     ? {
         minX: Math.min(box.minX, minX),
         maxX: Math.max(box.maxX, maxX),
         minZ: Math.min(box.minZ, minZ),
         maxZ: Math.max(box.maxZ, maxZ),
+        minY: Math.min(box.minY, y),
+        maxY: Math.max(box.maxY, y),
       }
-    : { minX, maxX, minZ, maxZ };
+    : { minX, maxX, minZ, maxZ, minY: y, maxY: y };
+}
+
+/** A cloud service or one of its buildings arriving: it comes down from the sky in a shot of its own. */
+function cloudArrival(layout: WorldLayout, e: TimelineEvent) {
+  return e.kind === "add" && e.what !== "link" && !!layout.cities.get(e.cityId)?.cloud;
+}
+
+/** The cloud and the nearest mast of its cable car, so the line it strings is in the frame. */
+function cloudFrame(layout: WorldLayout, cityId: string) {
+  const city = layout.cities.get(cityId);
+  let box = citiesBox(layout, [cityId]);
+  if (!city || !box) {
+    return null;
+  }
+  let mast: [number, number] | null = null;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (const way of layout.cableways) {
+    const d = Math.hypot(way.base[0] - city.center[0], way.base[1] - city.center[1]);
+    if (way.cloud === cityId && d < bestD) {
+      bestD = d;
+      mast = way.base;
+    }
+  }
+  if (mast) {
+    box = grow(box, mast[0] - 1, mast[0] + 1, mast[1] - 1, mast[1] + 1, MAST_HEIGHT);
+  }
+  return frame(box);
 }
 
 function citiesBox(layout: WorldLayout, ids: Iterable<string>): Box | null {
@@ -76,6 +110,7 @@ function citiesBox(layout: WorldLayout, ids: Iterable<string>): Box | null {
         b.cx + b.width / 2,
         b.cz - b.height / 2,
         b.cz + b.height / 2,
+        cityAltitude(layout.cities.get(id)),
       );
     }
   }
@@ -99,7 +134,8 @@ function clusterFrame(tl: Timeline, layout: WorldLayout, events: TimelineEvent[]
     let box: Box | null = null;
     for (const n of layout.nodes) {
       if (addrs.includes(`${n.cityId}/${n.id}`)) {
-        box = grow(box, n.position[0] - 3, n.position[0] + 3, n.position[2] - 3, n.position[2] + 3);
+        const [x, y, z] = n.position;
+        box = grow(box, x - 3, x + 3, z - 3, z + 3, y);
       }
     }
     if (box) {
@@ -135,11 +171,24 @@ export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
   }
 
   const clusters: TimelineEvent[][] = [];
+  /** Open shot per cloud service: its buildings join it even when the islands keep busy meanwhile. */
+  const skies = new Map<string, TimelineEvent[]>();
+  let current: TimelineEvent[] | undefined;
   for (const e of tl.events) {
     if (e.at >= outroAt) {
       continue;
     }
-    const current = clusters[clusters.length - 1];
+    if (cloudArrival(layout, e)) {
+      const sky = skies.get(e.cityId);
+      if (sky && e.at - sky[0]!.at < MAX_CLUSTER) {
+        sky.push(e);
+      } else {
+        const opened = [e];
+        skies.set(e.cityId, opened);
+        clusters.push(opened);
+      }
+      continue;
+    }
     const first = current?.[0];
     const last = current?.[current.length - 1];
     // Demolitions get their own shot: never merged with what is being built.
@@ -153,15 +202,24 @@ export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
     ) {
       current.push(e);
     } else {
-      clusters.push([e]);
+      current = [e];
+      clusters.push(current);
     }
   }
   clusters.forEach((cluster, i) => {
     const start = cluster[0]!.at;
-    const end = cluster[cluster.length - 1]!.at + tl.rampSec + HOLD;
-    add(start - LEAD, clusterFrame(tl, layout, cluster));
+    const last = cluster[cluster.length - 1]!.at;
+    const end = last + tl.rampSec + HOLD;
+    const sky = cloudArrival(layout, cluster[0]!);
+    add(
+      start - LEAD,
+      sky ? cloudFrame(layout, cluster[0]!.cityId) : clusterFrame(tl, layout, cluster),
+    );
     if (cluster[0]!.kind === "remove") {
-      holdUntil = cluster[cluster.length - 1]!.at + BLAST_HOLD;
+      holdUntil = last + BLAST_HOLD;
+    } else if (sky) {
+      // Stay until it has landed and its buildings are up.
+      holdUntil = end;
     }
     const next = clusters[i + 1]?.[0]?.at ?? outroAt;
     if (next - end > WIDE_GAP) {
