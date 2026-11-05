@@ -4,7 +4,7 @@ import { useReplayStore } from "../../store/replayStore";
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
 
-/** Transport for tuning a scenario: play, scrub (event ticks), speed, camera mode. */
+/** Transport for tuning a scenario: play, scrub (event ticks, chapter jumps), speed, camera mode. */
 export function ReplayBar({
   timeline,
   onOpen,
@@ -61,6 +61,17 @@ export function ReplayBar({
             />
           ))}
         </div>
+        {timeline.chapters.map((ch) => (
+          <button
+            key={ch.index}
+            type="button"
+            title={ch.title}
+            aria-label={`Chapter ${ch.index + 1}: ${ch.title}`}
+            className="absolute -top-2.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white/70 bg-surface-900 hover:bg-white"
+            style={{ left: `${(ch.at / total) * 100}%` }}
+            onClick={() => setT(ch.at)}
+          />
+        ))}
       </div>
       <select
         className="glass-button rounded px-2 py-1"

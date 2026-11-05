@@ -28,12 +28,20 @@ over the period, each piece dated. Types: `Scenario` in `src/domain/scenario.ts`
 | `minGapSec` | Least video seconds between two distinct event dates (default `rampSec`, 0 = linear) |
 | `staggerSec` | Seconds between buildings arriving on the same date (default `rampSec / 2`, 0 = together) |
 | `introSec` / `outroSec` | Wide shot before / after (default 3 / 4) |
+| `maxGapSec` | Time-lapse: a quiet stretch between two event dates never takes more than this (default none = base pace) |
 | `rampSec` | Seconds a building takes to rise or sink (default 1.2) |
 | `sunTime` | ISO instant the sun is frozen at |
+| `lang` | BCP 47 tag of the on-screen text and dates (`"fr"`); default the viewer's locale |
+| `chapters[]` | Story beats: `{ "at", "title", "caption"?, "stat"? }` — opens on `at` with a title card, owns the events up to the next chapter |
+| `chapterSec` | Seconds the date holds on a chapter's opening while its title card shows (default 1.8) |
 | `cities[]` | `id`, `name`, `biome`, `meta` (`CityMeta`: `memMb` sizes the island), `nodes[]` |
 | `cities[].nodes[]` | `GraphNode` fields; `links` items are a node id or `{ "to", "since", "until" }` |
 | `cities[].nodes[].building` | Look (`BUILDING_KINDS`): `factory`, `legacy-shack`, `office-tower`, `storefront`, `workshop`, `watchtower`, `library`, `switchboard`, `relay-pylon`, `relay-station` (app), `silo`, `offshore-vault`, `analytics-warehouse` (db), `kiosk` (cache); unknown or other-type kinds draw the type's models |
 | `links[]` | Inter-city links `{ "from": "city/node", "to": "city/node" }` → bridges |
+
+A chapter's events start after its hold, so a building dated the same day rises once the card
+is gone. Chapters are optional, but a raw year (hundreds of events) is unwatchable without
+them: `bun scripts/condense-scenario.ts` writes a story-shaped scenario from one (below).
 
 Every city, node and link takes optional `since` / `until` (ISO dates; omitted = from the start /
 until the end). Lifetimes are clipped: a node never outlives its city, a link never outlives
@@ -49,6 +57,41 @@ A skeleton from today's infrastructure (everything present from 1 January), then
 bun scripts/scenario-from-snapshot.ts                       # live proxy (ws://localhost:4001/ws/frontend)
 bun scripts/scenario-from-snapshot.ts snapshot.json --year 2026 --out public/scenarios/2026.json
 ```
+
+## Condensing a raw scenario
+
+A scenario generated from git history is a full year of commits. `condense-scenario` turns it into a story.
+
+```sh
+bun scripts/condense-scenario.ts raw.json full.json --lang fr            # ~100 s
+bun scripts/condense-scenario.ts raw.json teaser.json --lang fr --teaser # ~60 s
+bun scripts/check-scenario.ts full.json && bun scripts/check-shots.ts full.json
+```
+
+The tool is pure (`src/domain/scenarioCondense.ts`, plus `…Core.ts` and `…Chapters.ts`) and deterministic. Unknown node fields such as `building` are kept. It prints a report:
+
+- events before and after, both with links and as city/service beats only;
+- clouds, churn merges, staging folds, prunes and cuts;
+- moves, grouped by (from, to, date);
+- each chapter with its date, its length in seconds, its title and its stat;
+- the solved `durationSec` and `maxGapSec`, and the total length.
+
+Rules, in the order they run (defaults in brackets):
+
+| # | Rule | Option |
+|---|---|---|
+| 1 | Clouds. A city whose services all use an external look (`relay-station`, `offshore-vault`) becomes `cloud: true`, and its `meta.memMb` is dropped. | `--cloud id,id` |
+| 2 | Churn. A service removed and then re-added under the same id or label (parentheticals ignored) is one lifetime. Skipped when the id reappears on another island within `moveDays`. Staging twins fold into production (`--keep-staging` disables this). | `--churn-days` [30] |
+| 3 | Prune. Services alive less than `minDays` are removed, with their links; cities left empty go too. Migration ends are kept. | `--min-days` [14] |
+| 4 | Migrations. A service leaving island A and rising on island B is matched by id, then by label, within ±`moveDays`. The old service's `until` is set to the new one's `since`. | `--move-days` [14] |
+| 5 | Snap. Bursts on one island snap to their first date within `snapDays`, and same-stack arrivals within `stackDays`. Stack = id prefix before the first `.`, else group, else id. Removals snap the same way. Arrivals within `openDays` of `start` join the starting point. Then dates snap across islands, but island arrival dates never move. Links whose span is empty are dropped. | `--snap-days` [4], `--stack-days` [10], `--open-days` [14] |
+| 6 | Cap. Protected: islands, clouds, migrations, ingress, db, services there all along, arrivals that share an island's date, and for every cloud the island end of its longest-lived link (so each cloud keeps a cable car). The rest drop stack by stack until the city/service beats fit: legacy stacks first (there from the start, only torn down), then the smallest. | `--max-events` [130], `--top-stacks` |
+| 7 | Chapters. Candidates are scored: opening > island arrival > migration of ≥ 5 services > cloud arrival > busiest date. They are taken greedily, at least `chapterDays` apart, and the stronger candidate absorbs the weaker one's services. Titles come from fr/en templates (≤ 32 characters). `--lang` also sets the scenario's `lang`. | `--chapters` [9], `--chapter-days` [10] |
+| 8 | Pacing. Fixed values: `minGapSec` 0.8, `staggerSec` 0.25, `chapterSec` 1.8, `introSec` 3, `outroSec` 6. `durationSec` is bisected until the total lands within 2 s of the target. When the time-lapse cap saturates, `maxGapSec` is raised instead. Several `maxGapSec` and `chapterSec` steps are tried, and the first one in which every chapter lasts at least `minChapterSec` wins. A chapter that is still too short merges with its neighbour when either one is an island arrival ("Groq et Worker-1"), and is dropped otherwise. | `--target` [100], `--max-gap` [1], `--chapter-sec`, `--min-chapter-sec` [6] |
+
+`--teaser` changes these defaults: target 60 s, 7 chapters, 70 beats, the top 6 stacks. It also stops protecting services that are there all along and arrivals sharing an island's date. It keeps only migrations in groups of 5 or more.
+
+`--max-events` counts city and service events. Links rise and fall with their ends and cost no screen time, so they are not counted. `check-scenario` counts every event.
 
 ## How it works
 
@@ -74,16 +117,54 @@ bun scripts/scenario-from-snapshot.ts snapshot.json --year 2026 --out public/sce
   fireball, flying debris and smoke (three pooled instanced draws, `src/domain/blast.ts` for the
   pure, seeded trajectories). An island removed with its buildings sinks `BLAST_SINK_DELAY`
   after they blow up.
-- **Director** — `planShots` (`src/domain/director.ts`) groups events into shots (wide intro →
-  close-up per burst of events → wide outro) and `shotAt` interpolates them. Demolitions never
-  share a shot with arrivals, and the camera holds on them through the blast (`BLAST_HOLD`). A
-  cloud service's arrival and its buildings get a shot of their own too, framed at its altitude
-  with the nearest mast of its cable car, held until they are up. Untick
-  **Director** in the bar to orbit freely.
+- **Director** — `planShots` (`src/domain/director.ts`) plans few, slow, purposeful moves; `shotAt`
+  interpolates them. With chapters, one framing per chapter, landing on its title card
+  (`chapter.at`, slipping at most `holdSec`), so the camera travels during the previous chapter's
+  tail, never during the rises. It frames the cities carrying the bulk of the chapter's buildings
+  (a lone side job stays off frame; an island arriving weighs more); a chapter opening on a cloud
+  is framed at its altitude with the nearest cable-car mast (with no cable car, the nearest
+  island standing, never empty sea). A demolition in a city where nothing
+  rises gets one aside framing both cities, folded into the chapter's framing when too close.
+  Without chapters, bursts of events get a shot each; demolitions are held through the blast
+  (`BLAST_HOLD`) and catch the next burst under way rather than cut short. Everywhere, a framing
+  holds at least `MIN_HOLD` (4 s) before the next move: a move that cannot fit merges into its
+  neighbour, the lighter burst giving way so the heavier lands on time (the intro wide alone may
+  hold less). Holds stay alive: a slow push-in (`DRIFT`) and an orbit of `ORBIT_DEG_PER_SEC`
+  (1.3°/s, easing toward 45° per shot: ≤ 12° in 10 s). A wide shot only fills a quiet stretch
+  longer than `WIDE_GAP` (time-lapse seconds excluded) that can hold it ≥ 4 s; intro and outro
+  wides stay. `bun scripts/check-shots.ts <scenario.json>` prints every shot and the totals (shot
+  count, moving %, holds). Untick **Director** in the bar to orbit freely.
 - **Synthetic telemetry** — every service is healthy with a stable per-address request rate, so
   traffic flows on the roads. Automatic constructions count video time instead of wall time.
 
 Code: `src/components/replay/`, `src/hooks/useReplayModel.ts`, `src/store/replayStore.ts`.
+
+## On-screen narration
+
+Everything below is a pure function of video time (`src/domain/replayStats.ts`), so an exported
+frame matches playback.
+
+- **Chapter title cards** — lower third, left-aligned: "03 / 09", the chapter `title`, its
+  `caption`, and a stat chip. The card fades in over 0.35 s from the chapter's opening, holds
+  through `chapterSec` (the date stands still meanwhile) and fades out over 0.5 s as the first
+  building rises. The chip shows `stat` when given, else what the chapter's events did:
+  `+1 island`, `+1 cloud`, `+N services`, `N moved` (a service removed in one city and added in
+  another, same id or label, within 31 days), `N demolished`.
+- **Progress bar** — a segmented bar along the bottom edge (intro, one segment per chapter,
+  outro), filled to `t`; the current chapter's title sits above its segment, hidden while its
+  card shows.
+- **Corner HUD** — month, servers, clouds and services. While the date leaps (a `maxGapSec`
+  stretch running over 4× the date's mean pace) the month changes without sliding and a ⏩
+  fades in.
+- **Recap** — from the outro's start, the scenario title over six figures: four non-zero counts
+  among services deployed over the period (not only those still standing), islands,
+  clouds, bridges, moved and demolitions, then the longest-lived
+  service still standing (days) and the busiest month (events). It fades in over 0.6 s and each
+  figure counts up over 1.2 s, 0.15 s after the previous one: settled 2.3 s into the outro.
+- **`lang`** — `Intl` formats (month, numbers) use the scenario's `lang` (default the viewer's
+  locale); the HUD and recap words are English, or French when `lang` starts with `fr`.
+
+In the interactive player, chapter dots above the scrub bar jump to a chapter.
 
 ## MP4 export
 

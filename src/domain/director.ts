@@ -30,8 +30,16 @@ const MAX_CLUSTER = 6;
 const LEAD = 1.6;
 /** Linger once the last one is up. */
 const HOLD = 1.2;
-/** A quiet stretch longer than this gets a wide shot. */
-const WIDE_GAP = 5;
+/** A quiet stretch longer than this (time-lapses excluded) may get a wide shot. */
+const WIDE_GAP = 8;
+/** A wide shot is never held for less. */
+const WIDE_MIN_HOLD = 3;
+/** Once a move lands, the camera holds at least this long before the next one. */
+export const MIN_HOLD = 4;
+/** A city is framed when it carries more than this share of the busiest one's buildings. */
+const DOMINANT = 0.3;
+/** A burst's move may land this late (or half-way through it) when the previous framing still holds. */
+const LATE = 0.6;
 /** A demolition shot holds until the fireball has died down. */
 const BLAST_HOLD = 1.6;
 /** Seconds a short camera move takes; a long one stretches up to `MAX_TRANSITION`. */
@@ -39,14 +47,16 @@ export const TRANSITION = 1.6;
 const MAX_TRANSITION = 3.4;
 /** Zoom-out during a long move (van Wijk & Nuij `rho`): higher climbs more. */
 const RHO = 1.3;
-const ORBIT_DEG_PER_SEC = 3;
+/** A hold slowly orbits the look-at, easing toward `MAX_ORBIT_DEG` per shot; moves keep the heading. */
+export const ORBIT_DEG_PER_SEC = 1.3;
+const MAX_ORBIT_DEG = 45;
 /** Close-ups look across the street, wide shots look down from higher. */
 const LOW_ELEVATION = (26 * Math.PI) / 180;
 const HIGH_ELEVATION = (40 * Math.PI) / 180;
 const MIN_DISTANCE = 14;
 /** A held shot slowly pushes in by up to this fraction. */
-const DRIFT = 0.08;
-const DRIFT_SEC = 6;
+const DRIFT = 0.1;
+const DRIFT_SEC = 8;
 /** Half-width (s) of the window the raw path is averaged over: no velocity jump anywhere. */
 const SMOOTH_SEC = 0.5;
 const SMOOTH_SAMPLES = 11;
@@ -92,8 +102,8 @@ function cloudArrival(layout: WorldLayout, e: TimelineEvent) {
   return e.kind === "add" && e.what !== "link" && !!layout.cities.get(e.cityId)?.cloud;
 }
 
-/** The cloud and the nearest mast of its cable car, so the line it strings is in the frame. */
-function cloudFrame(layout: WorldLayout, cityId: string) {
+/** The cloud and the nearest mast of its cable car, so the line it strings is in the frame; a cloud with no cable car takes the nearest island standing (`ground`), never empty sea. */
+function cloudFrame(layout: WorldLayout, cityId: string, ground: Iterable<string>) {
   const city = layout.cities.get(cityId);
   let box = citiesBox(layout, [cityId]);
   if (!city || !box) {
@@ -109,9 +119,28 @@ function cloudFrame(layout: WorldLayout, cityId: string) {
     }
   }
   if (mast) {
-    box = grow(box, mast[0] - 1, mast[0] + 1, mast[1] - 1, mast[1] + 1, MAST_HEIGHT);
+    return frame(grow(box, mast[0] - 1, mast[0] + 1, mast[1] - 1, mast[1] + 1, MAST_HEIGHT));
+  }
+  let island: string | null = null;
+  for (const id of ground) {
+    const g = layout.cities.get(id);
+    if (!g || g.cloud) {
+      continue;
+    }
+    const d = Math.hypot(g.center[0] - city.center[0], g.center[1] - city.center[1]);
+    if (d < bestD) {
+      bestD = d;
+      island = id;
+    }
+  }
+  if (island) {
+    box = grow(box, ...boxOf(citiesBox(layout, [island])!));
   }
   return frame(box);
+}
+
+function boxOf(b: Box): [number, number, number, number, number] {
+  return [b.minX, b.maxX, b.minZ, b.maxZ, b.minY];
 }
 
 function citiesBox(layout: WorldLayout, ids: Iterable<string>): Box | null {
@@ -155,45 +184,286 @@ function clusterFrame(tl: Timeline, layout: WorldLayout, events: TimelineEvent[]
   return frame(citiesBox(layout, cityIds)) ?? frame(citiesBox(layout, tl.cities.keys()));
 }
 
+interface Segment {
+  /** `shot` a burst (no chapters), `chapter` its opening move, `aside` its demolition elsewhere. */
+  kind: "intro" | "shot" | "chapter" | "aside" | "outro";
+  events: TimelineEvent[];
+  /** Video second the move should land; may slip until `latest`. */
+  land: number;
+  latest: number;
+  /** The camera stays at least until then (a blast dying down, a cloud landing). */
+  until: number;
+  /** The action is over: a quiet stretch from there may get a wide shot. */
+  end: number;
+  /** Cloud service framed at its altitude. */
+  sky: string | null;
+  /** Cities framed together, overriding the events' own focus. */
+  cities: string[] | null;
+  fixed: Framing | null;
+  /** Late landing accepted: no merge could make room. */
+  forced: boolean;
+}
+
+interface Scheduled {
+  seg: Segment;
+  framing: Framing;
+  start: number;
+  duration: number;
+}
+
+/** Video seconds of `[a, b)` spent in a time-lapse: the date leaping faster than the base pace. */
+function timeLapseSec(tl: Timeline, a: number, b: number): number {
+  const { ms, sec, rate } = tl.clock;
+  let total = 0;
+  for (let i = 1; i < ms.length; i++) {
+    const s0 = sec[i - 1]!;
+    const s1 = sec[i]!;
+    if (s1 > s0 && (ms[i]! - ms[i - 1]!) * rate > (s1 - s0) * 1.5) {
+      total += Math.max(0, Math.min(b, s1) - Math.max(a, s0));
+    }
+  }
+  return total;
+}
+
 /** Framings for the whole replay; `layout` is the union, laid out once. */
 export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
   const intro = tl.scenario.introSec ?? 3;
-  const outroAt = tl.totalSec - (tl.scenario.outroSec ?? 4);
+  const outroAt = tl.outroAt;
   const wideAt = (t: number) => {
     const alive = aliveAt(tl, t);
     return frame(citiesBox(layout, alive.length > 0 ? alive : tl.cities.keys()));
   };
-  const keys: ShotKey[] = [];
-  let holdUntil = 0;
-  /** A move toward `f` meant to land `TRANSITION` after `t`: a long one leaves earlier. */
-  const add = (t: number, f: Framing | null) => {
-    if (!f) {
-      return;
-    }
-    const last = keys[keys.length - 1];
-    if (!last) {
-      keys.push({ t, ...f, duration: TRANSITION });
-      return;
-    }
-    const duration = moveDuration(last, f);
-    // Never start a move before the previous one has landed, nor cut a demolition short.
-    const at = Math.max(t + TRANSITION - duration, last.t + last.duration, holdUntil);
-    keys.push({ t: at, ...f, duration });
+  const shot = (events: TimelineEvent[], land: number, latest: number): Segment => {
+    const first = events[0]!;
+    const last = events[events.length - 1]!.at;
+    const sky = cloudArrival(layout, first) ? first.cityId : null;
+    const end = last + tl.rampSec + HOLD;
+    const blast = events.some((e) => e.kind === "remove")
+      ? Math.max(...events.filter((e) => e.kind === "remove").map((e) => e.at)) + BLAST_HOLD
+      : 0;
+    return {
+      kind: "shot",
+      events,
+      land,
+      latest,
+      until: Math.max(blast, sky ? end : 0),
+      end: Math.max(end, blast),
+      sky,
+      cities: null,
+      fixed: null,
+      forced: false,
+    };
   };
+  const framingOf = (s: Segment): Framing | null =>
+    s.fixed ??
+    (s.sky
+      ? cloudFrame(layout, s.sky, aliveAt(tl, s.land))
+      : s.cities
+        ? frame(citiesBox(layout, s.cities))
+        : eventsFrame(tl, layout, s.events));
 
+  const segs: Segment[] = [];
   const opening = wideAt(intro);
   if (opening) {
-    add(0, { ...opening, distance: opening.distance * 1.5 });
+    segs.push({
+      kind: "intro",
+      events: [],
+      land: 0,
+      latest: 0,
+      until: 0,
+      end: intro,
+      sky: null,
+      cities: null,
+      fixed: { ...opening, distance: opening.distance * 1.5 },
+      forced: false,
+    });
+  }
+  const events = tl.events.filter((e) => e.at < outroAt);
+  const firstChapter = tl.chapters[0]?.at ?? Number.POSITIVE_INFINITY;
+  for (const cluster of legacyClusters(
+    layout,
+    events.filter((e) => e.at < firstChapter),
+  )) {
+    const at = cluster[0]!.at - LEAD + TRANSITION;
+    const span = cluster[cluster.length - 1]!.at - cluster[0]!.at;
+    segs.push(shot(cluster, at, at + Math.max(LATE, span / 2)));
+  }
+  for (const ch of tl.chapters) {
+    const own = events.filter((e) => ch.at <= e.at && e.at < ch.to);
+    if (own.length === 0) {
+      continue;
+    }
+    /** A chapter's holds never delay the next title card. */
+    const inChapter = (seg: Segment, kind: "chapter" | "aside"): Segment => ({
+      ...seg,
+      kind,
+      until: Math.min(seg.until, ch.to - MAX_TRANSITION),
+    });
+    const buildings = own.filter((e) => e.what !== "link");
+    const rising = buildings.filter((e) => e.kind === "add");
+    const built = focus(rising);
+    const foreign = buildings.filter(
+      (e) => e.kind === "remove" && !rising.some((r) => r.cityId === e.cityId),
+    );
+    if (built.length === 0 || foreign.length === 0) {
+      segs.push(inChapter(shot(own, ch.at, ch.at + ch.holdSec), "chapter"));
+      continue;
+    }
+    // Rises framed first; a demolition elsewhere widens to both cities when it comes.
+    const rises = own.filter((e) => !foreign.includes(e));
+    segs.push(inChapter(shot(rises, ch.at, ch.at + ch.holdSec), "chapter"));
+    const at = foreign[0]!.at - LEAD + TRANSITION;
+    const both = inChapter(shot(foreign, at, at + LATE), "aside");
+    both.cities = [...new Set([...built, ...focus(foreign)])];
+    segs.push(both);
+  }
+  segs.sort((a, b) => a.land - b.land);
+  const closing = wideAt(outroAt);
+  if (closing) {
+    const at = outroAt + TRANSITION;
+    segs.push({
+      kind: "outro",
+      events: [],
+      land: at,
+      latest: Math.max(at, tl.totalSec - 1),
+      until: 0,
+      end: tl.totalSec,
+      sky: null,
+      cities: null,
+      fixed: closing,
+      forced: false,
+    });
   }
 
+  /** Earliest each move may start and when it lands; the first segment that cannot land in time. */
+  const schedule = () => {
+    const out: Scheduled[] = [];
+    let conflict = -1;
+    let conflictLand = 0;
+    for (const [i, seg] of segs.entries()) {
+      const framing = framingOf(seg);
+      if (!framing) {
+        continue;
+      }
+      const prev = out[out.length - 1];
+      if (!prev) {
+        out.push({ seg, framing, start: 0, duration: TRANSITION });
+        continue;
+      }
+      const duration = moveDuration(prev.framing, framing);
+      const landed = prev.start + prev.duration;
+      const hold = prev.seg.kind === "intro" ? 0 : MIN_HOLD;
+      const start = Math.max(seg.land - duration, landed + hold, prev.seg.until);
+      if (conflict < 0 && !seg.forced && start + duration > seg.latest + 1e-9) {
+        conflict = i;
+        conflictLand = start + duration;
+      }
+      out.push({ seg, framing, start, duration });
+    }
+    return { out, conflict, conflictLand };
+  };
+  const absorb = (into: Segment, from: Segment) => {
+    into.events = [...into.events, ...from.events].sort((a, b) => a.at - b.at);
+    if (into.cities || from.cities) {
+      into.cities = [
+        ...new Set([
+          ...(into.cities ?? focus(into.events)),
+          ...(from.cities ?? focus(from.events)),
+        ]),
+      ];
+    }
+    into.until = Math.max(into.until, from.until);
+    into.end = Math.max(into.end, from.end);
+  };
+  // Too close to hold the previous framing `MIN_HOLD` seconds: one framing covers both.
+  for (let guard = 0; guard < 4 * segs.length + 4; guard++) {
+    const { conflict, conflictLand } = schedule();
+    if (conflict < 0) {
+      break;
+    }
+    const seg = segs[conflict]!;
+    const prev = segs[conflict - 1];
+    const before = segs[conflict - 2];
+    const framed = (x: Segment | undefined) => !!x && x.kind !== "intro" && x.kind !== "outro";
+    const demolition = prev?.kind === "shot" && prev.events.every((e) => e.kind === "remove");
+    if (demolition && seg.kind === "shot" && conflictLand < seg.events[seg.events.length - 1]!.at) {
+      // A demolition keeps its close-up: the next burst is caught under way.
+      seg.forced = true;
+    } else if (
+      (seg.kind === "outro" || (seg.kind === "chapter" && prev?.kind === "aside")) &&
+      framed(prev) &&
+      framed(before)
+    ) {
+      // The next chapter lands on time: the aside before it folds into its own chapter.
+      absorb(before!, prev!);
+      segs.splice(conflict - 1, 1);
+    } else if (framed(seg) && framed(prev)) {
+      const weight = (x: Segment) => x.events.filter((e) => e.what !== "link").length;
+      if (
+        seg.kind !== "aside" &&
+        prev!.kind !== "aside" &&
+        weight(prev!) < weight(seg) &&
+        (framed(before) || before?.kind === "intro")
+      ) {
+        // The lighter burst gives way: the framing before it keeps holding, the heavier lands on time.
+        if (framed(before)) {
+          absorb(before!, prev!);
+        }
+        segs.splice(conflict - 1, 1);
+      } else {
+        absorb(prev!, seg);
+        segs.splice(conflict, 1);
+      }
+    } else {
+      seg.forced = true;
+    }
+  }
+  const planned = schedule().out;
+
+  // A long quiet stretch gets a wide shot, if it can hold it; a time-lapse keeps the framing.
+  const keys: ShotKey[] = [];
+  for (const [i, s] of planned.entries()) {
+    const next = planned[i + 1];
+    let item = s;
+    const last = keys[keys.length - 1];
+    if (last) {
+      // A wide shot may have been inserted: the move back leaves from it.
+      const duration = moveDuration(last, s.framing);
+      const target = s.start + s.duration;
+      item = { ...s, start: Math.max(target - duration, last.t + last.duration), duration };
+    }
+    keys.push({ t: item.start, ...item.framing, duration: item.duration });
+    if (!next || next.seg.kind === "outro" || s.seg.kind === "intro") {
+      continue;
+    }
+    const quietFrom = Math.max(s.seg.end, s.seg.until);
+    const quietTo = next.seg.kind === "shot" ? next.seg.events[0]!.at : next.seg.land;
+    if (quietTo - quietFrom - timeLapseSec(tl, quietFrom, quietTo) <= WIDE_GAP) {
+      continue;
+    }
+    const wide = wideAt(quietFrom);
+    if (!wide) {
+      continue;
+    }
+    const landed = item.start + item.duration;
+    const start = Math.max(quietFrom, landed + MIN_HOLD, s.seg.until);
+    const duration = moveDuration(item.framing, wide);
+    const back = moveDuration(wide, next.framing);
+    const nextLand = next.start + next.duration;
+    if (nextLand - back - (start + duration) >= Math.max(MIN_HOLD, WIDE_MIN_HOLD)) {
+      keys.push({ t: start, ...wide, duration });
+    }
+  }
+  return keys;
+}
+
+/** Bursts of events as before chapters existed: demolitions and cloud arrivals apart. */
+function legacyClusters(layout: WorldLayout, events: TimelineEvent[]): TimelineEvent[][] {
   const clusters: TimelineEvent[][] = [];
   /** Open shot per cloud service: its buildings join it even when the islands keep busy meanwhile. */
   const skies = new Map<string, TimelineEvent[]>();
   let current: TimelineEvent[] | undefined;
-  for (const e of tl.events) {
-    if (e.at >= outroAt) {
-      continue;
-    }
+  for (const e of events) {
     if (cloudArrival(layout, e)) {
       const sky = skies.get(e.cityId);
       if (sky && e.at - sky[0]!.at < MAX_CLUSTER) {
@@ -207,7 +477,6 @@ export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
     }
     const first = current?.[0];
     const last = current?.[current.length - 1];
-    // Demolitions get their own shot: never merged with what is being built.
     if (
       current &&
       first &&
@@ -222,29 +491,32 @@ export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
       clusters.push(current);
     }
   }
-  clusters.forEach((cluster, i) => {
-    const start = cluster[0]!.at;
-    const last = cluster[cluster.length - 1]!.at;
-    const end = last + tl.rampSec + HOLD;
-    const sky = cloudArrival(layout, cluster[0]!);
-    add(
-      start - LEAD,
-      sky ? cloudFrame(layout, cluster[0]!.cityId) : clusterFrame(tl, layout, cluster),
-    );
-    if (cluster[0]!.kind === "remove") {
-      holdUntil = last + BLAST_HOLD;
-    } else if (sky) {
-      // Stay until it has landed and its buildings are up.
-      holdUntil = end;
-    }
-    const next = clusters[i + 1]?.[0]?.at ?? outroAt;
-    if (next - end > WIDE_GAP) {
-      add(end, wideAt(end));
-    }
-  });
+  return clusters;
+}
 
-  add(outroAt, wideAt(outroAt));
-  return keys;
+/** Cities carrying the bulk of the buildings that change: a lone side job stays off frame. */
+function focus(events: TimelineEvent[]): string[] {
+  const weights = new Map<string, number>();
+  const buildings = events.filter((e) => e.what !== "link");
+  for (const e of buildings.length > 0 ? buildings : events) {
+    // An island arriving outweighs a few buildings elsewhere.
+    weights.set(e.cityId, (weights.get(e.cityId) ?? 0) + (e.what === "city" ? 3 : 1));
+  }
+  const max = Math.max(0, ...weights.values());
+  return [...weights].filter(([, w]) => w > max * DOMINANT).map(([id]) => id);
+}
+
+/** Several cities: frame them together; one: close-up on what changes there. */
+function eventsFrame(tl: Timeline, layout: WorldLayout, events: TimelineEvent[]) {
+  const cities = focus(events);
+  if (cities.length > 1) {
+    return frame(citiesBox(layout, cities));
+  }
+  return clusterFrame(
+    tl,
+    layout,
+    events.filter((e) => e.cityId === cities[0]),
+  );
 }
 
 function smooth(x: number): number {
@@ -295,11 +567,35 @@ function drifted(distance: number, held: number): number {
   return distance * (1 - DRIFT * (1 - Math.exp(-Math.max(0, held) / DRIFT_SEC)));
 }
 
+/** Degrees turned after holding `held` seconds: starts at the full rate, bounded per shot. */
+function orbited(held: number): number {
+  const h = Math.max(0, held);
+  return MAX_ORBIT_DEG * (1 - Math.exp((-h * ORBIT_DEG_PER_SEC) / MAX_ORBIT_DEG));
+}
+
+/** Heading (deg) each key's hold starts from: what the earlier holds turned. */
+const headings = new WeakMap<ShotKey[], number[]>();
+
+function headingsOf(keys: ShotKey[]): number[] {
+  let out = headings.get(keys);
+  if (!out) {
+    out = [0];
+    for (let i = 1; i < keys.length; i++) {
+      const prev = keys[i - 1]!;
+      out.push(out[i - 1]! + orbited(keys[i]!.t - (prev.t + prev.duration)));
+    }
+    headings.set(keys, out);
+  }
+  return out;
+}
+
 interface RawPose {
   x: number;
   y: number;
   z: number;
   logDistance: number;
+  /** Orbit heading, degrees. */
+  heading: number;
 }
 
 /** Last key starting at or before `t` (0 before the first). */
@@ -329,6 +625,7 @@ function rawAt(keys: ShotKey[], t: number, out: RawPose) {
     out.y = to.lookAt[1];
     out.z = to.lookAt[2];
     out.logDistance = Math.log(drifted(to.distance, held));
+    out.heading = headingsOf(keys)[i]! + orbited(held);
     return;
   }
   const start: Framing = {
@@ -340,11 +637,12 @@ function rawAt(keys: ShotKey[], t: number, out: RawPose) {
   out.y = start.lookAt[1] + (to.lookAt[1] - start.lookAt[1]) * u;
   out.z = start.lookAt[2] + (to.lookAt[2] - start.lookAt[2]) * u;
   out.logDistance = Math.log(w);
+  out.heading = headingsOf(keys)[i]!;
 }
 
-const SAMPLE: RawPose = { x: 0, y: 0, z: 0, logDistance: 0 };
+const SAMPLE: RawPose = { x: 0, y: 0, z: 0, logDistance: 0, heading: 0 };
 
-/** Pose at video second `t`: the zoom path averaged over a short window, slowly orbiting. */
+/** Pose at video second `t`: the zoom path averaged over a short window, orbiting while it holds. */
 export function shotAt(keys: ShotKey[], t: number): CameraPose | null {
   if (keys.length === 0) {
     return null;
@@ -353,6 +651,7 @@ export function shotAt(keys: ShotKey[], t: number): CameraPose | null {
   let y = 0;
   let z = 0;
   let logDistance = 0;
+  let heading = 0;
   let total = 0;
   for (let k = 0; k < SMOOTH_SAMPLES; k++) {
     const o = (k / (SMOOTH_SAMPLES - 1)) * 2 - 1;
@@ -366,6 +665,7 @@ export function shotAt(keys: ShotKey[], t: number): CameraPose | null {
     y += SAMPLE.y * weight;
     z += SAMPLE.z * weight;
     logDistance += SAMPLE.logDistance * weight;
+    heading += SAMPLE.heading * weight;
     total += weight;
   }
   const lookAt: [number, number, number] = [x / total, y / total, z / total];
@@ -373,7 +673,7 @@ export function shotAt(keys: ShotKey[], t: number): CameraPose | null {
   // Higher as the camera pulls out: a long move climbs, a close-up comes down to street level.
   const lift = Math.max(0, Math.min(1, Math.log(distance / MIN_DISTANCE) / Math.log(6)));
   const elevation = LOW_ELEVATION + (HIGH_ELEVATION - LOW_ELEVATION) * smooth(lift);
-  const azimuth = Math.PI / 4 + (t * ORBIT_DEG_PER_SEC * Math.PI) / 180;
+  const azimuth = Math.PI / 4 + (heading / total) * (Math.PI / 180);
   const flat = distance * Math.cos(elevation);
   return {
     lookAt,

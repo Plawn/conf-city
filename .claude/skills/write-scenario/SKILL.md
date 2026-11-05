@@ -51,7 +51,13 @@ a camera director frames each event. Full reference: `docs/replay.md`; types and
   "staggerSec": 0.6,                       // same-date buildings rise one after another (default rampSec / 2, 0 = together)
   "introSec": 3, "outroSec": 4,            // wide shots before / after (defaults)
   "rampSec": 1.2,                          // seconds a building rises or sinks
+  "maxGapSec": 1.0,                        // time-lapse: a quiet stretch never takes more than this
+  "chapterSec": 1.8,                       // the date holds this long on a chapter's title card
   "sunTime": "2026-06-21T17:30:00Z",       // frozen sun: late afternoon = warm light, long shadows
+  "lang": "fr",                            // on-screen text and dates (default: the viewer's locale)
+  "chapters": [                            // story beats: title card, then the events up to the next one
+    { "at": "2026-02-01", "title": "Paris arrive", "caption": "API, Postgres", "stat": "+3 services" }
+  ],
   "cities": [
     {
       "id": "paris-1", "name": "Paris",    // id: unique, stable, no "/"
@@ -97,7 +103,19 @@ a camera director frames each event. Full reference: `docs/replay.md`; types and
   each node.
 - Ids must be unique (cities; nodes within a city), and every link must point at a known node.
 
+- **`chapters`** (optional): each opens on `at` with a lower-third title card (`title`,
+  `caption`, `stat`; `stat` omitted = computed from its events) and owns the events until the
+  next chapter. 8–10 chapters tell a year; the checker warns above 12. The director frames one
+  shot per chapter, the HUD shows a progress bar with a tick per chapter and a recap card in
+  the outro (give `outroSec: 6` so the figures have time to count up).
+
 ## Making it look good
+
+- **Start from the story, not the inventory.** A raw export of everything (hundreds of events)
+  reads as a list. `bun scripts/condense-scenario.ts raw.json story.json --lang fr [--teaser]`
+  merges churn, prunes short-lived services, pairs migrations, snaps bursts, writes the chapters
+  and paces the video to a target length (`--target`, 100 s; teaser 60 s). Edit the chapter
+  titles afterwards; re-run `check-scenario.ts`.
 
 - **Space the events.** Video time follows dates at `durationSec / (end − start)`, except that
   slow motion keeps distinct event dates at least `minGapSec` apart (a demolition: its blast),

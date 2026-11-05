@@ -30,6 +30,8 @@ bun run sync:glass   # regenerate src/styles/glass-ui.css (also on postinstall)
 bun scripts/traffic-soak.ts            # accelerated 24 h traffic check
 bun scripts/build-industrial-models.ts # regenerate industrial-*.glb
 bun scripts/render-replay.ts <scenario.json> out.mp4   # replay → video (docs/replay.md)
+bun scripts/condense-scenario.ts raw.json story.json --lang fr [--teaser]  # raw year → chaptered story
+bun scripts/check-scenario.ts story.json; bun scripts/check-shots.ts story.json  # timeline, chapters, camera moves
 ```
 
 Headless checks and benchmarks (`scripts/check-*.ts`, `benchmark-rendering.ts`) need a built
