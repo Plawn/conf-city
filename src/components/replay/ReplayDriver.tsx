@@ -75,7 +75,8 @@ export function ReplayDriver({ timeline, shots }: { timeline: Timeline; shots: S
         // Scene time is video time: the clock, so every animation and the traffic step, follows t.
         advance(t);
         last = t;
-        await paint();
+        // `advance` renders synchronously: one frame lets the overlay commit and the canvas present.
+        await nextFrame();
       },
     };
     return () => {
@@ -156,6 +157,10 @@ async function settle(advance: (t: number) => void, scene: Object3D, t: number) 
     previous = size;
     return stable >= 10;
   });
+}
+
+function nextFrame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 function paint() {

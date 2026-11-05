@@ -101,16 +101,22 @@ and AO noise, invisible).
 
 ```sh
 bun scripts/render-replay.ts <scenario.json> [out.mp4|out.webm] \
-  [--fps 30] [--from S] [--seconds N] [--width 1920 --height 1080] [--frames dir]
+  [--fps 30] [--from S] [--seconds N] [--width 1920 --height 1080] [--workers 3] [--frames dir]
 ```
 
 - `.mp4` needs `ffmpeg` on `PATH` (or `FFMPEG=…`): libx264, yuv420p, CRF 18.
 - `.webm` falls back to Playwright's bundled ffmpeg (VP8) when none is installed.
-- `--frames dir` also keeps every frame as an image.
+- `--workers N` (default 3) renders N contiguous slices in parallel Chromiums, then joins them
+  without re-encoding. Each slice pre-rolls on its own, so joints are invisible. Beyond 3 the
+  Radeon box saturates: the full wrapped replay (6 062 frames, 1080p) takes 12 min, against 56.
+- Frames are JPEG screenshots (quality 95): a quarter of a PNG's cost, invisible after x264.
+- About 8 % of frames, where the active set changes, remount and compile shaders: up to 2.6 s
+  each, two thirds of the render time. A steady frame takes ~43 ms.
+- `--frames dir` also keeps every frame as an image (forces one worker).
 - The page is served by `CITY_URL` (default the preview on `:4174`). It uses the same harness as
   the checks (`CHROMIUM_PATH`, `CITY_BACKEND`, `GPU_SOFTWARE`; see `render-performance.md`).
 - Export defaults to `CITY_BACKEND=webgl`: headless screenshots of a WebGPU canvas come back blank.
-- On a real GPU expect a few frames per second. SwiftShader (`GPU_SOFTWARE=1 CITY_BACKEND=webgl`)
+- On a real GPU expect ~8 frames per second with 3 workers. SwiftShader (`GPU_SOFTWARE=1 CITY_BACKEND=webgl`)
   is far slower but works anywhere.
 
 `window.__CITY_REPLAY__.seek(t)` pauses the interactive player at `t` (handy for screenshots).
