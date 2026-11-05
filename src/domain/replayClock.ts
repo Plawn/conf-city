@@ -28,6 +28,10 @@ export interface ClockOptions {
   gap: number;
   /** Seconds between two buildings rising on the same date. */
   stagger: number;
+  /** Time-lapse: a quiet stretch between two dates never takes more than this. */
+  maxGap?: number;
+  /** Dates whose clock holds this many seconds before their events (chapter title cards). */
+  holds?: Map<number, number>;
 }
 
 export function emptyMoment(): Moment {
@@ -85,7 +89,9 @@ export function planMoment(m: Moment, { gap, stagger }: ClockOptions) {
 
 /**
  * Distinct event dates sit at least a cascade plus `gap` apart (a blast after a demolition);
- * quiet stretches keep the base pace. Returns the clock and each endpoint's video second.
+ * quiet stretches keep the base pace, capped at `maxGap`. A held date (a chapter opening)
+ * stands still before its events. Returns the clock, each endpoint's video second and the
+ * second each date opens at.
  */
 export function buildClock(
   period: { start: number; end: number; intro: number; durationSec: number },
@@ -94,23 +100,31 @@ export function buildClock(
 ) {
   const { start, end, intro, durationSec } = period;
   const rate = durationSec / (end - start);
-  const dates = [...new Set([start, end, ...moments.keys()])]
+  const maxGap = opts.maxGap ?? Infinity;
+  const holds = opts.holds ?? new Map<number, number>();
+  const dates = [...new Set([start, end, ...moments.keys(), ...holds.keys()])]
     .filter((d) => d >= start && d <= end)
     .sort((a, b) => a - b);
   const clock: Clock = { ms: [], sec: [], rate };
   const offsets = new Map<string, number>();
   const firstStep = new Map<number, number>();
+  const opens = new Map<number, number>();
   let prev: { date: number; sec: number; busy: number } | null = null;
   for (const date of dates) {
     const plan = moments.has(date) ? planMoment(moments.get(date)!, opts) : null;
-    const sec: number = prev ? prev.sec + Math.max((date - prev.date) * rate, prev.busy) : intro;
+    const open: number = prev
+      ? prev.sec + Math.max(Math.min((date - prev.date) * rate, maxGap), prev.busy)
+      : intro;
+    opens.set(date, open);
+    const hold = holds.get(date) ?? 0;
+    const sec = open + hold;
     firstStep.set(date, sec);
     clock.ms.push(date);
-    clock.sec.push(sec);
-    if (plan && plan.length > 0) {
-      // The date on screen holds while the cascade plays.
+    clock.sec.push(open);
+    if (hold + (plan?.length ?? 0) > 0) {
+      // The date on screen holds through the title card and while the cascade plays.
       clock.ms.push(date);
-      clock.sec.push(sec + plan.length);
+      clock.sec.push(sec + (plan?.length ?? 0));
     }
     for (const [k, o] of plan?.offsets ?? []) {
       offsets.set(k, o);
@@ -120,7 +134,9 @@ export function buildClock(
   /** Video second of endpoint `key`, dated `ms`. */
   const at = (ms: number, key: string) =>
     (firstStep.get(ms) ?? clockSec(clock, ms)) + (offsets.get(key) ?? 0);
-  return { clock, at };
+  /** Video second date `ms` opens at, before any hold. */
+  const opened = (ms: number) => opens.get(ms) ?? clockSec(clock, ms);
+  return { clock, at, opened };
 }
 
 /** Video second of date `ms` (the end of its cascade, if any). */

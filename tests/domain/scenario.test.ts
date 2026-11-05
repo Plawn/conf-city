@@ -129,6 +129,69 @@ describe("scenario", () => {
   });
 });
 
+describe("scenario chapters and time-lapse", () => {
+  test("a chapter opens on its date, holds for its title card, then its events play", () => {
+    const t = parseScenario({
+      ...example,
+      chapters: [
+        { at: "2026-07-01", title: "Summer" },
+        { at: "2026-03-01", title: "Cache", caption: "Redis lands", stat: "+1" },
+      ],
+    });
+    expect(t.chapters.map((c) => c.title)).toEqual(["Cache", "Summer"]);
+    const [cache, summer] = t.chapters;
+    expect(cache!.index).toBe(0);
+    expect(cache!.holdSec).toBe(1.8);
+    expect(cache!.to).toBe(summer!.at);
+    expect(summer!.to).toBe(t.outroAt);
+    expect(t.totalSec).toBe(t.outroAt + 5);
+    // The title card shows while the date stands still, then the building rises.
+    const node = t.nodes.get("paris-1/cache")!;
+    expect(node.from).toBeCloseTo(cache!.at + 1.8);
+    expect(dateAt(t, cache!.at).toISOString().slice(0, 10)).toBe("2026-03-01");
+    expect(
+      dateAt(t, cache!.at + 1.7)
+        .toISOString()
+        .slice(0, 10),
+    ).toBe("2026-03-01");
+    // Without chapters the same building comes earlier: the hold is extra video time.
+    expect(node.from).toBeGreaterThan(parseScenario(example).nodes.get("paris-1/cache")!.from);
+    expect(parseScenario({ ...example, chapters: [] }).chapters).toEqual([]);
+  });
+
+  test("maxGapSec caps quiet stretches, so the video shrinks and dates leap", () => {
+    const slow = parseScenario({ ...example, minGapSec: 0, staggerSec: 0 });
+    const fast = parseScenario({ ...example, minGapSec: 0, staggerSec: 0, maxGapSec: 1 });
+    expect(fast.totalSec).toBeLessThan(slow.totalSec);
+    const ats = [...new Set(fast.events.map((e) => e.at))];
+    for (let i = 1; i < ats.length; i++) {
+      expect(ats[i]! - ats[i - 1]!).toBeLessThanOrEqual(1 + 1e-9);
+    }
+    // Still monotone and invertible.
+    for (let s = 0; s < fast.totalSec; s += 0.5) {
+      expect(dateAt(fast, s + 0.5).getTime()).toBeGreaterThanOrEqual(dateAt(fast, s).getTime());
+    }
+    expect(clockSec(fast.clock, Date.parse("2026-12-31"))).toBeCloseTo(fast.outroAt);
+  });
+
+  test("rejects broken chapters and gaps", () => {
+    const bad = (patch: object) => () => parseScenario({ ...example, ...patch });
+    expect(bad({ chapters: [{ at: "2026-03-01" }] })).toThrow(ScenarioError);
+    expect(bad({ chapters: [{ at: "nope", title: "x" }] })).toThrow(/invalid date/);
+    expect(bad({ chapters: [{ at: "2027-03-01", title: "x" }] })).toThrow(/outside/);
+    expect(
+      bad({
+        chapters: [
+          { at: "2026-03-01", title: "x" },
+          { at: "2026-03-01", title: "y" },
+        ],
+      }),
+    ).toThrow(/two chapters/);
+    expect(bad({ maxGapSec: 0 })).toThrow(/maxGapSec/);
+    expect(bad({ chapterSec: -1 })).toThrow(/chapterSec/);
+  });
+});
+
 describe("scenarioFromSnapshot", () => {
   const snapshot = {
     meta: {

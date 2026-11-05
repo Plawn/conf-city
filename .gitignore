@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Claude Code agent worktrees
 .claude/worktrees
+
+# private replay scenarios (company infra)
+public/scenarios/wrapped

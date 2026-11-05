@@ -37,6 +37,16 @@ export interface ScenarioCity extends Lifetime {
   nodes: ScenarioNode[];
 }
 
+/** A chapter of the story: a title card, then the events up to the next chapter. */
+export interface ScenarioChapter {
+  /** ISO date the chapter opens on; events from there to the next chapter belong to it. */
+  at: string;
+  title: string;
+  caption?: string;
+  /** Headline figure shown with the title ("+42 services"); omitted = computed from its events. */
+  stat?: string;
+}
+
 export interface Scenario {
   title: string;
   subtitle?: string;
@@ -49,6 +59,10 @@ export interface Scenario {
   minGapSec?: number;
   /** Seconds between buildings that arrive on the same date (default half `rampSec`, 0 = together). */
   staggerSec?: number;
+  /** Time-lapse: a quiet stretch between two event dates never takes more than this (default none = base pace). */
+  maxGapSec?: number;
+  /** Seconds the date holds on a chapter's opening while its title card shows (default 1.8). */
+  chapterSec?: number;
   /** Wide shot before the first date / after the last one. */
   introSec?: number;
   outroSec?: number;
@@ -58,11 +72,25 @@ export interface Scenario {
   sunTime?: string;
   cities: ScenarioCity[];
   links?: (InterCityLink & Lifetime)[];
+  /** Story beats, in any order; none = the video is one continuous stretch. */
+  chapters?: ScenarioChapter[];
 }
 
 export const DEFAULT_INTRO_SEC = 3;
 export const DEFAULT_OUTRO_SEC = 4;
 export const DEFAULT_RAMP_SEC = 1.2;
+export const DEFAULT_CHAPTER_SEC = 1.8;
+
+/** A chapter on the video clock. */
+export interface TimelineChapter extends Omit<ScenarioChapter, "at"> {
+  index: number;
+  dateMs: number;
+  /** Video second its title card opens; the date holds `holdSec` before its events play. */
+  at: number;
+  holdSec: number;
+  /** Video second the next chapter opens (or the outro starts): events with `at <= e.at < to` are its. */
+  to: number;
+}
 
 /** A scenario resolved against its own clock: every lifetime in video seconds. */
 export interface Timeline {
@@ -81,6 +109,10 @@ export interface Timeline {
   /** `linkKey` → span, clipped to both ends'. */
   linkSpans: Map<string, Span>;
   events: TimelineEvent[];
+  /** Sorted by date; empty when the scenario has none. */
+  chapters: TimelineChapter[];
+  /** Video second the outro's wide shot starts. */
+  outroAt: number;
 }
 
 export interface Span {
@@ -260,15 +292,44 @@ export function parseScenario(json: unknown): Timeline {
       false,
     );
   }
-  for (const s of [scn.minGapSec, scn.staggerSec]) {
+  for (const s of [scn.minGapSec, scn.staggerSec, scn.chapterSec]) {
     if (!(s === undefined || s >= 0)) {
-      throw new ScenarioError("minGapSec and staggerSec must be >= 0");
+      throw new ScenarioError("minGapSec, staggerSec and chapterSec must be >= 0");
     }
   }
-  const { clock, at } = buildClock({ start, end, intro, durationSec: scn.durationSec }, moments, {
-    gap: scn.minGapSec ?? rampSec,
-    stagger: scn.staggerSec ?? rampSec / 2,
-  });
+  if (!(scn.maxGapSec === undefined || scn.maxGapSec > 0)) {
+    throw new ScenarioError("maxGapSec must be > 0");
+  }
+  const chapterSec = scn.chapterSec ?? DEFAULT_CHAPTER_SEC;
+  const chapterDates = new Map<number, ScenarioChapter>();
+  for (const [i, ch] of (scn.chapters ?? []).entries()) {
+    const where = `chapters[${i}]`;
+    if (!ch || typeof ch !== "object" || typeof ch.title !== "string" || !ch.title) {
+      throw new ScenarioError(`${where}: needs a title`);
+    }
+    const ms = parseDate(ch.at, `${where}.at`, errors);
+    if (errors.length > 0) {
+      throw new ScenarioError(errors.join("\n"));
+    }
+    if (ms < start || ms > end) {
+      throw new ScenarioError(`${where}: at ${ch.at} is outside ${scn.start} → ${scn.end}`);
+    }
+    if (chapterDates.has(ms)) {
+      throw new ScenarioError(`${where}: two chapters open on ${ch.at}`);
+    }
+    chapterDates.set(ms, ch);
+  }
+  const holds = new Map([...chapterDates.keys()].map((ms) => [ms, chapterSec]));
+  const { clock, at, opened } = buildClock(
+    { start, end, intro, durationSec: scn.durationSec },
+    moments,
+    {
+      gap: scn.minGapSec ?? rampSec,
+      stagger: scn.staggerSec ?? rampSec / 2,
+      ...(scn.maxGapSec !== undefined ? { maxGap: scn.maxGapSec } : {}),
+      holds,
+    },
+  );
   const toVideo = (s: Span, key: string): Span => ({
     from: Number.isFinite(s.from) ? at(s.from, `${key}>`) : 0,
     to: Number.isFinite(s.to) ? at(s.to, `${key}<`) : Infinity,
@@ -282,7 +343,21 @@ export function parseScenario(json: unknown): Timeline {
       spans.set(id, toVideo(s, `${prefix}:${id}`));
     }
   }
-  const totalSec = clock.sec[clock.sec.length - 1]! + outro;
+  const outroAt = clock.sec[clock.sec.length - 1]!;
+  const totalSec = outroAt + outro;
+  const chapters: TimelineChapter[] = [...chapterDates]
+    .sort(([a], [b]) => a - b)
+    .map(([dateMs, { at: _date, ...ch }], index) => ({
+      ...ch,
+      index,
+      dateMs,
+      at: opened(dateMs),
+      holdSec: chapterSec,
+      to: outroAt,
+    }));
+  for (let i = 0; i + 1 < chapters.length; i++) {
+    chapters[i]!.to = chapters[i + 1]!.at;
+  }
 
   const events: TimelineEvent[] = [];
   const push = (span: Span, what: TimelineEvent["what"], id: string, cityId: string) => {
@@ -316,6 +391,8 @@ export function parseScenario(json: unknown): Timeline {
     nodes,
     linkSpans,
     events,
+    chapters,
+    outroAt,
   };
 }
 

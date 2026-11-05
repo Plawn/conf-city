@@ -89,13 +89,31 @@ console.log(
   `  ${monthSec.toFixed(1)} s per month at base pace, +${slowSec.toFixed(1)} s of slow motion; ` +
     `a building rises in ${tl.rampSec} s\n`,
 );
+if (tl.chapters.length > 0) {
+  console.log(`  ${tl.chapters.length} chapters, title cards hold ${tl.chapters[0]!.holdSec} s\n`);
+} else if (tl.events.length > 60) {
+  warnings.push(
+    `${tl.events.length} events and no chapters — bun scripts/condense-scenario.ts groups them into a story`,
+  );
+}
+if (tl.chapters.length > 12) {
+  warnings.push(`${tl.chapters.length} chapters — more than 12 reads as a list, not a story`);
+}
 let previous = -Infinity;
+const chapters = [...tl.chapters];
 for (const e of tl.events) {
+  while (chapters.length > 0 && chapters[0]!.at <= e.at) {
+    const ch = chapters.shift()!;
+    console.log(`${fmt(ch.at)}  ${dateOf(ch.at)}  ▶ ${ch.title}${ch.stat ? `  (${ch.stat})` : ""}`);
+  }
   const crowded = e.at - previous < 0.5 ? "  ← same instant as the line above" : "";
   console.log(
     `${fmt(e.at)}  ${dateOf(e.at)}  ${e.kind === "add" ? "+" : "×"} ${e.what.padEnd(4)} ${e.id}${crowded}`,
   );
   previous = e.at;
+}
+for (const ch of chapters) {
+  console.log(`${fmt(ch.at)}  ${dateOf(ch.at)}  ▶ ${ch.title}`);
 }
 if (warnings.length > 0) {
   console.log(`\n⚠ ${warnings.length} warning(s)`);
