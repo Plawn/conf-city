@@ -73,20 +73,20 @@ describe("chapter stats", () => {
     // March → June: Redis, RabbitMQ, Worker.
     expect(chapterStat(tl, tl.chapters[0]!)).toBe("+3 services");
     // August onward: London rises with four services.
-    expect(chapterStat(tl, tl.chapters[2]!)).toBe("+1 island · +4 services");
+    expect(chapterStat(tl, tl.chapters[2]!)).toBe("+1 server · +4 services");
   });
 
   test("a service removed in one city and added in another moves, in French", () => {
     const tl = movedScenario("fr-FR");
     expect(chapterStat(tl, tl.chapters[0]!)).toBe("+3 services");
-    expect(chapterStat(tl, tl.chapters[2]!)).toBe("+1 île · +4 services · 1 déménagé");
+    expect(chapterStat(tl, tl.chapters[2]!)).toBe("+1 serveur · +4 services · 1 déménagé");
     const en = movedScenario();
-    expect(chapterStat(en, en.chapters[2]!)).toBe("+1 island · +4 services · 1 moved");
+    expect(chapterStat(en, en.chapters[2]!)).toBe("+1 server · +4 services · 1 moved");
   });
 
   test("demolitions without a twin are demolished", () => {
     const tl = withChapters({ chapters: [{ at: "2026-06-01", title: "Été" }] });
-    expect(chapterStat(tl, tl.chapters[0]!)).toBe("+1 island · +4 services · 1 demolished");
+    expect(chapterStat(tl, tl.chapters[0]!)).toBe("+1 server · +4 services · 1 demolished");
   });
 });
 
@@ -108,11 +108,11 @@ describe("recap", () => {
 
   test("labels follow lang", () => {
     const fr = new Map(scenarioStats(movedScenario("fr")).map((s) => [s.key, s]));
-    expect(fr.get("islands")?.label).toBe("îles");
+    expect(fr.get("islands")?.label).toBe("serveurs");
     expect(fr.get("moved")?.label).toBe("déménagé");
     expect(fr.get("busiestMonth")?.detail).toBe("août 2026");
     const en = new Map(scenarioStats(movedScenario("en")).map((s) => [s.key, s]));
-    expect(en.get("islands")?.label).toBe("islands");
+    expect(en.get("islands")?.label).toBe("servers");
     expect(en.get("demolitions")?.label).toBe("demolition");
   });
 

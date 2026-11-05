@@ -84,3 +84,44 @@ export function countAt(
     fade,
   );
 }
+
+/** Services standing over the scenario's dates: a step curve, `x` 0 → 1 from `start` to `end`. */
+export interface ServicesCurve {
+  /** One step per date the count changes, `x` ascending; the count holds after the last. */
+  steps: { x: number; count: number }[];
+  max: number;
+}
+
+/** Date `t` shows, as a fraction of the scenario's span. */
+export function curveX(tl: Timeline, t: number): number {
+  const { ms } = tl.clock;
+  const start = ms[0]!;
+  const span = ms[ms.length - 1]! - start;
+  return span > 0 ? (dateAt(tl, t).getTime() - start) / span : 1;
+}
+
+/** Sampled once a building is halfway up, so it matches the HUD counter at every date. */
+export function servicesCurve(tl: Timeline): ServicesCurve {
+  const ats = new Set<number>([0]);
+  for (const e of tl.events) {
+    if (e.what === "node") {
+      ats.add(e.at);
+    }
+  }
+  const half = tl.rampSec / 2 + 1e-3;
+  const steps: ServicesCurve["steps"] = [];
+  let max = 0;
+  for (const at of [...ats].sort((a, b) => a - b)) {
+    const count = hudCounts(tl, at + half).nodes;
+    max = Math.max(max, count);
+    const x = curveX(tl, at);
+    // One step per date (a cascade shares one), none where the count holds.
+    if (steps[steps.length - 1]?.x === x) {
+      steps.pop();
+    }
+    if (steps[steps.length - 1]?.count !== count) {
+      steps.push({ x, count });
+    }
+  }
+  return { steps, max };
+}

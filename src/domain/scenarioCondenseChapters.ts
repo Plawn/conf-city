@@ -37,8 +37,8 @@ interface Candidate {
 export const TEXT = {
   fr: {
     start: "Le point de départ",
-    islands: (n: number, m: number) =>
-      `${n} service${n > 1 ? "s" : ""} sur ${m} île${m > 1 ? "s" : ""}`,
+    islands: (n: number, m: number, k: number) =>
+      `${n} service${n > 1 ? "s" : ""} sur ${m} serveur${m > 1 ? "s" : ""}${k > 0 ? ` et ${k} cloud${k > 1 ? "s" : ""}` : ""}`,
     city: (name: string) => `${name} arrive`,
     cloud: (name: string) => `${name} dans le nuage`,
     move: (name: string) => `Déménagement vers ${name}`,
@@ -50,8 +50,8 @@ export const TEXT = {
   },
   en: {
     start: "The starting point",
-    islands: (n: number, m: number) =>
-      `${n} service${n > 1 ? "s" : ""} on ${m} island${m > 1 ? "s" : ""}`,
+    islands: (n: number, m: number, k: number) =>
+      `${n} service${n > 1 ? "s" : ""} on ${m} server${m > 1 ? "s" : ""}${k > 0 ? ` and ${k} cloud${k > 1 ? "s" : ""}` : ""}`,
     city: (name: string) => `${name} joins`,
     cloud: (name: string) => `${name} in the cloud`,
     move: (name: string) => `Moving to ${name}`,
@@ -157,8 +157,13 @@ export function planChapters(
       const at = isoDate(c.date);
       info?.set(at, { score: c.score, count: c.count });
       if (c.kind === "start") {
-        const cities = new Set(initial.map((x) => x.c.id)).size;
-        return { at, title: text.start, caption: text.islands(c.count, cities) };
+        const ids = new Set(initial.map((x) => x.c.id));
+        const cloudCount = [...ids].filter((id) => clouds.has(id)).length;
+        return {
+          at,
+          title: text.start,
+          caption: text.islands(c.count, ids.size - cloudCount, cloudCount),
+        };
       }
       const moved = [c, ...c.absorbed].find((x) => x.kind === "move" && x.cityId === c.cityId);
       if (c.kind === "move") {

@@ -307,7 +307,7 @@ describe("rule 5: chapters", () => {
       ["2026-03-10", "Azure in the cloud"],
       ["2026-05-05", "Quartz joins"],
     ]);
-    expect(chapters[0]?.caption).toBe("1 service on 1 island");
+    expect(chapters[0]?.caption).toBe("1 service on 1 server");
     expect(chapters[3]?.stat).toBe("+3 services");
   });
   test("the count is capped and titles fit 32 characters, in French", () => {

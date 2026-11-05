@@ -148,16 +148,21 @@ frame matches playback.
   `caption`, and a stat chip. The card fades in over 0.35 s from the chapter's opening, holds
   through `chapterSec` (the date stands still meanwhile) and fades out over 0.5 s as the first
   building rises. The chip shows `stat` when given, else what the chapter's events did:
-  `+1 island`, `+1 cloud`, `+N services`, `N moved` (a service removed in one city and added in
-  another, same id or label, within 31 days), `N demolished`.
+  `+1 server`, `+1 cloud`, `+N services`, `N moved` (a service removed in one city and added in
+  another, same id or label, within 31 days), `N demolished`. Islands are the look; every word
+  on screen says server.
 - **Progress bar** — a segmented bar along the bottom edge (intro, one segment per chapter,
   outro), filled to `t`; the current chapter's title sits above its segment, hidden while its
   card shows.
-- **Corner HUD** — month, servers, clouds and services. While the date leaps (a `maxGapSec`
+- **Corner HUD** — month, servers, clouds and services, and under them the services curve:
+  the count standing over the scenario's dates (`servicesCurve`, one step per date it changes,
+  sampled once a building is halfway up so it agrees with the counter), drawn up to the date on
+  screen with a dot at today's value. Its x axis is the date, not video time, so it stands still
+  through a title card and leaps with a time-lapse. While the date leaps (a `maxGapSec`
   stretch running over 4× the date's mean pace) the month changes without sliding and a ⏩
   fades in.
 - **Recap** — from the outro's start, the scenario title over six figures: four non-zero counts
-  among services deployed over the period (not only those still standing), islands,
+  among services deployed over the period (not only those still standing), servers,
   clouds, bridges, moved and demolitions, then the longest-lived
   service still standing (days) and the busiest month (events). It fades in over 0.6 s and each
   figure counts up over 1.2 s, 0.15 s after the previous one: settled 2.3 s into the outro.

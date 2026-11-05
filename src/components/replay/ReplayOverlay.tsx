@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import { type Change, countAt, monthAt } from "../../domain/replayHud";
+import {
+  type Change,
+  countAt,
+  curveX,
+  monthAt,
+  type ServicesCurve,
+  servicesCurve,
+} from "../../domain/replayHud";
 import {
   type ChapterState,
   chapterAt,
@@ -186,16 +193,71 @@ function RecapCard({
   );
 }
 
+/** Services standing over the scenario's dates, drawn up to the date on screen: one series, no legend, the counter above names it. */
+function ServicesSpark({ curve, x, count }: { curve: ServicesCurve; x: number; count: number }) {
+  const W = 100;
+  const H = 28;
+  const yOf = (c: number) => H - 2 - (c / Math.max(1, curve.max)) * (H - 4);
+  let d = "";
+  let lastY = yOf(curve.steps[0]?.count ?? 0);
+  for (const s of curve.steps) {
+    if (s.x > x) {
+      break;
+    }
+    const px = s.x * W;
+    const py = yOf(s.count);
+    d += d ? ` H${px.toFixed(2)} V${py.toFixed(2)}` : `M0 ${py.toFixed(2)}`;
+    lastY = py;
+  }
+  const cx = x * W;
+  const cy = yOf(count);
+  d += ` H${cx.toFixed(2)}${cy !== lastY ? ` V${cy.toFixed(2)}` : ""}`;
+  return (
+    <div className="relative mt-2 h-7 w-56">
+      <svg
+        className="absolute inset-0 h-full w-full overflow-visible"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <title>services</title>
+        <line
+          x1="0"
+          y1={H - 1}
+          x2={W}
+          y2={H - 1}
+          className="stroke-white/15"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path d={`${d} V${H - 1} H0 Z`} className="fill-white/15" />
+        <path
+          d={d}
+          fill="none"
+          className="stroke-white/80"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <span
+        className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow"
+        style={{ left: `${x * 100}%`, top: `${(cy / H) * 100}%` }}
+      />
+    </div>
+  );
+}
+
 /** Title card during the intro, chapter cards, the date and what stands, progress, recap. */
 export function ReplayOverlay({ timeline }: { timeline: Timeline }) {
   // 30 Hz: one render per exported frame, cheap enough live for a handful of spans.
   const t = useReplayStore((s) => Math.floor(s.t * 30) / 30);
   const scn = timeline.scenario;
-  const { monthFmt, numbers, figures, stats, titles } = useMemo(
+  const { monthFmt, numbers, figures, curve, stats, titles } = useMemo(
     () => ({
       monthFmt: new Intl.DateTimeFormat(scn.lang, { month: "long", year: "numeric" }),
       numbers: new Intl.NumberFormat(scn.lang),
       figures: recapFigures(scenarioStats(timeline)),
+      curve: servicesCurve(timeline),
       stats: timeline.chapters.map((c) => chapterStat(timeline, c)),
       titles: timeline.chapters.map((c) => c.title),
     }),
@@ -281,6 +343,7 @@ export function ReplayOverlay({ timeline }: { timeline: Timeline }) {
             <Rolling change={nodes} /> {word(timeline, "service", nodes.current)}
           </span>
         </div>
+        <ServicesSpark curve={curve} x={curveX(timeline, t)} count={nodes.current} />
       </div>
       <ProgressLine progress={progress} titles={titles} label={1 - (chapter?.card ?? 0)} />
     </div>

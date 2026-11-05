@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { countAt, hudCounts, monthAt } from "@/domain/replayHud";
+import { countAt, curveX, hudCounts, monthAt, servicesCurve } from "@/domain/replayHud";
 import { parseScenario } from "@/domain/scenario";
 import example from "../../public/scenarios/example.json";
 
@@ -28,5 +28,25 @@ describe("replay HUD", () => {
     expect(start.k).toBeLessThan(0.2);
     expect(monthAt(tl, t + 0.2, 0.4).k).toBeGreaterThan(start.k);
     expect(monthAt(tl, t + 0.5, 0.4).previous).toBeNull();
+  });
+
+  test("the services curve steps with the counter over the scenario's dates", () => {
+    const curve = servicesCurve(tl);
+    expect(curve.steps[0]).toEqual({ x: 0, count: hudCounts(tl, tl.rampSec / 2 + 1e-3).nodes });
+    for (let i = 1; i < curve.steps.length; i++) {
+      expect(curve.steps[i]!.x).toBeGreaterThan(curve.steps[i - 1]!.x);
+      expect(curve.steps[i]!.count).not.toBe(curve.steps[i - 1]!.count);
+    }
+    const last = curve.steps[curve.steps.length - 1]!;
+    expect(last.x).toBeLessThanOrEqual(1);
+    expect(last.count).toBe(hudCounts(tl, tl.outroAt).nodes);
+    expect(curve.max).toBe(Math.max(...curve.steps.map((s) => s.count)));
+    // The cursor follows the date: still through the intro, at the end from the outro on.
+    expect(curveX(tl, 0)).toBe(0);
+    expect(curveX(tl, tl.scenario.introSec!)).toBe(0);
+    expect(curveX(tl, tl.outroAt)).toBe(1);
+    expect(curveX(tl, tl.totalSec)).toBe(1);
+    const cache = tl.nodes.get("paris-1/cache")!;
+    expect(curveX(tl, cache.from)).toBeCloseTo((31 + 28) / 364, 3);
   });
 });

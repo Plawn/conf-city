@@ -17,10 +17,10 @@ const MOVE_WINDOW_MS = 31 * DAY_MS;
 type Lang = "en" | "fr";
 type Plural = { one: string; other: string };
 
+/** Islands are the look; the words say servers. */
 const STRINGS: Record<Lang, Record<string, Plural>> = {
   en: {
     server: { one: "server", other: "servers" },
-    island: { one: "island", other: "islands" },
     cloud: { one: "cloud", other: "clouds" },
     service: { one: "service", other: "services" },
     deployed: { one: "service deployed", other: "services deployed" },
@@ -35,7 +35,6 @@ const STRINGS: Record<Lang, Record<string, Plural>> = {
   },
   fr: {
     server: { one: "serveur", other: "serveurs" },
-    island: { one: "île", other: "îles" },
     cloud: { one: "cloud", other: "clouds" },
     service: { one: "service", other: "services" },
     deployed: { one: "service déployé", other: "services déployés" },
@@ -175,7 +174,7 @@ export function chapterStat(tl: Timeline, ch: TimelineChapter): string | null {
   const removed = count((e) => e.what === "node" && e.kind === "remove" && !moved.has(e));
   const parts: string[] = [];
   if (islands > 0) {
-    parts.push(`+${islands} ${word(tl, "island", islands)}`);
+    parts.push(`+${islands} ${word(tl, "server", islands)}`);
   }
   if (newClouds > 0) {
     parts.push(`+${newClouds} ${word(tl, "cloud", newClouds)}`);
@@ -288,7 +287,7 @@ export function scenarioStats(tl: Timeline): RecapStat[] {
     ...extra,
   });
   const out: RecapStat[] = [
-    stat("islands", islands, "island"),
+    stat("islands", islands, "server"),
     stat("clouds", cloudCount, "cloud"),
     stat("services", services, "deployed"),
     stat("bridges", bridges, "bridge"),
