@@ -1,4 +1,4 @@
-import { MAST_HEIGHT } from "../layout/cableway";
+import { type Cableway, MAST_HEIGHT } from "../layout/cableway";
 import { cityAltitude } from "../layout/cloud";
 import type { WorldLayout } from "../layout/types";
 import type { Timeline, TimelineEvent } from "./scenario";
@@ -102,24 +102,26 @@ function cloudArrival(layout: WorldLayout, e: TimelineEvent) {
   return e.kind === "add" && e.what !== "link" && !!layout.cities.get(e.cityId)?.cloud;
 }
 
-/** The cloud and the nearest mast of its cable car, so the line it strings is in the frame; a cloud with no cable car takes the nearest island standing (`ground`), never empty sea. */
+/** The cloud with the island its nearest cable car lands on, mast included, so the line it strings reads; a cloud with no cable car takes the nearest island standing (`ground`), never empty sea. */
 function cloudFrame(layout: WorldLayout, cityId: string, ground: Iterable<string>) {
   const city = layout.cities.get(cityId);
   let box = citiesBox(layout, [cityId]);
   if (!city || !box) {
     return null;
   }
-  let mast: [number, number] | null = null;
+  let way: Cableway | null = null;
   let bestD = Number.POSITIVE_INFINITY;
-  for (const way of layout.cableways) {
-    const d = Math.hypot(way.base[0] - city.center[0], way.base[1] - city.center[1]);
-    if (way.cloud === cityId && d < bestD) {
+  for (const w of layout.cableways) {
+    const d = Math.hypot(w.base[0] - city.center[0], w.base[1] - city.center[1]);
+    if (w.cloud === cityId && d < bestD) {
       bestD = d;
-      mast = way.base;
+      way = w;
     }
   }
-  if (mast) {
-    return frame(grow(box, mast[0] - 1, mast[0] + 1, mast[1] - 1, mast[1] + 1, MAST_HEIGHT));
+  if (way) {
+    const [mx, mz] = way.base;
+    box = grow(box, mx - 1, mx + 1, mz - 1, mz + 1, MAST_HEIGHT);
+    return frame(grow(box, ...boxOf(citiesBox(layout, [way.ground]) ?? box)));
   }
   let island: string | null = null;
   for (const id of ground) {

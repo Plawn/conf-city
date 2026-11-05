@@ -135,11 +135,19 @@ describe("director, cloud services", () => {
   const arrival = tl.cities.get("azure")!.from;
   const service = tl.nodes.get("azure/openai")!.from;
 
-  test("a cloud's arrival is framed at its altitude, apart from the island's work", () => {
+  /** The look-at sits between the cloud and the island and the shot is wide enough for both. */
+  function framesBoth(shot: ShotKey, cloud: [number, number], island: [number, number]) {
+    const toCloud = Math.hypot(shot.lookAt[0] - cloud[0], shot.lookAt[2] - cloud[1]);
+    const toIsland = Math.hypot(shot.lookAt[0] - island[0], shot.lookAt[2] - island[1]);
+    const apart = Math.hypot(cloud[0] - island[0], cloud[1] - island[1]);
+    expect(Math.abs(toCloud - toIsland)).toBeLessThan(apart / 2);
+    expect(shot.distance).toBeGreaterThan(apart);
+    expect(shot.lookAt[1]).toBeGreaterThan(CLOUD_ALTITUDE / 3);
+  }
+
+  test("a cloud's arrival is framed up in the air with the island its cable car lands on", () => {
     const shot = keys.findLast((k) => k.t <= arrival)!;
-    const cloud = layout.cities.get("azure")!.center;
-    expect(shot.lookAt[1]).toBeGreaterThan(CLOUD_ALTITUDE / 2);
-    expect(Math.hypot(shot.lookAt[0] - cloud[0], shot.lookAt[2] - cloud[1])).toBeLessThan(15);
+    framesBoth(shot, layout.cities.get("azure")!.center, layout.cities.get("tools")!.center);
   });
 
   test("the shot holds while the cloud lands and its service rises", () => {
@@ -163,15 +171,7 @@ describe("director, cloud services", () => {
     );
     expect(bare.cableways).toHaveLength(0);
     const shot = planShots(lone, bare).findLast((k) => k.t <= lone.cities.get("azure")!.from)!;
-    const cloud = bare.cities.get("azure")!.center;
-    const island = bare.cities.get("tools")!.center;
-    // The look-at sits between the two and the shot is wide enough for both.
-    const toCloud = Math.hypot(shot.lookAt[0] - cloud[0], shot.lookAt[2] - cloud[1]);
-    const toIsland = Math.hypot(shot.lookAt[0] - island[0], shot.lookAt[2] - island[1]);
-    expect(Math.abs(toCloud - toIsland)).toBeLessThan(
-      Math.hypot(cloud[0] - island[0], cloud[1] - island[1]) / 2,
-    );
-    expect(shot.distance).toBeGreaterThan(keys.findLast((k) => k.t <= arrival)!.distance);
+    framesBoth(shot, bare.cities.get("azure")!.center, bare.cities.get("tools")!.center);
   });
 
   test("a chapter opening on a cloud lands on it at altitude", () => {
@@ -183,7 +183,7 @@ describe("director, cloud services", () => {
     const shots = planShots(chaptered, layout);
     const shot = shots.find((k) => k.t + k.duration >= ch.at - 1e-9)!;
     expect(shot.t + shot.duration).toBeLessThanOrEqual(ch.at + ch.holdSec + 1e-9);
-    expect(shot.lookAt[1]).toBeGreaterThan(CLOUD_ALTITUDE / 2);
+    expect(shot.lookAt[1]).toBeGreaterThan(CLOUD_ALTITUDE / 3);
   });
 });
 

@@ -122,8 +122,8 @@ Rules, in the order they run (defaults in brackets):
   (`chapter.at`, slipping at most `holdSec`), so the camera travels during the previous chapter's
   tail, never during the rises. It frames the cities carrying the bulk of the chapter's buildings
   (a lone side job stays off frame; an island arriving weighs more); a chapter opening on a cloud
-  is framed at its altitude with the nearest cable-car mast (with no cable car, the nearest
-  island standing, never empty sea). A demolition in a city where nothing
+  is framed at its altitude with the island its cable car lands on (with no cable car, the
+  nearest island standing), never empty sea. A demolition in a city where nothing
   rises gets one aside framing both cities, folded into the chapter's framing when too close.
   Without chapters, bursts of events get a shot each; demolitions are held through the blast
   (`BLAST_HOLD`) and catch the next burst under way rather than cut short. Everywhere, a framing
