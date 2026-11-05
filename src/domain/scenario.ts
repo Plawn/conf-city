@@ -70,6 +70,8 @@ export interface Scenario {
   rampSec?: number;
   /** ISO instant the sun is frozen at. */
   sunTime?: string;
+  /** BCP 47 tag of the on-screen text and dates ("fr", "en-GB"); default the viewer's locale. */
+  lang?: string;
   cities: ScenarioCity[];
   links?: (InterCityLink & Lifetime)[];
   /** Story beats, in any order; none = the video is one continuous stretch. */

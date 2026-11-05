@@ -744,6 +744,32 @@ Measure only after **Enter** then **Let's ride**: the title and briefing screens
 game. The numbers are not strictly comparable: theirs is display cadence, ours is capped at 60
 and its GPU time is the sum of per-pass timestamps.
 
+**Same machine, same browser (2026-11-04, Radeon Barcelo, Chromium 149 headless on Vulkan,
+960×600 at DPR 1, vsync and frame-rate limit off).** `bun scripts/benchmark-reference.ts`
+(`CITY_REFERENCE=punk|city`, `CITY_CASE`, `CITY_TWEAKS`, `CITY_WORLD_SCALE`) clicks through to
+the game for Punk, and loads Conf City with `?fps=1000` (a benchmark-only cadence override)
+counting rendered frames, not rAF ticks.
+
+| Scene | Frame interval median / p95 |
+| --- | --- |
+| Threejs-Punk, in game | 14.1 / 31.2 ms (66 fps) |
+| Conf City `high`, fixture world, night / noon | 5.9 / 22.5 ms, 5.9 / 21.8 ms |
+| Conf City `high`, fixture ×10, night / noon | 5.8 / 8.4 ms, 4.6 / 8.6 ms |
+
+On this machine Conf City is already cheaper per frame than the reference. Its techniques were
+reviewed against ours: most are already in place (half-resolution AO and bloom, DPR 1.5, no
+MSAA, event-driven shadows, frozen static matrices). Differences tried:
+
+- **AO budget** (`benchmark-pipeline.ts` variants `ao-8`, `ao-6`, `ao-6-raw`, 1280×800, Office,
+  3 runs): 16 → 6 samples saves 0.41 ms by day and 0.36 ms at night; dropping the denoise as
+  well (Punk's setting) saves 0.88 ms (11 %) and 0.98 ms. At fit-all and city framing the
+  image difference is not visible, even against `ao=0`; close-ups were not judged. Tiers are
+  unchanged; try `?tweaks=ao:6,aoDenoise:0`.
+- **Bloom on the emissive attachment only**: no gain (±0.1 ms) and no visible difference,
+  since emission already dominates the pixels above the 1.15 threshold. Not kept.
+- **Not transferable**: Punk has no point or spot lights (all neon is emissive + bloom), one
+  78-draw GLB, KTX2 textures, and a planar reflection that redraws the scene each frame.
+
 
 ## Reproducible comparison
 

@@ -11,6 +11,16 @@ import {
 } from "react";
 import type { CameraTarget } from "../domain/camera";
 import { IDLE_FPS, resolveDpr } from "../domain/quality";
+
+// `?fps=N` pins the cadence for benchmarks (e.g. 1000 = uncapped against an external reference).
+const BENCH_FPS = (() => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  const value = Number(new URLSearchParams(window.location.search).get("fps"));
+  return value > 0 ? value : undefined;
+})();
+
 import type {
   City,
   CityMeta,
@@ -133,7 +143,7 @@ export function WorldScene({
   const renderMode = useUiStore((s) => s.renderMode);
   const idle = useUiStore((s) => s.idle);
   const profile = useQualityProfile();
-  const fps = idle ? IDLE_FPS : renderMode === "office" ? 30 : 60;
+  const fps = BENCH_FPS ?? (idle ? IDLE_FPS : renderMode === "office" ? 30 : 60);
   // Overlay that hosts every drei <Html>; state (not ref) so children re-render once it exists.
   const [portalEl, setPortalEl] = useState<HTMLDivElement | null>(null);
   // Canvas re-applies its `dpr` prop (default [1, 2]) on every render, so the budget must live here.

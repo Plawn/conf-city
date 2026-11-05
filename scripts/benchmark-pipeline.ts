@@ -35,15 +35,19 @@ const variants = [
   { name: "no-water", params: "&water=0" },
   { name: "water-reference", params: "&water=reference" },
   { name: "no-fxaa", params: "&antialias=0" },
+  // Opt-in AO budgets, Threejs-Punk runs 6 samples without denoise.
+  { name: "ao-8", params: "&tweaks=ao:8" },
+  { name: "ao-6", params: "&tweaks=ao:6" },
+  { name: "ao-6-raw", params: "&tweaks=ao:6,aoDenoise:0" },
 ];
+const OPT_IN = ["bloom-reference", "ao-reference", "water-reference", "ao-8", "ao-6", "ao-6-raw"];
 const requested = process.env.CITY_VARIANTS?.split(",");
 if (requested?.some((name) => !variants.some((variant) => variant.name === name))) {
   throw new Error(`CITY_VARIANTS must use: ${variants.map((variant) => variant.name).join(",")}`);
 }
 const selected = variants.filter(
   (variant) =>
-    (!requested &&
-      !["bloom-reference", "ao-reference", "water-reference"].includes(variant.name)) ||
+    (!requested && !OPT_IN.includes(variant.name)) ||
     variant.name === "baseline" ||
     requested?.includes(variant.name),
 );
