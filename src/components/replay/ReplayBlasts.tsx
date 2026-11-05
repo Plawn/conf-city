@@ -13,6 +13,7 @@ import {
 } from "../../domain/blast";
 import { NODE_STYLE } from "../../domain/nodeStyle";
 import { cityLift } from "../../domain/replayLift";
+import { DUST_SEC, type DustPuff, dustAt, dustPuffs } from "../../domain/replayRise";
 import type { PositionedNode } from "../../domain/types";
 import type { WorldLayout } from "../../layout/types";
 import { replayPresence } from "../../store/replayStore";
@@ -23,6 +24,9 @@ const MAX_BLASTS = 64;
 const SHARDS = 26;
 const FLAMES = 6;
 const PUFFS = 9;
+const DUSTS = 8;
+const SMOKE = new THREE.Color("#3e3a3c");
+const DUST = new THREE.Color("#7a7062");
 const DEBRIS = ["#5a5856", "#6e6a64", "#47464a", "#7a6a58"];
 const HOT = new THREE.Color("#ffe39a").multiplyScalar(3.2);
 const WARM = new THREE.Color("#ff6a1a").multiplyScalar(1.8);
@@ -40,10 +44,14 @@ interface Site {
   width: number;
   shards: Shard[];
   puffs: Puff[];
+  dust: DustPuff[];
 }
 
-/** Buildings leaving the replay explode: fireball, flying debris, smoke. Three pooled draws. */
-export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
+/**
+ * Buildings leaving the replay explode (fireball, flying debris, smoke); arriving ones kick up
+ * a ring of dust. Three pooled draws: dust shares the smoke pool.
+ */
+export function ReplayBlasts({ layout, rampSec }: { layout: WorldLayout; rampSec: number }) {
   const shardMesh = useRef<THREE.InstancedMesh>(null);
   const fireMesh = useRef<THREE.InstancedMesh>(null);
   const smokeMesh = useRef<THREE.InstancedMesh>(null);
@@ -51,6 +59,7 @@ export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
   const color = useMemo(() => new THREE.Color(), []);
   const shard = useMemo(() => ({ x: 0, y: 0, z: 0, roll: 0, scale: 0 }), []);
   const puff = useMemo(() => ({ x: 0, y: 0, z: 0, scale: 0 }), []);
+  const smokePool = MAX_BLASTS * PUFFS;
   const sites = useMemo(() => new Map<string, Site>(), []);
   const byAddr = useMemo(
     () => new Map(layout.nodes.map((n) => [`${n.cityId}/${n.id}`, n] as const)),
@@ -63,11 +72,15 @@ export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
       mesh.setColorAt(i, color.set(DEBRIS[i % DEBRIS.length]!));
     }
     mesh.instanceColor!.needsUpdate = true;
+    // Allocate smoke colours up front: the material compiles once, with instance colours.
+    for (let i = 0; i < smokePool; i++) {
+      smokeMesh.current!.setColorAt(i, SMOKE);
+    }
     for (const m of [shardMesh, fireMesh, smokeMesh]) {
       m.current!.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.current!.count = 0;
     }
-  }, [color]);
+  }, [color, smokePool]);
 
   useFrame(() => {
     let blasts = 0;
@@ -117,11 +130,40 @@ export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
       const size = Math.max(site.width, site.height * 0.5);
       for (const p of site.puffs) {
         puffAt(p, age, puff);
+        smokeMesh.current!.setColorAt(puffs, SMOKE);
         dummy.position.set(site.x + puff.x * size, y + puff.y * size, site.z + puff.z * size);
         dummy.rotation.set(p.angle, p.delay * 9, 0);
         dummy.scale.setScalar(Math.max(0.0001, puff.scale * size));
         dummy.updateMatrix();
         smokeMesh.current!.setMatrixAt(puffs++, dummy.matrix);
+      }
+    }
+    // Construction dust while a building rises (its age is presence × ramp).
+    for (const [addr, presence] of replayPresence.nodes) {
+      const age = presence * rampSec;
+      if (presence >= 1 || age >= DUST_SEC || replayPresence.blasts.has(addr)) {
+        continue;
+      }
+      if (puffs + DUSTS > smokePool) {
+        break;
+      }
+      const site = siteOf(sites, byAddr, layout, addr);
+      if (!site) {
+        continue;
+      }
+      const y = site.y + cityLift(replayPresence.cities.get(site.cityId) ?? 0, site.cloud);
+      const size = site.width * 1.4;
+      for (const p of site.dust) {
+        dustAt(p, age, puff);
+        if (puff.scale <= 0) {
+          continue;
+        }
+        dummy.position.set(site.x + puff.x * size, y + puff.y * size, site.z + puff.z * size);
+        dummy.rotation.set(p.angle, p.angle * 0.5, 0);
+        dummy.scale.setScalar(puff.scale * size);
+        dummy.updateMatrix();
+        smokeMesh.current!.setMatrixAt(puffs, dummy.matrix);
+        smokeMesh.current!.setColorAt(puffs++, DUST);
       }
     }
     for (const [mesh, count] of [
@@ -136,7 +178,7 @@ export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
         mesh.instanceMatrix.clearUpdateRanges();
         mesh.instanceMatrix.addUpdateRange(0, count * 16);
         mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor && mesh === fireMesh.current) {
+        if (mesh.instanceColor && mesh !== shardMesh.current) {
           mesh.instanceColor.clearUpdateRanges();
           mesh.instanceColor.addUpdateRange(0, count * 3);
           mesh.instanceColor.needsUpdate = true;
@@ -173,7 +215,7 @@ export function ReplayBlasts({ layout }: { layout: WorldLayout }) {
         raycast={NO_RAYCAST}
       >
         <icosahedronGeometry args={[1, 1]} />
-        <meshBasicMaterial color="#3e3a3c" transparent opacity={0.55} depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.55} depthWrite={false} />
       </instancedMesh>
     </group>
   );
@@ -206,6 +248,7 @@ function siteOf(
       width: scale * 0.8,
       shards: blastShards(addr, SHARDS),
       puffs: blastPuffs(addr, PUFFS),
+      dust: dustPuffs(addr, DUSTS),
     };
     sites.set(addr, site);
   }

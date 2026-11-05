@@ -4,6 +4,7 @@ import { Color, type Group, Matrix4, type Object3D } from "three";
 import { buildingBlastScale } from "../../domain/blast";
 import type { BuildingVariant } from "../../domain/buildingVariant";
 import { NODE_STYLE } from "../../domain/nodeStyle";
+import { buildingRise } from "../../domain/replayRise";
 import type { NodeType } from "../../domain/types";
 import { REPLAY_MODE, replayPresence } from "../../store/replayStore";
 import { BuildingFire } from "../BuildingFire";
@@ -123,7 +124,7 @@ export function InstancedBuilding({
   );
 }
 
-/** Replay: grows from the ground, slightly narrow until done; swells and vanishes when it blows up. */
+/** Replay: shoots up, overshoots and settles (`buildingRise`); swells and vanishes when it blows up. */
 function riseTo(group: Group, addr: string) {
   const blast = replayPresence.blasts.get(addr);
   if (blast !== undefined) {
@@ -131,10 +132,8 @@ function riseTo(group: Group, addr: string) {
     group.scale.set(Math.max(0.001, xz), Math.max(0.001, y), Math.max(0.001, xz));
     return;
   }
-  const presence = replayPresence.nodes.get(addr) ?? 0;
-  const up = 1 - (1 - presence) ** 3;
-  const xz = 0.6 + 0.4 * presence;
-  group.scale.set(xz, Math.max(0.001, up), xz);
+  const [xz, y] = buildingRise(replayPresence.nodes.get(addr) ?? 0);
+  group.scale.set(Math.max(0.001, xz), Math.max(0.001, y), Math.max(0.001, xz));
 }
 
 const SCRATCH = new Matrix4();

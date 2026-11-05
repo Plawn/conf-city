@@ -13,6 +13,8 @@ export interface ShotKey {
   lookAt: [number, number, number];
   /** Camera–target distance. */
   distance: number;
+  /** Seconds the move into this framing takes: longer the farther it goes. */
+  duration: number;
 }
 
 export interface CameraPose {
@@ -32,11 +34,22 @@ const HOLD = 1.2;
 const WIDE_GAP = 5;
 /** A demolition shot holds until the fireball has died down. */
 const BLAST_HOLD = 1.6;
-/** Seconds a camera move takes. */
+/** Seconds a short camera move takes; a long one stretches up to `MAX_TRANSITION`. */
 export const TRANSITION = 1.6;
+const MAX_TRANSITION = 3.4;
+/** Zoom-out during a long move (van Wijk & Nuij `rho`): higher climbs more. */
+const RHO = 1.3;
 const ORBIT_DEG_PER_SEC = 3;
-const ELEVATION = (35 * Math.PI) / 180;
+/** Close-ups look across the street, wide shots look down from higher. */
+const LOW_ELEVATION = (26 * Math.PI) / 180;
+const HIGH_ELEVATION = (40 * Math.PI) / 180;
 const MIN_DISTANCE = 14;
+/** A held shot slowly pushes in by up to this fraction. */
+const DRIFT = 0.08;
+const DRIFT_SEC = 6;
+/** Half-width (s) of the window the raw path is averaged over: no velocity jump anywhere. */
+const SMOOTH_SEC = 0.5;
+const SMOOTH_SAMPLES = 11;
 
 interface Box {
   minX: number;
@@ -48,7 +61,9 @@ interface Box {
   maxY: number;
 }
 
-function frame(box: Box | null): Omit<ShotKey, "t"> | null {
+type Framing = Omit<ShotKey, "t" | "duration">;
+
+function frame(box: Box | null): Framing | null {
   if (!box) {
     return null;
   }
@@ -121,19 +136,14 @@ function aliveAt(tl: Timeline, t: number): string[] {
   return [...tl.cities].filter(([, s]) => s.from <= t && t < s.to).map(([id]) => id);
 }
 
-/** Close-up on a handful of buildings of one island, else the islands involved. */
+/** Close-up on the buildings involved, wherever they stand; the islands when one arrives or leaves. */
 function clusterFrame(tl: Timeline, layout: WorldLayout, events: TimelineEvent[]) {
   const cityIds = new Set(events.map((e) => e.cityId));
-  const addrs = events.filter((e) => e.what === "node").map((e) => e.id);
-  if (
-    cityIds.size === 1 &&
-    addrs.length > 0 &&
-    addrs.length <= 3 &&
-    events.every((e) => e.what !== "city")
-  ) {
+  const addrs = new Set(events.filter((e) => e.what === "node").map((e) => e.id));
+  if (addrs.size > 0 && events.every((e) => e.what !== "city")) {
     let box: Box | null = null;
     for (const n of layout.nodes) {
-      if (addrs.includes(`${n.cityId}/${n.id}`)) {
+      if (addrs.has(`${n.cityId}/${n.id}`)) {
         const [x, y, z] = n.position;
         box = grow(box, x - 3, x + 3, z - 3, z + 3, y);
       }
@@ -155,14 +165,20 @@ export function planShots(tl: Timeline, layout: WorldLayout): ShotKey[] {
   };
   const keys: ShotKey[] = [];
   let holdUntil = 0;
-  const add = (t: number, f: Omit<ShotKey, "t"> | null) => {
+  /** A move toward `f` meant to land `TRANSITION` after `t`: a long one leaves earlier. */
+  const add = (t: number, f: Framing | null) => {
     if (!f) {
       return;
     }
     const last = keys[keys.length - 1];
+    if (!last) {
+      keys.push({ t, ...f, duration: TRANSITION });
+      return;
+    }
+    const duration = moveDuration(last, f);
     // Never start a move before the previous one has landed, nor cut a demolition short.
-    const at = last ? Math.max(t, last.t + TRANSITION, holdUntil) : t;
-    keys.push({ t: at, ...f });
+    const at = Math.max(t + TRANSITION - duration, last.t + last.duration, holdUntil);
+    keys.push({ t: at, ...f, duration });
   };
 
   const opening = wideAt(intro);
@@ -236,33 +252,134 @@ function smooth(x: number): number {
   return c * c * (3 - 2 * c);
 }
 
-/** Pose at video second `t`: eased between framings, slowly orbiting throughout. */
+/** Optimal zoom-and-pan path between two framings (van Wijk & Nuij 2003, as d3.interpolateZoom). */
+function zoomPath(a: Framing, b: Framing) {
+  const dx = b.lookAt[0] - a.lookAt[0];
+  const dz = b.lookAt[2] - a.lookAt[2];
+  const w0 = a.distance;
+  const w1 = b.distance;
+  const d2 = dx * dx + dz * dz;
+  const r2 = RHO * RHO;
+  if (d2 < 1e-6) {
+    const S = Math.log(w1 / w0) / RHO;
+    return {
+      length: Math.abs(S),
+      at: (k: number) => ({ u: k, w: w0 * Math.exp(RHO * k * S) }),
+    };
+  }
+  const d1 = Math.sqrt(d2);
+  const b0 = (w1 * w1 - w0 * w0 + r2 * r2 * d2) / (2 * w0 * r2 * d1);
+  const b1 = (w1 * w1 - w0 * w0 - r2 * r2 * d2) / (2 * w1 * r2 * d1);
+  const r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0);
+  const r1 = Math.log(Math.sqrt(b1 * b1 + 1) - b1);
+  const S = (r1 - r0) / RHO;
+  const c0 = Math.cosh(r0);
+  return {
+    length: S,
+    at: (k: number) => {
+      const s = k * S;
+      return {
+        u: (w0 / (r2 * d1)) * (c0 * Math.tanh(RHO * s + r0) - Math.sinh(r0)),
+        w: (w0 * c0) / Math.cosh(RHO * s + r0),
+      };
+    },
+  };
+}
+
+function moveDuration(a: Framing, b: Framing): number {
+  return Math.min(MAX_TRANSITION, TRANSITION + 0.7 * Math.max(0, zoomPath(a, b).length - 0.6));
+}
+
+/** Distance once a shot has been held `held` seconds: a slow push-in. */
+function drifted(distance: number, held: number): number {
+  return distance * (1 - DRIFT * (1 - Math.exp(-Math.max(0, held) / DRIFT_SEC)));
+}
+
+interface RawPose {
+  x: number;
+  y: number;
+  z: number;
+  logDistance: number;
+}
+
+/** Last key starting at or before `t` (0 before the first). */
+function keyIndex(keys: ShotKey[], t: number): number {
+  let lo = 0;
+  let hi = keys.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (keys[mid]!.t <= t) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return lo;
+}
+
+/** Unsmoothed framing at `t`: held (pushing in), or flying the zoom path toward the next. */
+function rawAt(keys: ShotKey[], t: number, out: RawPose) {
+  const i = keyIndex(keys, t);
+  const to = keys[i]!;
+  const from = keys[i - 1];
+  const land = to.t + to.duration;
+  if (!from || t >= land || t < to.t) {
+    const held = from || t >= to.t ? t - land : 0;
+    out.x = to.lookAt[0];
+    out.y = to.lookAt[1];
+    out.z = to.lookAt[2];
+    out.logDistance = Math.log(drifted(to.distance, held));
+    return;
+  }
+  const start: Framing = {
+    lookAt: from.lookAt,
+    distance: drifted(from.distance, to.t - (from.t + from.duration)),
+  };
+  const { u, w } = zoomPath(start, to).at(smooth((t - to.t) / to.duration));
+  out.x = start.lookAt[0] + (to.lookAt[0] - start.lookAt[0]) * u;
+  out.y = start.lookAt[1] + (to.lookAt[1] - start.lookAt[1]) * u;
+  out.z = start.lookAt[2] + (to.lookAt[2] - start.lookAt[2]) * u;
+  out.logDistance = Math.log(w);
+}
+
+const SAMPLE: RawPose = { x: 0, y: 0, z: 0, logDistance: 0 };
+
+/** Pose at video second `t`: the zoom path averaged over a short window, slowly orbiting. */
 export function shotAt(keys: ShotKey[], t: number): CameraPose | null {
   if (keys.length === 0) {
     return null;
   }
-  let i = 0;
-  while (i + 1 < keys.length && keys[i + 1]!.t <= t) {
-    i++;
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  let logDistance = 0;
+  let total = 0;
+  for (let k = 0; k < SMOOTH_SAMPLES; k++) {
+    const o = (k / (SMOOTH_SAMPLES - 1)) * 2 - 1;
+    // Hann weights: a smooth kernel keeps the averaged path smooth too.
+    const weight = 0.5 + 0.5 * Math.cos(Math.PI * o);
+    if (weight <= 0) {
+      continue;
+    }
+    rawAt(keys, Math.max(0, t + o * SMOOTH_SEC), SAMPLE);
+    x += SAMPLE.x * weight;
+    y += SAMPLE.y * weight;
+    z += SAMPLE.z * weight;
+    logDistance += SAMPLE.logDistance * weight;
+    total += weight;
   }
-  const to = keys[i]!;
-  const from = keys[i - 1] ?? to;
-  const e = t < to.t ? 0 : smooth((t - to.t) / TRANSITION);
-  const start = t < to.t ? to : from;
-  const lerp = (a: number, b: number) => a + (b - a) * e;
-  const lookAt: [number, number, number] = [
-    lerp(start.lookAt[0], to.lookAt[0]),
-    lerp(start.lookAt[1], to.lookAt[1]),
-    lerp(start.lookAt[2], to.lookAt[2]),
-  ];
-  const distance = Math.exp(lerp(Math.log(start.distance), Math.log(to.distance)));
+  const lookAt: [number, number, number] = [x / total, y / total, z / total];
+  const distance = Math.exp(logDistance / total);
+  // Higher as the camera pulls out: a long move climbs, a close-up comes down to street level.
+  const lift = Math.max(0, Math.min(1, Math.log(distance / MIN_DISTANCE) / Math.log(6)));
+  const elevation = LOW_ELEVATION + (HIGH_ELEVATION - LOW_ELEVATION) * smooth(lift);
   const azimuth = Math.PI / 4 + (t * ORBIT_DEG_PER_SEC * Math.PI) / 180;
-  const flat = distance * Math.cos(ELEVATION);
+  const flat = distance * Math.cos(elevation);
   return {
     lookAt,
     position: [
       lookAt[0] + flat * Math.sin(azimuth),
-      lookAt[1] + distance * Math.sin(ELEVATION),
+      lookAt[1] + distance * Math.sin(elevation),
       lookAt[2] + flat * Math.cos(azimuth),
     ],
   };

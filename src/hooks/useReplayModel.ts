@@ -88,23 +88,12 @@ export function useReplayScene(tl: Timeline, base: ReplayBase, key: string) {
       }
       telemetry.set(addr, entry);
     }
-    let clouds = 0;
-    for (const id of active.cities) {
-      if (base.full.cities.get(id)?.cloud) {
-        clouds++;
-      }
-    }
     return {
       layout,
       cities,
       links,
       telemetry,
       visibleCities: active.cities,
-      counts: {
-        cities: active.cities.size - clouds,
-        clouds,
-        nodes: active.nodes.size,
-      },
     };
   }, [tl, base, key, telemetryCache]);
 }

@@ -19,7 +19,30 @@ describe("director", () => {
   test("shots are spaced by at least one camera move", () => {
     expect(keys.length).toBeGreaterThan(2);
     for (let i = 1; i < keys.length; i++) {
-      expect(keys[i]!.t - keys[i - 1]!.t).toBeGreaterThanOrEqual(TRANSITION - 1e-9);
+      expect(keys[i]!.duration).toBeGreaterThanOrEqual(TRANSITION);
+      expect(keys[i]!.t - keys[i - 1]!.t).toBeGreaterThanOrEqual(keys[i - 1]!.duration - 1e-9);
+    }
+  });
+
+  test("a farther move takes longer", () => {
+    const moves = keys.slice(1).map((k, i) => ({
+      far: Math.hypot(k.lookAt[0] - keys[i]!.lookAt[0], k.lookAt[2] - keys[i]!.lookAt[2]),
+      duration: k.duration,
+    }));
+    const near = moves.reduce((a, b) => (a.far < b.far ? a : b));
+    const far = moves.reduce((a, b) => (a.far > b.far ? a : b));
+    expect(far.duration).toBeGreaterThan(near.duration);
+  });
+
+  test("the camera never stops dead between two framings", () => {
+    // Velocity is continuous: consecutive per-frame steps differ by a small fraction.
+    const step = 1 / 60;
+    const at = (t: number) => shotAt(keys, t)!.lookAt;
+    for (let t = step; t < tl.totalSec - 2 * step; t += step) {
+      const [a, b, c] = [at(t - step), at(t), at(t + step)];
+      const v0 = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      const v1 = Math.hypot(c[0] - b[0], c[2] - b[2]);
+      expect(Math.abs(v1 - v0)).toBeLessThan(0.02);
     }
   });
 

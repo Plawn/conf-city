@@ -111,9 +111,9 @@ function ReplayPlayer({ timeline, onOpen }: { timeline: Timeline; onOpen: (file:
         cityPresence={presenceOf}
       >
         <ReplayDriver timeline={timeline} shots={base.shots} />
-        <ReplayBlasts layout={scene.layout} />
+        <ReplayBlasts layout={scene.layout} rampSec={timeline.rampSec} />
       </WorldScene>
-      <ReplayOverlay timeline={timeline} counts={scene.counts} />
+      <ReplayOverlay timeline={timeline} />
       {!CINEMA_MODE && <ReplayBar timeline={timeline} onOpen={onOpen} />}
     </div>
   );
