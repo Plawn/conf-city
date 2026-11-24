@@ -393,4 +393,3 @@ describe("condenseScenario", () => {
     expect(find(out, "groq/llm")?.building).toBe("relay-station");
   });
 });
-
