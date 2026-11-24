@@ -16,11 +16,13 @@ reverse proxy that handles it in front. The Docker Hub page is `docker/hub/READM
 ### Cutting a release
 
 ```sh
-just release minor             # bun pm version: bumps package.json, commits, tags vX.Y.Z
+git push origin main           # ci.yml: typecheck, lint, tests, image builds (no push)
+just release minor             # refuses unless ci is green on HEAD; bumps, commits, tags vX.Y.Z
 git push origin main --tags    # the tag push is what publishes
 ```
 
-`.github/workflows/release.yml` then runs typecheck, lint and tests, checks the tag matches
+Every push to `main` and every PR runs `.github/workflows/ci.yml`, so breakage shows up
+before a version number is spent. `.github/workflows/release.yml` reruns those checks, checks the tag matches
 `package.json`, builds the five images multi-arch, pushes them and syncs the Docker Hub
 description. A `-rc.N` tag publishes `X.Y.Z-rc.N` only, never `latest`. Repo settings:
 secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (Read/Write/Delete scope), optional variable
