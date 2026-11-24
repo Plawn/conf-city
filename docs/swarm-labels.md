@@ -188,7 +188,7 @@ the manager only. Topology, labels, liveness and node capacity are cluster-wide
 either way.
 
 That per-node agent also measures the machine itself, which needs two read-only
-bind-mounts (see `docker-compose.swarm.yml`):
+bind-mounts (see `docker-compose.node-agent.yml`):
 
 | Mount | Env | Gives |
 |-------|-----|-------|

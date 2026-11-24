@@ -55,6 +55,7 @@ provider is blind to every task scheduled on another node. Coverage is split, an
 |---|---|---|
 | `docker-swarm.ts` | `node.role == manager` | topology, `NodeMeta`, `CityMeta`, liveness, logs, `cpuLimit` / `memLimitMb` |
 | `docker-node.ts` | `mode: global` (every node) | `cpu`, `memoryMb`, `netRxKbps`, `netTxKbps`, and the machine's own `CityMetrics` |
+| *or* `victoria.ts` | one replica, anywhere | the same fields, read from VictoriaMetrics |
 
 The two **must keep writing disjoint fields** — the merge is last-writer-wins per key, so an
 overlap would make values flap between providers. Limits stay on the manager because they come
@@ -62,6 +63,41 @@ from the service spec (`Reservations` serve as a fallback when no hard limit is 
 by the replica count running on that node, matching the usage the agent sums over those replicas.
 
 Host mounts and `PROVIDER_ID` templating: `deployment.md`. Service labels: `swarm-labels.md`.
+
+### VictoriaMetrics instead of the agent
+
+Where Telegraf (`docker` input) and node_exporter already ship to VictoriaMetrics, `victoria.ts`
+replaces the agent: one PromQL instant query per field per tick, for the whole cluster, no Docker
+socket and no host mount. It writes exactly the agent's fields, so **deploy one or the other**
+(`docker-compose.victoria.yml` or `docker-compose.node-agent.yml`), never both.
+
+| field | query (`C` = container matchers, `N` = node matchers, `w` = window) |
+|---|---|
+| `cpu` | `sum by (host, service)(rate(docker_container_cpu_usage_total{C,cpu="cpu-total"}[w])) / 1e7` |
+| `memoryMb` | `docker_container_mem_usage - docker_container_mem_inactive_file`, summed |
+| `netRxKbps` / `netTxKbps` | `rate(docker_container_net_{rx,tx}_bytes[w]) * 8 / 1000`, summed over interfaces |
+| `cpuUsedCores` | `rate(node_cpu_seconds_total{N,mode!~"idle\|iowait"}[w])`, summed |
+| `memUsedMb` | `MemTotal - MemAvailable` |
+| `load1` | `node_load1` |
+| `diskUsedMb` / `diskTotalMb` | `node_filesystem_{size - free, size}` on the root mountpoint |
+| `diskRead/WriteMbPerSec` | `rate(node_disk_{read,written}_bytes_total[w])` over whole disks |
+
+Addresses come from labels: `engine_host/com_docker_swarm_service_name` for services, `instance`
+for machines — both must be the Swarm hostname. `CityMetrics.at` is the sample time, not the poll
+time. A failed query drops only its field for that tick (warned once, until it recovers).
+
+| variable | default | meaning |
+|---|---|---|
+| `VICTORIAMETRICS_URL` | `http://victoriametrics:8428` | Prometheus API base (`/api/v1/query` is appended) |
+| `VICTORIAMETRICS_TIMEOUT_MS` | `8000` | deadline per query |
+| `VM_METRICS_INTERVAL` | `10000` | poll period — no use going below the scrape interval |
+| `VM_RATE_WINDOW` | `30s` | `rate()` window, a few scrape intervals |
+| `VM_CONTAINER_FILTER` | `job="telegraf"` | matchers for the container series |
+| `VM_NODE_FILTER` | `job="node"` | matchers for the node_exporter series |
+| `VM_HOST_LABEL` / `VM_SERVICE_LABEL` | `engine_host` / `com_docker_swarm_service_name` | container address labels |
+| `VM_INSTANCE_LABEL` | `instance` | machine address label |
+| `VM_ROOT_MOUNT` | `/` | mountpoint measured for disk space |
+| `VM_DISK_DEVICE_EXCLUDE` | `(loop\|ram\|zram\|sr\|fd\|dm-\|md).*` | devices left out of disk throughput |
 
 ## Auto-discovery
 

@@ -2,8 +2,8 @@
 
 ## Published images (Docker Hub)
 
-Five images, `linux/amd64` + `linux/arm64`, tagged `X.Y.Z`, `X.Y` and `latest`:
-`<ns>/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-dummy}`.
+Six images, `linux/amd64` + `linux/arm64`, tagged `X.Y.Z`, `X.Y` and `latest`:
+`<ns>/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-victoria,provider-dummy}`.
 
 ```sh
 docker compose -f docker-compose.demo.yml up                 # demo data, any host → :8080
@@ -38,7 +38,7 @@ the Dockerfiles and installs use `--frozen-lockfile`: bump them on purpose.
 docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build
 
 # Real Swarm metrics
-docker compose -f docker-compose.yml -f docker-compose.swarm.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.swarm.yml -f docker-compose.node-agent.yml up --build
 ```
 
 Images: `docker/Dockerfile.frontend` (Vite build → nginx, `nginx.conf.template` serves the SPA
@@ -68,7 +68,9 @@ see the variables; the compose files default to the published Docker Hub images.
 | `TRAEFIK_NETWORK` | `traefik` | name of the external Traefik network to join |
 | `DEPLOY_CONSTRAINT` | `node.role == manager` | Swarm placement constraint for frontend and proxy |
 | `VICTORIALOGS_URL` | `http://victorialogs:9428` | VictoriaLogs base URL (logs overlay) |
-| `VICTORIALOGS_NETWORK` | `monitoring_obs` | external network VictoriaLogs lives on |
+| `VICTORIALOGS_NETWORK` | `monitoring_obs` | external network VictoriaLogs (and VictoriaMetrics) live on |
+| `VICTORIALOGS_SCHEMA` | `vector` | log field layout, `promtail` for `swarm_service` / `swarm_instance` |
+| `VICTORIAMETRICS_URL` | `http://victoriametrics:8428` | VictoriaMetrics base URL (metrics overlay) |
 | `AMBIENT_SERVICES` | *(empty)* | services whose incoming links are not drawn |
 
 ## Production (`justfile`)
@@ -91,6 +93,25 @@ it never moves `latest`.
 The overlay chain lives in the `justfile` (`files` / `stackfiles`). Drop
 `docker-compose.victorialogs.yml` from it to read logs from the Docker API again
 (see `logs-backends.md`).
+
+## Usage source: VictoriaMetrics or the agent
+
+The chain deploys `docker-compose.victoria.yml` (one `provider-victoria` replica reading
+VictoriaMetrics, see `providers.md`). Without VictoriaMetrics, swap it for
+`docker-compose.node-agent.yml` in the `justfile`. Switching does not remove the old service —
+`docker stack deploy` never prunes — so drop it by hand: `docker service rm confcity_provider-node`
+(or `confcity_provider-victoria`). Running both makes every usage value flap.
+
+Moving an existing stack from the agent to VictoriaMetrics:
+
+1. In `.env`, point at the monitoring services. From another stack, a service resolves by its
+   **full** Swarm name (`<stack>_<service>`), not its short alias:
+   `VICTORIAMETRICS_URL=http://<stack>_vmetrics:8428`, same for `VICTORIALOGS_URL`.
+2. Check both are attached to `VICTORIALOGS_NETWORK` (`docker service inspect <svc>`).
+3. With promtail shipping the logs, set `VICTORIALOGS_SCHEMA=promtail`.
+4. Release (the image must exist on Docker Hub), `just deploy`, then
+   `docker service rm confcity_provider-node`.
+5. `just logs provider-victoria`: one `query failed` warning per field that cannot be read.
 
 ## Swarm agent mounts
 

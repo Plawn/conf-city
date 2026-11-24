@@ -50,6 +50,10 @@ jobs:
             dockerfile: docker/Dockerfile.provider
             script: proxy/providers/docker-node.ts
             title: Conf City — per-node stats agent
+          - name: provider-victoria
+            dockerfile: docker/Dockerfile.provider
+            script: proxy/providers/victoria.ts
+            title: Conf City — VictoriaMetrics stats provider
           - name: provider-dummy
             dockerfile: docker/Dockerfile.provider
             script: proxy/providers/dummy.ts

@@ -1,0 +1,45 @@
+# Per-node agent overlay — container usage and machine stats straight from each node
+#
+# Alternative to docker-compose.victoria.yml, for clusters without VictoriaMetrics.
+# Never deploy both: they write the same fields and the values would flap.
+# Usage:
+#   docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml \
+#                       -c docker-compose.node-agent.yml confcity
+
+services:
+  # ── Per-node stats agent ──
+  # `mode: global`: the manager's Docker socket cannot read the stats of containers
+  # scheduled on another node, so one agent runs on each node and reports what it sees.
+  provider-node:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-node:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.provider
+      args:
+        PROVIDER_SCRIPT: proxy/providers/docker-node.ts
+    environment:
+      PROXY_URL: ws://proxy:4001/ws/provider
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Swarm templating — one distinct id per node. The proxy indexes providers by
+      # their declared id, so two homonyms would evict each other.
+      PROVIDER_ID: "node-agent-{{.Node.Hostname}}"
+      # Host procfs, for the machine-level CPU/memory of the city badge. Container
+      # stats alone miss the kernel, dockerd and every non-Swarm container.
+      # Disk I/O comes from the same mount (/proc/diskstats).
+      HOST_PROC: /host/proc
+      # Host root, for the disk *space* gauge only: the container's own `/` is the
+      # overlay, which reports whatever backs /var/lib/docker rather than the machine.
+      HOST_FS: /hostfs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /:/hostfs:ro
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      labels:
+        # conf-city infrastructure: not drawn as a building
+        - "confcity.hidden=true"
+    networks:
+      - confcity

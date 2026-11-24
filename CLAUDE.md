@@ -83,7 +83,7 @@ preview and Chromium — see `docs/render-performance.md`. Docker and `just` rec
 | Topic | File |
 |---|---|
 | Annotated file tree, data flow, UI state, Glass UI | `docs/architecture.md` |
-| Providers, proxy, log backfill, Swarm split, auto-discovery | `docs/providers.md` |
+| Providers, proxy, log backfill, Swarm split, VictoriaMetrics provider, auto-discovery | `docs/providers.md` |
 | Docker, `justfile`, registry, agent mounts | `docs/deployment.md` |
 | Swarm labels (`confcity.*`) | `docs/swarm-labels.md` |
 | Log backends (`LOGS_BACKEND`) | `docs/logs-backends.md` |

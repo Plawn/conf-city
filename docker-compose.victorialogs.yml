@@ -19,6 +19,8 @@ services:
       LOGS_BACKEND: victorialogs
       # Swarm service alias of VictoriaLogs, resolved inside the log network joined below.
       VICTORIALOGS_URL: ${VICTORIALOGS_URL:-http://victorialogs:9428}
+      # Field layout of the collector: vector (Swarm ids) or promtail (names).
+      VICTORIALOGS_SCHEMA: ${VICTORIALOGS_SCHEMA:-vector}
     networks:
       - confcity
       - obs

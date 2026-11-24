@@ -76,7 +76,7 @@ The frontend auto-connects to the proxy and displays live metrics on each node.
 
 ### Published images
 
-Multi-arch images on Docker Hub (`plawn/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-dummy}`),
+Multi-arch images on Docker Hub (`plawn/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-victoria,provider-dummy}`),
 no checkout or Traefik needed:
 
 ```sh
@@ -109,6 +109,7 @@ See [deployment](docs/deployment.md) for the full variable table.
 | `provider-dummy` | bun | — | Random walk metrics generator for testing |
 | `provider-swarm` | bun | — | Topology, liveness, logs, limits from a manager's Docker API |
 | `provider-node` | bun | — | Per-node container usage + machine CPU/memory/disk (`mode: global`) |
+| `provider-victoria` | bun | — | Same fields as `provider-node`, read from VictoriaMetrics (one replica) |
 
 ### Environment variables
 

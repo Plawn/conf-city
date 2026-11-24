@@ -28,7 +28,15 @@ known), a range query is one HTTP call for every service at once, and nothing is
 
 ### Expected fields
 
-The adapter assumes a collector that forwards container labels verbatim — Vector's
+`VICTORIALOGS_SCHEMA` names the collector's layout:
+
+| schema | service field | node field | matched against | filter |
+|---|---|---|---|---|
+| `vector` *(default)* | `label.com.docker.swarm.service.id` | `label.com.docker.swarm.node.id` | Swarm ids | field scan |
+| `promtail` | `swarm_service` | `swarm_instance` | service name, node hostname | stream `{…}` |
+
+`VICTORIALOGS_SERVICE_FIELD` / `VICTORIALOGS_NODE_FIELD` override either field name. The rest of
+this section describes `vector`, a collector that forwards container labels verbatim — Vector's
 `docker_logs` source does, and so does anything writing the standard Docker label set:
 
 | field | used for |
@@ -76,6 +84,8 @@ These labels are ordinary fields, not stream fields, so filtering on them costs 
 |---|---|---|
 | `LOGS_BACKEND` | `docker` | `docker` or `victorialogs` |
 | `VICTORIALOGS_URL` | `http://victorialogs:9428` | base URL |
+| `VICTORIALOGS_SCHEMA` | `vector` | `vector` or `promtail` field layout |
+| `VICTORIALOGS_SERVICE_FIELD` / `_NODE_FIELD` | *(schema's)* | field name overrides |
 | `VICTORIALOGS_TENANT` | *(none)* | `accountID:projectID`, sent as `AccountID` / `ProjectID` headers |
 | `VICTORIALOGS_TIMEOUT_MS` | `10000` | hard deadline per request |
 | `VICTORIALOGS_EXTRA_FILTER` | *(none)* | extra LogsQL filter, ANDed in (e.g. `stream:stdout`) |

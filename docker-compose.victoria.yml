@@ -1,0 +1,39 @@
+# VictoriaMetrics overlay — container usage and machine stats from the metrics store
+#
+# Replaces docker-compose.node-agent.yml where Telegraf (docker input) and node_exporter
+# already ship to VictoriaMetrics: one replica, no Docker socket, no host mounts.
+# Never deploy both: they write the same fields and the values would flap.
+# Usage:
+#   docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml \
+#                       -c docker-compose.victorialogs.yml -c docker-compose.victoria.yml confcity
+
+services:
+  provider-victoria:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-victoria:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.provider
+      args:
+        PROVIDER_SCRIPT: proxy/providers/victoria.ts
+    environment:
+      PROXY_URL: ws://proxy:4001/ws/provider
+      VICTORIAMETRICS_URL: ${VICTORIAMETRICS_URL:-http://victoriametrics:8428}
+      # Label matchers of the two scrape jobs (see docs/providers.md for the rest).
+      VM_CONTAINER_FILTER: ${VM_CONTAINER_FILTER:-job="telegraf"}
+      VM_NODE_FILTER: ${VM_NODE_FILTER:-job="node"}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        # conf-city infrastructure: not drawn as a building
+        - "confcity.hidden=true"
+    networks:
+      - confcity
+      - obs
+
+networks:
+  # VictoriaMetrics lives in the monitoring stack; joined like VictoriaLogs.
+  obs:
+    external: true
+    name: ${VICTORIALOGS_NETWORK:-monitoring_obs}

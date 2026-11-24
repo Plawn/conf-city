@@ -37,6 +37,7 @@ jobs:
           - { name: proxy, dockerfile: docker/Dockerfile.proxy, script: "" }
           - { name: provider-swarm, dockerfile: docker/Dockerfile.provider, script: proxy/providers/docker-swarm.ts }
           - { name: provider-node, dockerfile: docker/Dockerfile.provider, script: proxy/providers/docker-node.ts }
+          - { name: provider-victoria, dockerfile: docker/Dockerfile.provider, script: proxy/providers/victoria.ts }
           - { name: provider-dummy, dockerfile: docker/Dockerfile.provider, script: proxy/providers/dummy.ts }
     steps:
       - uses: actions/checkout@v4

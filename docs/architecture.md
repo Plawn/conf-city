@@ -221,6 +221,8 @@ providers/host-stats.ts    The machine itself from HOST_PROC / HOST_FS → CityM
 providers/dummy.ts         Random-walk generator
 providers/docker-swarm.ts  Manager side: topology, labels, limits, liveness, logs
 providers/docker-node.ts   Per-node agent: container usage + host CityMetrics
+providers/victoria.ts      Same fields from VictoriaMetrics (Telegraf + node_exporter)
+providers/victoria/        PromQL builders + pure assembly into MetricSnapshot / CityMetrics
 providers/logsources/      LOGS_BACKEND plug-ins: docker (tail), victorialogs (tail + history) — logs-backends.md
 ```
 
