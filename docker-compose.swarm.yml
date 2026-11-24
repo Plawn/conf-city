@@ -9,7 +9,7 @@
 
 services:
   provider-swarm:
-    image: ${REGISTRY:-confcity}/provider-swarm
+    image: ${IMAGE_PREFIX:-confcity/}provider-swarm:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.provider
@@ -42,7 +42,7 @@ services:
   # `mode: global`: the manager's Docker socket cannot read the stats of containers
   # scheduled on another node, so one agent runs on each node and reports what it sees.
   provider-node:
-    image: ${REGISTRY:-confcity}/provider-node
+    image: ${IMAGE_PREFIX:-confcity/}provider-node:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.provider

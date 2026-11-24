@@ -1,4 +1,4 @@
-# Site configuration (REGISTRY, CONFCITY_HOST, DEPLOY_CONSTRAINT…) comes from `.env`,
+# Site configuration (IMAGE_PREFIX, CONFCITY_HOST, DEPLOY_CONSTRAINT…) comes from `.env`,
 # which is not committed. Copy `.env.example` to `.env` and edit it before deploying.
 set dotenv-load := true
 
@@ -10,10 +10,10 @@ stackfiles := "-c docker-compose.yml -c docker-compose.swarm.yml -c docker-compo
 auth := if env_var_or_default("FORWARDAUTH_MIDDLEWARES", "") != "" { " -c docker-compose.forwardauth.yml" } else { "" }
 stack := "confcity"
 
-# `REGISTRY` is the registry every node pulls from. It is NOT optional on a multi-node
-# cluster: an image built on the manager exists nowhere else, so a task scheduled on another
-# node is rejected outright ("pull access denied"). Unset, it falls back to the local image
-# name `confcity`, which only works on a single-node box.
+# `IMAGE_PREFIX` points at the registry every node pulls from. It is NOT optional on a
+# multi-node cluster: an image built on the manager exists nowhere else, so a task scheduled on
+# another node is rejected outright ("pull access denied"). Unset, it falls back to the local
+# names `confcity/*`, which only work on a single-node box.
 compose := "docker compose " + files
 stack-deploy := "docker stack deploy " + stackfiles + " " + stack
 
@@ -44,3 +44,9 @@ status:
 # Tail logs for a service (e.g. just logs proxy)
 logs service="proxy":
   docker service logs -f {{stack}}_{{service}}
+
+# Cut a release (patch | minor | major | X.Y.Z): bumps package.json, commits, tags vX.Y.Z.
+# Pushing the tag is what publishes: CI builds and pushes the images on `v*` tags.
+release increment:
+  bun pm version {{increment}} --message "Release v%s"
+  @echo "now: git push origin main --tags"

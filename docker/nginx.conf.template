@@ -1,3 +1,4 @@
+# Template: the nginx image renders ${PROXY_UPSTREAM} (default proxy:4001) at start.
 server {
     listen 80;
     root /usr/share/nginx/html;
@@ -5,7 +6,7 @@ server {
 
     # WebSocket proxy → proxy service
     location /ws/ {
-        proxy_pass http://proxy:4001;
+        proxy_pass http://${PROXY_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -16,12 +17,12 @@ server {
 
     # API proxy → proxy service (health, debug)
     location /api/ {
-        proxy_pass http://proxy:4001;
+        proxy_pass http://${PROXY_UPSTREAM};
         proxy_set_header Host $host;
     }
 
     location /health {
-        proxy_pass http://proxy:4001;
+        proxy_pass http://${PROXY_UPSTREAM};
         proxy_set_header Host $host;
     }
 

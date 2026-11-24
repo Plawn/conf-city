@@ -10,7 +10,7 @@
 services:
   # ── Frontend (nginx + static SPA) ──
   frontend:
-    image: ${REGISTRY:-confcity}/frontend
+    image: ${IMAGE_PREFIX:-confcity/}frontend:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
@@ -44,7 +44,7 @@ services:
 
   # ── Telemetry proxy (WebSocket hub) ──
   proxy:
-    image: ${REGISTRY:-confcity}/proxy
+    image: ${IMAGE_PREFIX:-confcity/}proxy:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.proxy

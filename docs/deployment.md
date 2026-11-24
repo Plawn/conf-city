@@ -1,5 +1,34 @@
 # Deployment
 
+## Published images (Docker Hub)
+
+Five images, `linux/amd64` + `linux/arm64`, tagged `X.Y.Z`, `X.Y` and `latest`:
+`<ns>/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-dummy}`.
+
+```sh
+docker compose -f docker-compose.demo.yml up                 # demo data, any host → :8080
+docker stack deploy -c docker-compose.release.yml confcity   # real Swarm → :8080
+```
+
+Neither file needs a checkout beyond itself, nor Traefik. There is no built-in auth: put a
+reverse proxy that handles it in front. The Docker Hub page is `docker/hub/README.md`.
+
+### Cutting a release
+
+```sh
+just release minor             # bun pm version: bumps package.json, commits, tags vX.Y.Z
+git push origin main --tags    # the tag push is what publishes
+```
+
+`.github/workflows/release.yml` then runs typecheck, lint and tests, checks the tag matches
+`package.json`, builds the five images multi-arch, pushes them and syncs the Docker Hub
+description. A `-rc.N` tag publishes `X.Y.Z-rc.N` only, never `latest`. Repo settings:
+secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (Read/Write/Delete scope), optional variable
+`DOCKERHUB_NAMESPACE` when it differs from the user. Bun and nginx base images are pinned in
+the Dockerfiles and installs use `--frozen-lockfile`: bump them on purpose.
+
+`.dockerignore` keeps `public/scenarios/wrapped/` (private infra) out of every build context.
+
 ## Local, plain compose
 
 ```sh
@@ -10,8 +39,8 @@ docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build
 docker compose -f docker-compose.yml -f docker-compose.swarm.yml up --build
 ```
 
-Images: `docker/Dockerfile.frontend` (Vite build → nginx, `nginx.conf` serves the SPA and proxies
-`/ws/` to the proxy), `docker/Dockerfile.proxy` (Bun), `docker/Dockerfile.provider` (Bun, dummy or
+Images: `docker/Dockerfile.frontend` (Vite build → nginx, `nginx.conf.template` serves the SPA
+and proxies `/ws/`, `/api/` and `/health` to `$PROXY_UPSTREAM`, default `proxy:4001`), `docker/Dockerfile.proxy` (Bun), `docker/Dockerfile.provider` (Bun, dummy or
 swarm providers).
 
 ## Site configuration (`.env`)
@@ -30,7 +59,8 @@ external registry.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `REGISTRY` | *(none → local `confcity/*` images)* | registry prefix every node pulls from |
+| `IMAGE_PREFIX` | `confcity/` *(local images)* | prefix every image name is appended to, separator included: `registry.example.com/you/conf-city/` or `you/conf-city-` (Docker Hub allows only `namespace/repo`) |
+| `TAG` | `latest` | image tag built, pushed and deployed |
 | `CONFCITY_HOST` | `city.localhost` | host the frontend is served on (Traefik router rule) |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | Traefik entrypoint |
 | `TRAEFIK_CERTRESOLVER` | `resolver` | Traefik certificate resolver |
@@ -42,7 +72,7 @@ external registry.
 
 ## Production (`justfile`)
 
-The `justfile` always pushes to `REGISTRY`:
+The `justfile` always pushes to `IMAGE_PREFIX`:
 
 ```sh
 just deploy                    # build + push + stack deploy, everything
@@ -56,7 +86,7 @@ just logs proxy                # tail one service
 nowhere else, so a task scheduled on another node is rejected with `pull access denied` and the
 service silently stops running there. That is why every recipe pushes, and why `redeploy` ends
 on `docker stack deploy` rather than `docker service update`: only stack deploy resolves `:latest`
-to a digest and pins it, so all nodes run the same build. On a single-node box leave `REGISTRY`
+to a digest and pins it, so all nodes run the same build. On a single-node box leave `IMAGE_PREFIX`
 unset and pin the placement with `DEPLOY_CONSTRAINT=node.hostname == <that node>`.
 
 The overlay chain lives in the `justfile` (`files` / `stackfiles`). Drop

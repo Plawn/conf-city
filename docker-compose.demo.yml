@@ -1,0 +1,17 @@
+# Try Conf City on any Docker host, with generated data — no Swarm needed.
+#   docker compose -f docker-compose.demo.yml up
+# then open http://localhost:8080.
+
+services:
+  frontend:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}frontend:${TAG:-latest}
+    ports:
+      - "${CONFCITY_PORT:-8080}:80"
+    depends_on: [proxy]
+
+  proxy:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}proxy:${TAG:-latest}
+
+  provider-dummy:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-dummy:${TAG:-latest}
+    depends_on: [proxy]

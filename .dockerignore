@@ -1,8 +1,20 @@
 node_modules
 dist
+out
 .git
+.github
 .idea
+.claude
 .DS_Store
 *.log
-.env*.local
+.env
+.env.*
+!.env.example
 tests
+docs
+todo
+plan.md
+*.zip
+*.mp4
+# private replay scenarios (company infra) — must never reach a published image
+public/scenarios/wrapped

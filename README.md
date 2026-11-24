@@ -74,43 +74,41 @@ The frontend auto-connects to the proxy and displays live metrics on each node.
 
 ## Docker deployment
 
-### Site configuration
+### Published images
 
-Everything site-specific (registry, public host, Traefik entrypoint and cert resolver, Swarm
+Multi-arch images on Docker Hub (`plawn/conf-city-{frontend,proxy,provider-swarm,provider-node,provider-dummy}`),
+no checkout or Traefik needed:
+
+```sh
+docker compose -f docker-compose.demo.yml up                 # demo data → http://localhost:8080
+docker stack deploy -c docker-compose.release.yml confcity   # your Swarm → http://<node>:8080
+```
+
+There is no built-in authentication: put the UI behind a reverse proxy that handles it.
+Releases are cut with `just release minor` + pushing the tag (see [deployment](docs/deployment.md)).
+
+### From source
+
+Everything site-specific (image prefix, public host, Traefik entrypoint and cert resolver, Swarm
 placement, log store) is read from `.env`, which is not committed:
 
 ```sh
 cp .env.example .env   # then edit
+docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build   # dummy data
+just deploy            # build, push, stack deploy behind Traefik
 ```
 
-The defaults in the compose files run on a single-node box with no external registry.
 See [deployment](docs/deployment.md) for the full variable table.
-
-### With Docker Compose
-
-```sh
-# Test with dummy provider (random metrics)
-docker compose --profile dummy up --build
-
-# Open http://localhost
-```
-
-### With Docker Swarm
-
-```sh
-docker stack deploy -c docker-compose.yml confcity
-```
-
-For the Swarm provider (real Docker Swarm metrics), use the `swarm` profile or deploy the `provider-swarm` service. It needs access to the Docker socket and must run on a manager node.
 
 ### Services
 
 | Service | Image | Port | Description |
 |---|---|---|---|
-| `frontend` | nginx | 80 | Serves SPA + proxies `/ws/` and `/api/` to proxy |
+| `frontend` | nginx | 80 | Serves SPA + proxies `/ws/` and `/api/` to `$PROXY_UPSTREAM` (`proxy:4001`) |
 | `proxy` | bun | 4001 (internal) | WebSocket hub: collects from providers, broadcasts to frontends |
 | `provider-dummy` | bun | — | Random walk metrics generator for testing |
-| `provider-swarm` | bun | — | Real metrics from Docker Swarm API |
+| `provider-swarm` | bun | — | Topology, liveness, logs, limits from a manager's Docker API |
+| `provider-node` | bun | — | Per-node container usage + machine CPU/memory/disk (`mode: global`) |
 
 ### Environment variables
 

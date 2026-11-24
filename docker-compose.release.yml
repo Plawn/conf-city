@@ -1,0 +1,70 @@
+# Conf City from the published images — a self-contained Swarm stack, no build, no Traefik.
+#   docker stack deploy -c docker-compose.release.yml confcity
+# then open http://<any node>:8080. Put your own reverse proxy / auth in front: the UI and
+# the provider WebSocket have no authentication of their own.
+# Pin a version with TAG=1.2.0; IMAGE_PREFIX points at another registry or namespace.
+
+services:
+  frontend:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}frontend:${TAG:-latest}
+    ports:
+      - "${CONFCITY_PORT:-8080}:80"
+    deploy:
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "confcity.type=app"
+        - "confcity.label=Conf City"
+        - "confcity.group=apps"
+        - "confcity.links=confcity_proxy"
+    networks: [confcity]
+
+  proxy:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}proxy:${TAG:-latest}
+    deploy:
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "confcity.type=app"
+        - "confcity.label=Conf City proxy"
+        - "confcity.group=apps"
+    networks: [confcity]
+
+  # Topology, liveness, logs, limits — from a manager's Docker API.
+  provider-swarm:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-swarm:${TAG:-latest}
+    environment:
+      AMBIENT_SERVICES: ${AMBIENT_SERVICES:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+      labels: ["confcity.hidden=true"]
+    networks: [confcity]
+
+  # Container usage + machine CPU/memory/disk — one per node (stats are local-only).
+  provider-node:
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-node:${TAG:-latest}
+    environment:
+      PROVIDER_ID: "node-agent-{{.Node.Hostname}}"
+      HOST_PROC: /host/proc
+      HOST_FS: /hostfs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /:/hostfs:ro
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      labels: ["confcity.hidden=true"]
+    networks: [confcity]
+
+networks:
+  confcity:
+    driver: overlay
+    attachable: true
