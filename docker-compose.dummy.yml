@@ -4,7 +4,7 @@
 
 services:
   provider-dummy:
-    image: ${IMAGE_PREFIX:-confcity/}provider-dummy:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}provider-dummy:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.provider

@@ -95,7 +95,7 @@ placement, log store) is read from `.env`, which is not committed:
 ```sh
 cp .env.example .env   # then edit
 docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build   # dummy data
-just deploy            # build, push, stack deploy behind Traefik
+just deploy            # stack deploy of the published release, behind Traefik
 ```
 
 See [deployment](docs/deployment.md) for the full variable table.

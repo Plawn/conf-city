@@ -3,14 +3,14 @@
 #   Local dev:   docker compose -f docker-compose.yml -f docker-compose.dummy.yml up --build
 #   Stack deploy: docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml confcity
 #
-# Site-specific values (registry, public host, Traefik entrypoint, placement) come from the
-# environment — copy `.env.example` to `.env` and edit it. The defaults below run on a
-# single-node box with no external registry.
+# Site-specific values (public host, Traefik entrypoint, placement) come from the
+# environment — copy `.env.example` to `.env` and edit it. Images default to the ones CI
+# publishes on Docker Hub; `build:` is only for local `docker compose up --build`.
 
 services:
   # ── Frontend (nginx + static SPA) ──
   frontend:
-    image: ${IMAGE_PREFIX:-confcity/}frontend:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}frontend:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
@@ -23,9 +23,6 @@ services:
       - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
     deploy:
       replicas: 1
-      # Without a registry the image only exists on the node that built it, so an
-      # unconstrained scheduler can place the task where it cannot be pulled
-      # ("No such image" in a loop). Pin the placement, or push to a registry.
       placement:
         constraints:
           - ${DEPLOY_CONSTRAINT:-node.role == manager}
@@ -44,13 +41,13 @@ services:
 
   # ── Telemetry proxy (WebSocket hub) ──
   proxy:
-    image: ${IMAGE_PREFIX:-confcity/}proxy:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-plawn/conf-city-}proxy:${TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.proxy
     deploy:
       replicas: 1
-      # cf. frontend: same placement rule, same reason
+      # same placement rule as the frontend
       placement:
         constraints:
           - ${DEPLOY_CONSTRAINT:-node.role == manager}

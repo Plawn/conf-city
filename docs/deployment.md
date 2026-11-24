@@ -56,13 +56,12 @@ cp .env.example .env
 ```
 
 The `justfile` loads it (`set dotenv-load`) so both `docker compose` and `docker stack deploy`
-see the variables; the compose files carry defaults that run on a single-node box with no
-external registry.
+see the variables; the compose files default to the published Docker Hub images.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IMAGE_PREFIX` | `confcity/` *(local images)* | prefix every image name is appended to, separator included: `registry.example.com/you/conf-city/` or `you/conf-city-` (Docker Hub allows only `namespace/repo`) |
-| `TAG` | `latest` | image tag built, pushed and deployed |
+| `IMAGE_PREFIX` | `plawn/conf-city-` *(Docker Hub)* | prefix every image name is appended to, separator included; change it only to run your own builds from another registry |
+| `TAG` | `latest` | image tag deployed (`just deploy` sets it to the checkout's version) |
 | `CONFCITY_HOST` | `city.localhost` | host the frontend is served on (Traefik router rule) |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | Traefik entrypoint |
 | `TRAEFIK_CERTRESOLVER` | `resolver` | Traefik certificate resolver |
@@ -74,22 +73,20 @@ external registry.
 
 ## Production (`justfile`)
 
-The `justfile` always pushes to `IMAGE_PREFIX`:
+Nothing is built on the cluster: it runs the images CI published to Docker Hub, which every
+node pulls on its own. A change reaches production as a release.
 
 ```sh
-just deploy                    # build + push + stack deploy, everything
-just redeploy provider-swarm   # same, one service (still ends on a full stack deploy)
-just up                        # stack deploy without rebuilding
+just release patch && git push origin main --tags   # CI publishes X.Y.Z
+just deploy                    # stack deploy of the checkout's version (package.json)
+just deploy 0.2.0-rc.3         # or any published tag — also how you roll back
 just status                    # services + tasks
 just logs proxy                # tail one service
 ```
 
-**The registry is not optional on a multi-node cluster.** An image built on the manager exists
-nowhere else, so a task scheduled on another node is rejected with `pull access denied` and the
-service silently stops running there. That is why every recipe pushes, and why `redeploy` ends
-on `docker stack deploy` rather than `docker service update`: only stack deploy resolves `:latest`
-to a digest and pins it, so all nodes run the same build. On a single-node box leave `IMAGE_PREFIX`
-unset and pin the placement with `DEPLOY_CONSTRAINT=node.hostname == <that node>`.
+`deploy` passes `--resolve-image always`, so every node pins the same digest for the tag.
+To test unreleased code on the cluster, cut a release candidate (`just release 0.3.0-rc.1`):
+it never moves `latest`.
 
 The overlay chain lives in the `justfile` (`files` / `stackfiles`). Drop
 `docker-compose.victorialogs.yml` from it to read logs from the Docker API again
