@@ -47,6 +47,8 @@ logs service="proxy":
 
 # Cut a release (patch | minor | major | X.Y.Z): bumps package.json, commits, tags vX.Y.Z.
 # Pushing the tag is what publishes: CI builds and pushes the images on `v*` tags.
+# Only tracked changes block it: untracked scratch files are fine.
 release increment:
-  bun pm version {{increment}} --message "Release v%s"
-  @echo "now: git push origin main --tags"
+  git diff --quiet HEAD || (echo "uncommitted changes" && exit 1)
+  bun pm version {{increment}} --no-git-tag-version
+  v=$(bun pm pkg get version | tr -d '"') && git commit -q -m "Release v$v" package.json && git tag -a "v$v" -m "v$v" && echo "tagged v$v — now: git push origin main --tags"
