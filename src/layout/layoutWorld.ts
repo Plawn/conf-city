@@ -12,6 +12,7 @@ import { centroid, polygonBounds } from "./geometry";
 import { translateHarbour } from "./harbour";
 import { placeIslands, planGates } from "./islands";
 import { buildGroups, buildLocalCity, type LocalCity, planHarbours } from "./localCity";
+import { plotFootprint, settlePlots } from "./plotSettle";
 import type { GateRequest } from "./roads/bridgehead";
 import { buildRoadNetwork } from "./roads/network";
 import { translate, translateRoads, translateZone } from "./translate";
@@ -24,6 +25,7 @@ import {
   type WorldLayout,
 } from "./types";
 import { placeUtilityPlot, translateUtilityPlot } from "./utilityPlot";
+import { cityWarp, IDENTITY_WARP, warpRoads, warpZone } from "./warp";
 
 /**
  * Places every city as an island on the water and returns the whole layout in
@@ -164,12 +166,22 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
     const deck = plan.clouds.get(local.cityId);
     const cloud = deck !== undefined;
     // A copy: attaching driveways inserts vertices, and the plan is assembled again and again.
-    const roads = cloud
+    const routed = cloud
       ? NO_ROADS
       : buildRoadNetwork(nodesLayout, intraLinks, gates, {
           ring: [...local.ring],
           grid: local.grid,
         });
+    // The lattice bends gently (ring, bridgeheads and shore untouched), then each
+    // building settles into its plot, facing its street; its doors follow.
+    const warp = cloud ? IDENTITY_WARP : cityWarp(local.cityId, local.ring);
+    const warpedNodes = nodesLayout.nodes.map((n) => {
+      const [x, z] = warp.apply([n.position[0], n.position[2]]);
+      return { ...n, position: [x, n.position[1], z] as [number, number, number] };
+    });
+    const { nodes: settledNodes, roads } = cloud
+      ? { nodes: nodesLayout.nodes, roads: routed }
+      : settlePlots(local.cityId, warpedNodes, warpRoads(routed, warp), warp, local.layout.cells);
     // After the roads: the plot is chosen against the streets that were actually
     // drawn, and against the bridgeheads already attached to the ring.
     const worldPlot = active?.plots?.get(local.cityId);
@@ -181,17 +193,19 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
             outline: local.outline,
             ring: roads.ring.length > 0 ? roads.ring : local.ring,
             roads,
-            buildings: nodesLayout.nodes.map((n) => [n.position[0], n.position[2]] as Vec2),
+            buildings: settledNodes.flatMap((n) => plotFootprint(n, 0).map((f) => f.at)),
             gates: gates.map((r) => r.gate.hit),
           });
     // World y is the deck's altitude: cameras and effects aim at a cloud's buildings, not the sea.
     const y = cityAltitude({ cloud });
-    const cityNodes = nodesLayout.nodes.map((n) => ({
+    const cityNodes = settledNodes.map((n) => ({
       ...n,
       position: [n.position[0] + dx, y, n.position[2] + dz] as [number, number, number],
     }));
     const outline = deck?.outline ?? local.outline.map((p) => translate(p, dx, dz));
-    const groups = cloud ? [] : active ? buildGroups(nodesLayout.nodes) : local.groups;
+    const groups = (cloud ? [] : active ? buildGroups(nodesLayout.nodes) : local.groups).map((g) =>
+      warpZone(g, warp),
+    );
     const layout: CityLayout = {
       cityId: local.cityId,
       biome: local.biome,
@@ -205,7 +219,7 @@ export function assembleWorld(plan: WorldPlan, active?: ActiveSet): WorldLayout 
       roads: cloud ? NO_ROADS : translateRoads(roads, dx, dz),
       groups: groups.map((g) => translateZone(g, dx, dz)),
       ...(local.discoveredZone
-        ? { discoveredZone: translateZone(local.discoveredZone, dx, dz) }
+        ? { discoveredZone: translateZone(warpZone(local.discoveredZone, warp), dx, dz) }
         : {}),
       ...(local.harbour ? { harbour: translateHarbour(local.harbour, dx, dz) } : {}),
       ...(worldPlot ? { utilityPlot: worldPlot } : {}),

@@ -12,6 +12,8 @@ import {
 } from "../domain/metrics/saturation";
 import { LIVENESS_COLORS, LIVENESS_TONE, NODE_STYLE } from "../domain/nodeStyle";
 import type { NodeTelemetry, PositionedNode } from "../domain/types";
+import { footprintRadius } from "../layout/constants";
+import { drawnOffset } from "../layout/plotSettle";
 import { useUiStore } from "../store/uiStore";
 import { GaugeRing } from "./buildings/GaugeRing";
 import { InstancedBuilding } from "./buildings/InstancedBuilding";
@@ -85,6 +87,16 @@ export const NodeMesh = memo(
         ? Math.ceil(footprint * 4) / 4
         : config.scale * 0.9;
 
+    // Off-centre in its plot, handed back towards the centre as the footprint outgrows the settle.
+    const settled = footprintRadius(node.type);
+    const [ox, oz] = node.plot
+      ? drawnOffset(node.plot, settled, Math.max(settled, footprint ?? 0))
+      : [0, 0];
+    const drawn = useMemo<[number, number, number]>(
+      () => [node.position[0] + ox, node.position[1], node.position[2] + oz],
+      [node.position, ox, oz],
+    );
+
     const handleHover = useCallback((value: boolean) => {
       setHovered(value);
       document.body.style.cursor = value ? "pointer" : "auto";
@@ -97,7 +109,7 @@ export const NodeMesh = memo(
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: React Three Fiber's group is a 3D scene object, not a DOM element.
       <group
-        position={[node.position[0], 0, node.position[2]]}
+        position={[drawn[0], 0, drawn[2]]}
         onPointerOver={(e) => {
           e.stopPropagation();
           handleHover(true);
@@ -122,7 +134,7 @@ export const NodeMesh = memo(
             variant={variant}
             visual={visual}
             fireIntensity={incident?.fireIntensity ?? 0}
-            position={node.position}
+            position={drawn}
             onHover={handleHover}
             onClick={handleClick}
           />
@@ -142,7 +154,11 @@ export const NodeMesh = memo(
 
         {hovered && !selected && (
           <SceneLabel
-            position={[0, (isPort ? PORT_SCALE : config.scale) * 1.6 + 0.8, 0]}
+            position={[
+              0,
+              (isPort ? PORT_SCALE : config.scale * (variant.rise ?? 1)) * 1.6 + 0.8,
+              0,
+            ]}
             zIndexRange={[20, 0]}
           >
             <div

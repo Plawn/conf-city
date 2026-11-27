@@ -52,14 +52,15 @@ test("an ingress service becomes the port: on the shore, outside the ring, on th
   expect(node.isPort).toBe(true);
   // The node IS the berth: `roads/` addresses a building by its cell centre.
   expect([node.position[0], node.position[2]]).toEqual(berth.position);
-  // Still on the city's lattice, so its cell centre and its position are one point.
+  // Still on the city's lattice — only gently bent inside the ring, never off by a plot.
   const [ox, oz] = [
     node.position[0] - berth.cell[0] * PITCH,
     node.position[2] - berth.cell[1] * PITCH,
   ];
+  const off = (v: number) => Math.abs(v - Math.round(v / PITCH) * PITCH);
   for (const other of city.nodes) {
-    expect(Math.abs((other.position[0] - ox) % PITCH)).toBe(0);
-    expect(Math.abs((other.position[2] - oz) % PITCH)).toBe(0);
+    expect(off(other.position[0] - ox)).toBeLessThan(1.2);
+    expect(off(other.position[2] - oz)).toBeLessThan(1.2);
   }
 
   // On dry land, outside the ring road: the strip the ring leaves to the sea.

@@ -155,17 +155,18 @@ export function NodeModel({
   const fireBounds = useMemo(() => {
     const bounds = new THREE.Box3().setFromObject(scene);
     const s = config.scale * variant.fit * variant.scale;
+    const [sx, sz] = variant.stretch ?? [1, 1];
     return {
       roof: [
-        ((bounds.min.x + bounds.max.x) * s) / 2,
-        bounds.max.y * s,
-        ((bounds.min.z + bounds.max.z) * s) / 2,
+        ((bounds.min.x + bounds.max.x) * s * sx) / 2,
+        bounds.max.y * s * (variant.rise ?? 1),
+        ((bounds.min.z + bounds.max.z) * s * sz) / 2,
       ] as [number, number, number],
-      width: (bounds.max.x - bounds.min.x) * s,
-      depth: (bounds.max.z - bounds.min.z) * s,
+      width: (bounds.max.x - bounds.min.x) * s * sx,
+      depth: (bounds.max.z - bounds.min.z) * s * sz,
       radius: boundsRadius(bounds.min, bounds.max, s),
     };
-  }, [scene, config.scale, variant.fit, variant.scale]);
+  }, [scene, config.scale, variant.fit, variant.scale, variant.rise, variant.stretch]);
   const { radius: modelRadius, ...fire } = fireBounds;
 
   // Clone the GLTF once; all per-frame visuals are driven imperatively below.
@@ -237,7 +238,11 @@ export function NodeModel({
     <group ref={scaleGroup}>
       <primitive
         object={clonedScene}
-        scale={config.scale * variant.fit * variant.scale}
+        scale={[
+          config.scale * variant.fit * variant.scale * (variant.stretch?.[0] ?? 1),
+          config.scale * variant.fit * variant.scale * (variant.rise ?? 1),
+          config.scale * variant.fit * variant.scale * (variant.stretch?.[1] ?? 1),
+        ]}
         rotation-y={variant.yaw}
       />
       {fireIntensity > 0 && (

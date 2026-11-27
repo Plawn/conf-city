@@ -63,6 +63,27 @@ export interface PositionedNode extends ResolvedNode {
   isDiscovered?: boolean;
   /** Ingress service moved to the shore: drawn as the island's port, not a building. */
   isPort?: boolean;
+  /** Where the building sits in its lattice plot (`layout/plotSettle.ts`); absent for ports and clouds. */
+  plot?: PlotSettle;
+}
+
+/** A building's settle in its plot: off the plot centre, turned to its street. */
+export interface PlotSettle {
+  /** Shift from `position`, x/z world units. */
+  offset: [number, number];
+  /** Rotation about y; the model's front (−Z) faces its street. */
+  yaw: number;
+  /** Neighbourhood big enough to read as a district: one palette for all its buildings. */
+  district?: string;
+  /** Height multiplier: a district's core rises into a skyline. */
+  rise?: number;
+  /** A lot of several cells: the building stands mid-lot, stretched to fill it. */
+  lot?: {
+    /** Each lot cell's centre, relative to `position`. */
+    cells: [number, number][];
+    /** Model stretch: x along its front, z its depth. */
+    stretch: [number, number];
+  };
 }
 
 // Re-export telemetry types from the canonical source (proxy/protocol.ts)

@@ -84,10 +84,11 @@ describe("buildRoadNetwork", () => {
     const { roads } = build("pair", city("pair", ["a", "b"]), [["a", "b"]]);
     const route = roads.routes.get("pair/a->pair/b");
     expect(route).toBeDefined();
-    // Too thin for a lattice street: the link rides the ring between two driveways.
+    // Driveway, lattice street or ring all the way: never open ground.
     const ring = ringKeys(roads);
+    const doors = new Set(roads.driveways.flatMap((d) => [vecKey(d.door), vecKey(d.mouth)]));
     for (const p of route!.points.slice(1, -1)) {
-      expect(ring.has(vecKey(p))).toBe(true);
+      expect(ring.has(vecKey(p)) || isCorner(p) || doors.has(vecKey(p))).toBe(true);
     }
     expect([...roads.routes.keys()].filter((k) => k.startsWith("ring:"))).toHaveLength(0);
     expect(roads.segments.filter((s) => s.ring).length).toBeGreaterThanOrEqual(2);

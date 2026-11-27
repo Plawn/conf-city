@@ -4,6 +4,7 @@ import { fnv1a, mulberry32 } from "../lib/random";
 import { FORCE_ITERATIONS, footprintRadius, LINK_REST, PITCH } from "./constants";
 import { type Body, relax, type Spring } from "./force";
 import { cellKey } from "./geometry";
+import { annealLattice } from "./latticeAnneal";
 
 /**
  * Lays out the nodes of ONE city around the local origin. World placement
@@ -19,6 +20,8 @@ import { cellKey } from "./geometry";
  *
  * Everything ends up snapped to the lattice: one building per cell, position
  * exactly `(i·PITCH, j·PITCH)`, which `roads/` needs to reason about corners.
+ * The snap is then annealed (`latticeAnneal.ts`): short links, contiguous
+ * neighbourhoods with a little room between them, a compact blob.
  *
  * `ports` are the ingress services: they are left out entirely, because the
  * shore and the ring road are offsets of the hull of what is laid out here — a
@@ -31,6 +34,11 @@ const TYPE_ORDER: Record<NodeType, number> = { app: 0, db: 1, cache: 2, queue: 3
 /** Golden angle — the phyllotaxis seed spreads nodes evenly with no clumping. */
 
 const DISCOVERED_GROUP = "__discovered";
+
+/** Discovered nodes cluster among themselves, by their own neighbourhood when they have one. */
+function discoveredGroup(n: ResolvedNode): string {
+  return n.group ? `${DISCOVERED_GROUP}:${n.group}` : DISCOVERED_GROUP;
+}
 
 export interface CityNodesLayout {
   /** Local coordinates, centred on the origin, snapped to the lattice. */
@@ -134,7 +142,8 @@ export function layoutCity(
       const angle = (i + 0.5) * GOLDEN_ANGLE;
       b.x = centerX + Math.cos(angle) * radius + (rand() - 0.5) * PITCH * 0.3;
       b.z = southZ + PITCH * (dense ? 1 : 2) + Math.abs(Math.sin(angle)) * radius;
-      b.group = DISCOVERED_GROUP;
+      // Own neighbourhood kept: on a fully discovered cluster this is the only pass.
+      b.group = discoveredGroup(discovered[i]!);
     }
     for (let i = 0; i < staticCount; i++) {
       bodies[i]!.fixed = true;
@@ -153,9 +162,53 @@ export function layoutCity(
     }
   }
 
+  // Lattice: snap then anneal the static city on its own, then the discovered
+  // nodes around it with the static cells pinned — a node appearing at runtime
+  // never moves a building already drawn.
+  const groupOf = (k: number) =>
+    k < staticCount ? (all[k]!.group ?? "") : discoveredGroup(all[k]!);
+  const cellsByIndex: [number, number][] = [];
+  const taken = new Set<string>();
+  const seed = fnv1a(`${cityId}|lattice`);
+  const links = springs.map((sp) => [sp.a, sp.b] as [number, number]);
+  for (const [from, to] of [
+    [0, staticCount],
+    [staticCount, all.length],
+  ] as const) {
+    if (from === to) {
+      continue;
+    }
+    for (let k = from; k < to; k++) {
+      const cell = nearestFreeCell(bodies[k]!, taken);
+      taken.add(cellKey(cell));
+      cellsByIndex[k] = cell;
+    }
+    const annealed = cellsByIndex.slice(0, to).map((cell, k) => ({
+      cell,
+      group: groupOf(k),
+      fixed: k < from,
+    }));
+    let ci = 0;
+    let cj = 0;
+    for (let k = from; k < to; k++) {
+      ci += cellsByIndex[k]![0];
+      cj += cellsByIndex[k]![1];
+    }
+    annealLattice(annealed, {
+      seed: seed + from,
+      links: links.filter(([a, b]) => a < to && b < to),
+      center: [ci / (to - from), cj / (to - from)],
+      dense,
+    });
+    taken.clear();
+    annealed.forEach((b, k) => {
+      cellsByIndex[k] = b.cell;
+      taken.add(cellKey(b.cell));
+    });
+  }
   // Recentre on the static block only: local coordinates of the static city must
   // not shift the day a discovered node shows up south of it.
-  const cells = snapToLattice(all, bodies, staticCount > 0 ? staticCount : all.length);
+  const cells = recenter(all, cellsByIndex, staticCount > 0 ? staticCount : all.length);
   const nodes: PositionedNode[] = all.map((n, i) => {
     const cell = cells.get(n.id)!;
     const positioned: PositionedNode = {
@@ -193,67 +246,63 @@ function buildSprings(intraLinks: ResolvedLink[], indexById: Map<string, number>
   return springs;
 }
 
+/** Nearest free lattice cell to a body: rings of growing Chebyshev radius, ties by distance then index. */
+function nearestFreeCell(body: Body, taken: Set<string>): [number, number] {
+  const idealI = body.x / PITCH;
+  const idealJ = body.z / PITCH;
+  const baseI = Math.round(idealI);
+  const baseJ = Math.round(idealJ);
+  for (let ring = 0; ring < 64; ring++) {
+    const candidates: [number, number][] = [];
+    for (let di = -ring; di <= ring; di++) {
+      for (let dj = -ring; dj <= ring; dj++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== ring) {
+          continue;
+        }
+        const cell: [number, number] = [baseI + di, baseJ + dj];
+        if (!taken.has(cellKey(cell))) {
+          candidates.push(cell);
+        }
+      }
+    }
+    candidates.sort((a, b) => {
+      const da = (a[0] - idealI) ** 2 + (a[1] - idealJ) ** 2;
+      const db = (b[0] - idealI) ** 2 + (b[1] - idealJ) ** 2;
+      return da - db || a[0] - b[0] || a[1] - b[1];
+    });
+    if (candidates[0]) {
+      return candidates[0];
+    }
+  }
+  return [baseI, baseJ];
+}
+
 /**
- * Assigns each body the nearest free lattice cell (rings of growing Chebyshev
- * radius, ties broken by distance then index), then recentres by a whole number
- * of cells so the lattice — and therefore the road corners — stays exact.
- * Only the first `recenterCount` nodes weigh in on the recentring.
+ * Shifts every cell by a whole number of cells so the bounding box of the first
+ * `recenterCount` nodes is centred — the lattice, and therefore the road corners, stays exact.
  */
-function snapToLattice(
+function recenter(
   nodes: ResolvedNode[],
-  bodies: Body[],
+  cellsByIndex: [number, number][],
   recenterCount: number,
 ): Map<string, [number, number]> {
-  const taken = new Set<string>();
-  const cells = new Map<string, [number, number]>();
   let minI = Infinity,
     maxI = -Infinity,
     minJ = Infinity,
     maxJ = -Infinity;
-
-  for (let k = 0; k < nodes.length; k++) {
-    const body = bodies[k]!;
-    const idealI = body.x / PITCH;
-    const idealJ = body.z / PITCH;
-    const baseI = Math.round(idealI);
-    const baseJ = Math.round(idealJ);
-    let chosen: [number, number] | null = null;
-    for (let ring = 0; ring < 64 && !chosen; ring++) {
-      const candidates: [number, number][] = [];
-      for (let di = -ring; di <= ring; di++) {
-        for (let dj = -ring; dj <= ring; dj++) {
-          if (Math.max(Math.abs(di), Math.abs(dj)) !== ring) {
-            continue;
-          }
-          const cell: [number, number] = [baseI + di, baseJ + dj];
-          if (!taken.has(cellKey(cell))) {
-            candidates.push(cell);
-          }
-        }
-      }
-      candidates.sort((a, b) => {
-        const da = (a[0] - idealI) ** 2 + (a[1] - idealJ) ** 2;
-        const db = (b[0] - idealI) ** 2 + (b[1] - idealJ) ** 2;
-        return da - db || a[0] - b[0] || a[1] - b[1];
-      });
-      chosen = candidates[0] ?? null;
-    }
-    const cell = chosen ?? [baseI, baseJ];
-    taken.add(cellKey(cell));
-    cells.set(nodes[k]!.id, cell);
-    if (k < recenterCount) {
-      minI = Math.min(minI, cell[0]);
-      maxI = Math.max(maxI, cell[0]);
-      minJ = Math.min(minJ, cell[1]);
-      maxJ = Math.max(maxJ, cell[1]);
-    }
+  for (let k = 0; k < recenterCount; k++) {
+    const cell = cellsByIndex[k]!;
+    minI = Math.min(minI, cell[0]);
+    maxI = Math.max(maxI, cell[0]);
+    minJ = Math.min(minJ, cell[1]);
+    maxJ = Math.max(maxJ, cell[1]);
   }
-
   const shiftI = -Math.round((minI + maxI) / 2);
   const shiftJ = -Math.round((minJ + maxJ) / 2);
-  for (const cell of cells.values()) {
-    cell[0] += shiftI;
-    cell[1] += shiftJ;
-  }
+  const cells = new Map<string, [number, number]>();
+  nodes.forEach((n, k) => {
+    const cell = cellsByIndex[k]!;
+    cells.set(n.id, [cell[0] + shiftI, cell[1] + shiftJ]);
+  });
   return cells;
 }

@@ -13,6 +13,7 @@ import type { CityMeta, NodeMeta, World } from "../src/domain/types";
 import { deckExits } from "../src/geo/bridgeScene";
 import { bridgeDeck, DECK_CLASS, deckWidth } from "../src/geo/drivable";
 import { buildRoadGraph } from "../src/geo/roadGraph";
+import { footprintRadius } from "../src/layout/constants";
 import { layoutWorld } from "../src/layout/layoutWorld";
 import type { Vec2 } from "../src/layout/types";
 import { buildDiscoveredNodes } from "../src/loaders/buildDiscoveredNodes";
@@ -143,7 +144,17 @@ for (const [id, city] of layout.cities) {
     })
     .join("");
   const buildings = city.nodes
-    .map((n) => `<circle cx="${n.position[0]}" cy="${n.position[2]}" r="0.9" fill="#b07040"/>`)
+    .map((n) => {
+      // Settled in its plot: shifted, turned to its street (front = −Z, the pale notch).
+      const [ox, oz] = n.plot?.offset ?? [0, 0];
+      const deg = (-(n.plot?.yaw ?? 0) * 180) / Math.PI;
+      // Footprint-sized, stretched over a multi-cell lot.
+      const r = footprintRadius(n.type);
+      const [sx, sz] = n.plot?.lot?.stretch ?? [1, 1];
+      const hx = r * sx;
+      const hz = r * sz;
+      return `<g transform="translate(${n.position[0] + ox} ${n.position[2] + oz}) rotate(${deg})"><rect x="${-hx}" y="${-hz}" width="${2 * hx}" height="${2 * hz}" fill="${n.plot?.lot ? "#c08a50" : "#b07040"}"/><rect x="-0.3" y="${-hz}" width="0.6" height="0.35" fill="#f0d0a0"/></g>`;
+    })
     .join("");
   const body = `<polygon points="${city.outline.map((p) => p.join(",")).join(" ")}" fill="#4d7a3a"/>
 ${trianglesSvg(geo.asphalt, "#303030")}

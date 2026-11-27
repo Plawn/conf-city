@@ -79,6 +79,8 @@ export function InstancedBuilding({
     };
   }, [batches, binding, model, position]);
   const scale = NODE_STYLE[type].scale * variant.fit * variant.scale;
+  const rise = variant.rise ?? 1;
+  const [sx, sz] = variant.stretch ?? [1, 1];
   const { min, max } = model.bounds;
   const targetXZ = footprintTarget(visual, boundsRadius(min, max, scale));
   // Prop changes (including position) wake this task. Only an active transition runs it again.
@@ -107,14 +109,22 @@ export function InstancedBuilding({
   return (
     <group ref={riseGroup}>
       <group ref={sizeGroup}>
-        <group ref={modelGroup} scale={scale} rotation-y={variant.yaw} />
+        <group
+          ref={modelGroup}
+          scale={[scale * sx, scale * rise, scale * sz]}
+          rotation-y={variant.yaw}
+        />
         {fireIntensity > 0 && (
           <group rotation-y={variant.yaw}>
             <BuildingFire
               seed={addr}
-              roof={[((min.x + max.x) * scale) / 2, max.y * scale, ((min.z + max.z) * scale) / 2]}
-              width={(max.x - min.x) * scale}
-              depth={(max.z - min.z) * scale}
+              roof={[
+                ((min.x + max.x) * scale * sx) / 2,
+                max.y * scale * rise,
+                ((min.z + max.z) * scale * sz) / 2,
+              ]}
+              width={(max.x - min.x) * scale * sx}
+              depth={(max.z - min.z) * scale * sz}
               intensity={fireIntensity}
             />
           </group>

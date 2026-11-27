@@ -20,8 +20,12 @@ export interface BuildingVariant {
   model: string;
   /** Scale factor that brings this model to the type's reference height. */
   fit: number;
-  /** Rotation around Y, a multiple of π/2 so the door still faces a street. */
+  /** Rotation around Y; a quarter turn here, the street-facing settle once laid out (`PlotSettle`). */
   yaw: number;
+  /** Height multiplier — a district's skyline (`PlotSettle.rise`); 1 when absent. */
+  rise?: number;
+  /** Stretch on a multi-cell lot (`PlotSettle.lot`): x along its front, z its depth. */
+  stretch?: [number, number];
   /** Extra scale, 0.92..1.08. */
   scale: number;
   /** Base colour in health mode: the type's hue tinted by the biome, ±8°, ±5 % lightness. */
@@ -32,6 +36,10 @@ export interface BuildingVariant {
 
 const HUE_JITTER = 16;
 const LIGHT_JITTER = 0.1;
+/** Spread of the shared hue picked per district, degrees. */
+const DISTRICT_HUE = 40;
+/** Share of the per-building jitter a district building keeps. */
+const DISTRICT_JITTER = 0.3;
 const SCALE_MIN = 0.92;
 const SCALE_MAX = 1.08;
 
@@ -49,6 +57,7 @@ export function buildingVariant(
   biome: Biome,
   available?: ReadonlySet<string>,
   building?: string,
+  district?: string,
 ): BuildingVariant {
   const style = NODE_STYLE[type];
   const all = modelsOf(type, building);
@@ -56,11 +65,16 @@ export function buildingVariant(
   const models = candidates.length > 0 ? candidates : all.slice(0, 1);
   const rand = mulberry32(fnv1a(addr));
 
-  const model = models[Math.min(models.length - 1, Math.floor(rand() * models.length))]!;
+  const pick = rand();
+  // A district builds in one style: same model per type, one shared hue, little jitter.
+  const seed = district ? mulberry32(fnv1a(`district:${district}`)) : undefined;
+  const style01 = seed ? seed() : pick;
+  const model = models[Math.min(models.length - 1, Math.floor(style01 * models.length))]!;
   const yaw = Math.floor(rand() * 4) * (Math.PI / 2);
   const scale = SCALE_MIN + rand() * (SCALE_MAX - SCALE_MIN);
-  const hue = (rand() - 0.5) * HUE_JITTER;
-  const light = (rand() - 0.5) * LIGHT_JITTER;
+  const jitter = seed ? DISTRICT_JITTER : 1;
+  const hue = (rand() - 0.5) * HUE_JITTER * jitter + (seed ? (seed() - 0.5) * DISTRICT_HUE : 0);
+  const light = (rand() - 0.5) * LIGHT_JITTER * jitter;
 
   const color = shiftHsl(
     style.color,

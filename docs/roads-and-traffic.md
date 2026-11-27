@@ -50,6 +50,12 @@ computed once and translated by the same integer offset; `roundabouts.ts`, `driv
 offsets are computed **after** those matches, on the render side. Never round-trip a layout point
 through float math.
 
+The bent grid (`layout/warp.ts`, applied in `layoutWorld` before the city offset) keeps this
+invariant: every layout point goes through the same deterministic `warp.apply`, and the warp is
+zero on and outside the ring, so ring vertices and bridgeheads are untouched. Segments are
+densified on a 1.5 lattice first. A route's first and last legs (centre → mouth) are not
+densified, so every route point is still a segment vertex or a mouth.
+
 ## Rendering (`RoadNetworkMesh`)
 
 The network becomes a graph (`geo/roadGraph.ts`: dead ends trimmed past the last driveway, 2-arm

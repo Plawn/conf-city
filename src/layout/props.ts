@@ -2,6 +2,7 @@ import type { PropKind } from "../domain/biome";
 import { NODE_STYLE } from "../domain/nodeStyle";
 import { fnv1a, mulberry32 } from "../lib/random";
 import { distToPolyline, pointInPolygon, polygonBounds } from "./geometry";
+import { plotFootprint } from "./plotSettle";
 import type { CityLayout, RoadClass, Vec2 } from "./types";
 import { slotRadius } from "./utilityPlot";
 
@@ -65,8 +66,7 @@ export function scatterProps(
   // a width. Flattened once, outside the candidate loop.
   const circles: Array<{ at: Vec2; r: number }> = [];
   for (const node of layout.nodes) {
-    const s = NODE_STYLE[node.type].scale;
-    circles.push({ at: [node.position[0], node.position[2]], r: s * 0.75 + PLOT_MARGIN });
+    circles.push(...plotFootprint(node, NODE_STYLE[node.type].scale * 0.75 + PLOT_MARGIN));
   }
   for (const r of layout.roads.roundabouts) {
     circles.push({ at: r.center, r: r.radius + ROAD_MARGIN });

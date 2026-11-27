@@ -1,5 +1,6 @@
 import { PITCH } from "./constants";
 import { cellKey, distToPolygon, pointInPolygon, polygonBounds, segSegIntersect } from "./geometry";
+import { ringHit } from "./ringRoad";
 import type { Vec2 } from "./types";
 
 /**
@@ -110,7 +111,19 @@ interface Candidate {
   shore: number;
   /** Inside the ring road: a fallback site, not a quay. */
   inRing: boolean;
+  /**
+   * An axial avenue from the cell meets the ring — the only way `roads/` serves
+   * a quay. A cell diagonally off a rounded corner of the ring has none.
+   */
+  facesRing: boolean;
 }
+
+const AXES: Vec2[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
 
 /**
  * Chooses the quay and its berths for one city. Returns `null` when the island
@@ -228,7 +241,7 @@ function nextBerth(
 
 /**
  * Every free lattice cell on dry land, best coastal site first: outside the ring
- * road before inside it, then closest to the water.
+ * road before inside it, reachable from the ring before not, then closest to the water.
  */
 function coastalCells(req: HarbourRequest): Candidate[] {
   const bounds = polygonBounds(req.outline);
@@ -261,12 +274,15 @@ function coastalCells(req: HarbourRequest): Candidate[] {
         normal: length > 0.01 ? [dx / length, dz / length] : [0, 1],
         shore: distToPolygon(centre, req.outline),
         inRing: req.ring.length >= 3 && pointInPolygon(centre, req.ring),
+        facesRing:
+          req.ring.length < 2 || AXES.some((axis) => ringHit(centre, axis, req.ring) !== null),
       });
     }
   }
   out.sort(
     (a, b) =>
       Number(a.inRing) - Number(b.inRing) ||
+      Number(b.facesRing) - Number(a.facesRing) ||
       a.shore - b.shore ||
       a.cell[0] - b.cell[0] ||
       a.cell[1] - b.cell[1],

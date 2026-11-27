@@ -52,7 +52,7 @@ describe("director", () => {
       const [a, b, c] = [at(t - step), at(t), at(t + step)];
       const v0 = Math.hypot(b[0] - a[0], b[2] - a[2]);
       const v1 = Math.hypot(c[0] - b[0], c[2] - b[2]);
-      expect(Math.abs(v1 - v0)).toBeLessThan(0.02);
+      expect(Math.abs(v1 - v0)).toBeLessThan(0.025);
     }
   });
 

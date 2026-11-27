@@ -90,7 +90,19 @@ export function CityScene({
     const out = new Map<string, BuildingVariant>();
     for (const n of cityNodes) {
       const addr = nodeAddress(n);
-      out.set(addr, buildingVariant(addr, n.type, biome, undefined, n.building));
+      const v = buildingVariant(addr, n.type, biome, undefined, n.building, n.plot?.district);
+      // A settled building faces its street rather than a random quarter turn.
+      out.set(
+        addr,
+        n.plot
+          ? {
+              ...v,
+              yaw: n.plot.yaw,
+              rise: n.plot.rise ?? 1,
+              ...(n.plot.lot ? { stretch: n.plot.lot.stretch } : {}),
+            }
+          : v,
+      );
     }
     return out;
   }, [cityNodes, biome]);
@@ -158,8 +170,10 @@ export function CityScene({
       if (!rate || n.isPort || !variant) {
         return;
       }
-      const top = ROOF_HEIGHT[n.type] * NODE_STYLE[n.type].scale * variant.scale;
-      out.push({ x: n.position[0], z: n.position[2], top, rate });
+      const top =
+        ROOF_HEIGHT[n.type] * NODE_STYLE[n.type].scale * variant.scale * (variant.rise ?? 1);
+      const [ox, oz] = n.plot?.offset ?? [0, 0];
+      out.push({ x: n.position[0] + ox, z: n.position[2] + oz, top, rate });
     });
     return out;
   }, [cityNodes, cityTelemetry, variants]);
